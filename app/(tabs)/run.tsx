@@ -82,7 +82,7 @@ function TurnView({ turn }: { turn: ChatTurn }) {
       <Text style={[styles.noteLine, {
         color: t.fgDim, fontFamily: t.fontMono, borderLeftColor: t.borderColor,
       }]}>
-        ⌃ {turn.text}
+        ↳ {turn.text}
       </Text>
     );
   }
@@ -160,7 +160,7 @@ export default function RunScreen() {
                 <View style={styles.taskCenter}>
                   <Text style={[styles.pillTitle, { color: t.fg }]} numberOfLines={1}>
                     {activeTask?.title ?? 'Claude'}
-                    <Text style={{ color: t.fgDim }}>  ▾</Text>
+                    <Text style={{ color: t.fgDim }}>  ⌄</Text>
                   </Text>
                   <Text
                     style={[styles.pillSub, { color: t.fgMuted, fontFamily: t.fontMono }]}
