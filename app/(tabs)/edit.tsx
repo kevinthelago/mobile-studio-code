@@ -1,15 +1,16 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView,
-  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable,
+  SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/theme';
 import { useSession } from '../../src/lib/session';
 import { detectLang, tokenizeFile } from '../../src/lib/syntax';
-import { ChatTurn } from '../../src/lib/types';
+import { AttachedImage, ChatTurn } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
 import { TopPill } from '../../src/components/ui/TopPill';
 import { IconBtn } from '../../src/components/ui/IconBtn';
@@ -95,9 +96,30 @@ function ChatTurnView({ turn }: { turn: ChatTurn }) {
     return (
       <View style={styles.promptRow}>
         <Text style={[styles.promptArrow, { color: t.accent }]}>›</Text>
-        <Text style={[styles.promptText, { color: t.fg, fontFamily: t.fontMono }]}>
-          {turn.text}
-        </Text>
+        <View style={styles.promptBody}>
+          {turn.images && turn.images.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.thumbScroll}
+              contentContainerStyle={styles.thumbRow}
+            >
+              {turn.images.map((img, i) => (
+                <Image
+                  key={i}
+                  source={{ uri: img.uri }}
+                  style={styles.thumbImage}
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
+          )}
+          {turn.text ? (
+            <Text style={[styles.promptText, { color: t.fg, fontFamily: t.fontMono }]}>
+              {turn.text}
+            </Text>
+          ) : null}
+        </View>
       </View>
     );
   }
@@ -143,6 +165,42 @@ function ChatTurnView({ turn }: { turn: ChatTurn }) {
   );
 }
 
+function ImagePreviewStrip({
+  images,
+  onRemove,
+}: {
+  images: AttachedImage[];
+  onRemove: (index: number) => void;
+}) {
+  const t = useTheme();
+  if (images.length === 0) return null;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={[styles.previewStrip, { borderTopColor: t.borderColor }]}
+      contentContainerStyle={styles.previewStripContent}
+    >
+      {images.map((img, i) => (
+        <View key={i} style={styles.previewItem}>
+          <Image
+            source={{ uri: img.uri }}
+            style={styles.previewImage}
+            resizeMode="cover"
+          />
+          <Pressable
+            style={[styles.previewRemove, { backgroundColor: t.accent }]}
+            onPress={() => onRemove(i)}
+            hitSlop={8}
+          >
+            <Text style={styles.previewRemoveText}>✕</Text>
+          </Pressable>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
 export default function EditScreen() {
   const t = useTheme();
   const router = useRouter();
@@ -154,13 +212,13 @@ export default function EditScreen() {
   const [input, setInput] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pendingImages, setPendingImages] = useState<AttachedImage[]>([]);
   const chatScrollRef = useRef<ScrollView>(null);
 
   const recentTurns = useMemo(() => turns.slice(-6), [turns]);
   const toolCount = useMemo(() => turns.filter((x) => x.kind === 'tool').length, [turns]);
 
   // keyboardVerticalOffset = tab bar + bottom safe area inset
-  // This tells KAV how much non-keyboard space sits below the view
   const kbOffset = TAB_BAR_HEIGHT + insets.bottom;
 
   useEffect(() => {
@@ -183,9 +241,43 @@ export default function EditScreen() {
 
   async function handleSend() {
     const trimmed = input.trim();
-    if (!trimmed || chatBusy) return;
+    if ((!trimmed && pendingImages.length === 0) || chatBusy) return;
+    const imgs = pendingImages.length > 0 ? pendingImages : undefined;
     setInput('');
-    await send(trimmed);
+    setPendingImages([]);
+    await send(trimmed, imgs);
+  }
+
+  async function handlePickImage() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      quality: 0.8,
+      base64: true,
+      exif: false,
+    });
+
+    if (result.canceled) return;
+
+    const newImages: AttachedImage[] = result.assets
+      .filter((a) => a.base64)
+      .map((a) => {
+        const ext = (a.mimeType ?? 'image/jpeg') as AttachedImage['mediaType'];
+        return {
+          uri: a.uri,
+          base64: a.base64!,
+          mediaType: ext,
+        };
+      });
+
+    setPendingImages((prev) => [...prev, ...newImages]);
+  }
+
+  function handleRemoveImage(index: number) {
+    setPendingImages((prev) => prev.filter((_, i) => i !== index));
   }
 
   if (!currentPath || currentContent === null) {
@@ -271,7 +363,7 @@ export default function EditScreen() {
                 {recentTurns.length === 0 && (
                   <Text style={[styles.placeholder, { color: t.fgDim }]}>
                     Ask Claude to read or change this file. It can edit any file in
-                    the repo.
+                    the repo. Tap 📎 to attach a screenshot.
                   </Text>
                 )}
                 {recentTurns.map((turn, i) => (
@@ -287,10 +379,25 @@ export default function EditScreen() {
                 )}
               </ScrollView>
 
+              {/* Pending image strip */}
+              <ImagePreviewStrip images={pendingImages} onRemove={handleRemoveImage} />
+
               <View style={[styles.inputBar, {
                 backgroundColor: t.glass ? 'rgba(0,0,0,0.25)' : t.bg,
                 borderColor: t.borderColor,
               }]}>
+                {/* Image attach button */}
+                <Pressable
+                  onPress={handlePickImage}
+                  disabled={chatBusy}
+                  style={({ pressed }) => [styles.attachBtn, { opacity: pressed ? 0.5 : 1 }]}
+                  hitSlop={8}
+                >
+                  <Text style={[styles.attachIcon, { color: pendingImages.length > 0 ? t.accent : t.fgMuted }]}>
+                    📎
+                  </Text>
+                </Pressable>
+
                 <TextInput
                   value={input}
                   onChangeText={setInput}
@@ -303,7 +410,7 @@ export default function EditScreen() {
                 <IconBtn
                   primary
                   onPress={handleSend}
-                  disabled={!input.trim() || chatBusy}
+                  disabled={(!input.trim() && pendingImages.length === 0) || chatBusy}
                 >
                   <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
                     <Path d="M7 11V3M3 7l4-4 4 4"
@@ -368,9 +475,18 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   placeholder: { fontSize: 13, lineHeight: 18, paddingVertical: 6 },
+
+  // User turns
   promptRow: { flexDirection: 'row', gap: 8, marginBottom: 6 },
-  promptArrow: { fontSize: 14 },
+  promptArrow: { fontSize: 14, marginTop: 2 },
+  promptBody: { flex: 1 },
   promptText: { fontSize: 13, flex: 1 },
+  thumbScroll: { marginBottom: 4 },
+  thumbRow: { gap: 6 },
+  thumbImage: {
+    width: 72, height: 72, borderRadius: 8,
+  },
+
   thinkingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginVertical: 6 },
   thinkingDot: { width: 6, height: 6, borderRadius: 3 },
   thinkingText: { fontSize: 12 },
@@ -390,11 +506,29 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  inputBar: {
-    marginTop: 10, height: 44, borderRadius: 22,
-    paddingLeft: 16, paddingRight: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+  // Image preview strip (above input)
+  previewStrip: {
+    maxHeight: 90,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 8,
   },
+  previewStripContent: { paddingHorizontal: 4, gap: 8 },
+  previewItem: { position: 'relative' },
+  previewImage: { width: 70, height: 70, borderRadius: 8 },
+  previewRemove: {
+    position: 'absolute', top: -6, right: -6,
+    width: 18, height: 18, borderRadius: 9,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  previewRemoveText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+
+  inputBar: {
+    marginTop: 10, minHeight: 44, borderRadius: 22,
+    paddingLeft: 10, paddingRight: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+  },
+  attachBtn: { padding: 4 },
+  attachIcon: { fontSize: 18 },
   inputText: { flex: 1, fontSize: 14, maxHeight: 80, paddingVertical: 6 },
 });

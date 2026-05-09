@@ -1,6 +1,14 @@
 export type ChatRole = 'user' | 'assistant';
 
 export type TextBlock = { type: 'text'; text: string };
+export type ImageBlock = {
+  type: 'image';
+  source: {
+    type: 'base64';
+    media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+    data: string;
+  };
+};
 export type ToolUseBlock = {
   type: 'tool_use';
   id: string;
@@ -13,15 +21,21 @@ export type ToolResultBlock = {
   content: string;
   is_error?: boolean;
 };
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+export type ContentBlock = TextBlock | ImageBlock | ToolUseBlock | ToolResultBlock;
 
 export type ChatMessage = {
   role: ChatRole;
   content: string | ContentBlock[];
 };
 
+export type AttachedImage = {
+  uri: string; // local file URI for preview
+  base64: string; // base64-encoded data for API
+  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+};
+
 export type ChatTurn =
-  | { kind: 'user'; text: string }
+  | { kind: 'user'; text: string; images?: AttachedImage[] }
   | { kind: 'assistant'; text: string }
   | {
       kind: 'tool';

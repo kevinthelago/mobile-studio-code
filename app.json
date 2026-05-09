@@ -16,7 +16,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.mobilestudiocode.app"
+      "bundleIdentifier": "com.mobilestudiocode.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Choose screenshots or images to send to Claude."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +30,13 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-updates"
+      "expo-updates",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose screenshots or images to send to Claude."
+        }
+      ]
     ],
     "extra": {
       "eas": {
