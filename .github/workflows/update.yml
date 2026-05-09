@@ -37,6 +37,18 @@ jobs:
             echo "name=main" >> $GITHUB_OUTPUT
           fi
 
+      # Ensure a channel of the same name exists and is linked to the matching
+      # branch. EAS Update separates branches (where updates live) from channels
+      # (what runtime clients query). `eas update --branch <x>` only touches the
+      # branch — without a corresponding channel, Expo Go's
+      # `?channel-name=<x>` lookup returns 404. This step is idempotent: it
+      # succeeds on first run and no-ops on subsequent runs (the `|| true`
+      # swallows the "already exists" exit code).
+      - name: Ensure channel exists
+        run: |
+          eas channel:create ${{ steps.channel.outputs.name }} \
+            --json --non-interactive 2>/dev/null || true
+
       - name: Publish update
         run: |
           eas update \
