@@ -39,9 +39,28 @@ function ThemedFrame({ children }: { children: React.ReactNode }) {
     <View style={[styles.frame, { backgroundColor: t.bg }]}>
       <Orbs />
       <StatusBar style={t.light ? 'dark' : 'light'} />
-      {/* content must be transparent so t.bg + Orbs show through all screens */}
+      {/* transparent so t.bg and Orbs show through all screens */}
       <View style={styles.content}>{children}</View>
     </View>
+  );
+}
+
+function InnerStack() {
+  const t = useTheme();
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        // Paints the native UIViewController background — stops grey bleed-through
+        screenBackgroundColor: t.bg,
+        contentStyle: { backgroundColor: 'transparent' },
+        animation: 'fade',
+      }}
+    >
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="setup" options={{ animation: 'fade' }} />
+      <Stack.Screen name="repo" options={{ animation: 'slide_from_bottom' }} />
+    </Stack>
   );
 }
 
@@ -51,17 +70,7 @@ export default function RootLayout() {
       <SessionProvider>
         <ThemedFrame>
           <StageGate>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: 'transparent' },
-                animation: 'fade',
-              }}
-            >
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="setup" options={{ animation: 'fade' }} />
-              <Stack.Screen name="repo" options={{ animation: 'slide_from_bottom' }} />
-            </Stack>
+            <InnerStack />
           </StageGate>
         </ThemedFrame>
       </SessionProvider>
@@ -71,9 +80,6 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
   frame: { flex: 1 },
-  // transparent so the frame's bg colour and Orbs bleed through every screen
   content: { flex: 1, backgroundColor: 'transparent' },
-  loading: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-  },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

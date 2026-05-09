@@ -6,7 +6,8 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "mobilestudiocode",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0b0d14",
     "newArchEnabled": true,
     "runtimeVersion": {
       "policy": "sdkVersion"
@@ -17,14 +18,17 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.mobilestudiocode.app",
+      "backgroundColor": "#0b0d14",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Choose screenshots or images to send to Claude."
+        "NSPhotoLibraryUsageDescription": "Choose screenshots or images to send to Claude.",
+        "UIUserInterfaceStyle": "Dark"
       }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0b0d14"
       },
+      "backgroundColor": "#0b0d14",
       "package": "com.mobilestudiocode.app"
     },
     "plugins": [
