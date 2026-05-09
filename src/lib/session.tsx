@@ -2,8 +2,8 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
 import {
-  ChatMessage, ChatTurn, Manifest, RetryStatus, CancelSignal, TextBlock,
-  Task, TaskSummary, TaskIndex, LinkedIssue,
+  ChatMessage, ChatTurn, ContentBlock, Manifest, RetryStatus, CancelSignal, TextBlock,
+  Task, TaskSummary, TaskIndex, LinkedIssue, AttachedImage,
 } from './types';
 import { KEYS, getSecret, setSecret, deleteSecret } from './storage';
 import {
@@ -68,7 +68,7 @@ type SessionValue = {
   chatBusy: boolean;
   retry: RetryStatus;
   resumeNotice: string | null;
-  send: (text: string) => Promise<void>;
+  send: (text: string, images?: AttachedImage[]) => Promise<void>;
   cancelChat: () => void;
   clearChat: () => Promise<void>;
 };
@@ -623,18 +623,45 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   }, [apiKey, pat, handleAgentEvent, updateActiveTask, flushPendingTaskWrite]);
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, images?: AttachedImage[]) => {
     const trimmed = text.trim();
-    if (!trimmed || chatBusy) return;
+    const hasImages = !!images && images.length > 0;
+    if ((!trimmed && !hasImages) || chatBusy) return;
     const t = activeTaskRef.current;
     if (!t) return;
+
+    // When images are attached, the user message becomes a content-block
+    // array (Anthropic's multimodal format). Image blocks come first because
+    // the model handles them better at the start of a turn; the text block
+    // (if any) follows. Without images, keep the legacy string-content shape
+    // so plain-text history is unchanged on disk.
+    let userContent: ChatMessage['content'];
+    if (hasImages) {
+      const blocks: ContentBlock[] = images!.map((img) => ({
+        type: 'image' as const,
+        source: {
+          type: 'base64' as const,
+          media_type: img.mediaType,
+          data: img.base64,
+        },
+      }));
+      if (trimmed) blocks.push({ type: 'text' as const, text: trimmed });
+      userContent = blocks;
+    } else {
+      userContent = trimmed;
+    }
+
     const newHistory: ChatMessage[] = [
       ...t.history,
-      { role: 'user', content: trimmed },
+      { role: 'user', content: userContent },
     ];
+    // Render a placeholder for images-only turns so the chat doesn't show an
+    // empty bubble. The full image data lives in `history`; `turns` is for UI.
+    const turnText = trimmed
+      || (hasImages ? `📎 ${images!.length} image${images!.length === 1 ? '' : 's'}` : '');
     updateActiveTask((task) => ({
       ...task,
-      turns: [...task.turns, { kind: 'user', text: trimmed }],
+      turns: [...task.turns, { kind: 'user', text: turnText }],
       history: newHistory,
       updatedAt: Date.now(),
     }));

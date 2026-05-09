@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable,
+  ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable,
   SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
 import { useSession } from '../../src/lib/session';
-import { ChatTurn, RetryStatus } from '../../src/lib/types';
+import { AttachedImage, ChatTurn, RetryStatus } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
 import { TopPill } from '../../src/components/ui/TopPill';
 import { IconBtn } from '../../src/components/ui/IconBtn';
@@ -121,6 +122,7 @@ export default function RunScreen() {
   } = useSession();
   const [input, setInput] = useState('');
   const [taskSheetOpen, setTaskSheetOpen] = useState(false);
+  const [pendingImages, setPendingImages] = useState<AttachedImage[]>([]);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -129,9 +131,44 @@ export default function RunScreen() {
 
   async function handleSend(text?: string) {
     const trimmed = (text ?? input).trim();
-    if (!trimmed || chatBusy) return;
+    const imgs = pendingImages;
+    // Allow images-only sends. Suggestion chips pass `text` directly and
+    // never have images, so the suggestion path stays text-only.
+    if ((!trimmed && imgs.length === 0) || chatBusy) return;
     if (text === undefined) setInput('');
-    await send(trimmed);
+    setPendingImages([]);
+    await send(trimmed, imgs.length > 0 ? imgs : undefined);
+  }
+
+  async function handlePickImage() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Photo access needed',
+        'Allow photo library access in Settings to attach screenshots.',
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      quality: 0.8,
+      base64: true,
+      exif: false,
+    });
+    if (result.canceled) return;
+    const newImages: AttachedImage[] = result.assets
+      .filter((a) => a.base64)
+      .map((a) => ({
+        uri: a.uri,
+        base64: a.base64!,
+        mediaType: (a.mimeType ?? 'image/jpeg') as AttachedImage['mediaType'],
+      }));
+    setPendingImages((prev) => [...prev, ...newImages]);
+  }
+
+  function handleRemoveImage(index: number) {
+    setPendingImages((prev) => prev.filter((_, i) => i !== index));
   }
 
   function confirmClear() {
@@ -258,8 +295,28 @@ export default function RunScreen() {
           )}
 
           <View style={styles.inputWrap}>
+            {pendingImages.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.thumbStrip}
+              >
+                {pendingImages.map((img, i) => (
+                  <View key={img.uri + i} style={styles.thumbWrap}>
+                    <Image source={{ uri: img.uri }} style={styles.thumb} />
+                    <Pressable
+                      onPress={() => handleRemoveImage(i)}
+                      hitSlop={6}
+                      style={styles.thumbRemove}
+                    >
+                      <Text style={styles.thumbRemoveText}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
             <Surface style={styles.inputBar} radius={26}>
-              <IconBtn>
+              <IconBtn onPress={handlePickImage} disabled={chatBusy}>
                 <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
                   <Path
                     d="M7 1v12M1 7h12"
@@ -288,7 +345,7 @@ export default function RunScreen() {
                   primary
                   size={40}
                   onPress={() => handleSend()}
-                  disabled={!input.trim()}
+                  disabled={!input.trim() && pendingImages.length === 0}
                 >
                   <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
                     <Path
@@ -383,4 +440,15 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   cancelBtnText: { color: '#ff8a8a', fontSize: 13, fontWeight: '600' },
+
+  thumbStrip: { paddingHorizontal: 4, paddingBottom: 6, gap: 8 },
+  thumbWrap: { position: 'relative', marginRight: 8 },
+  thumb: { width: 56, height: 56, borderRadius: 8, backgroundColor: '#222' },
+  thumbRemove: {
+    position: 'absolute', top: -4, right: -4,
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  thumbRemoveText: { color: '#fff', fontSize: 13, lineHeight: 16, fontWeight: '600' },
 });
