@@ -9,10 +9,6 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        // Use the actual theme bg, not transparent — the native RNSScreen
-        // layer ignores 'transparent' on iOS but will honour a real colour,
-        // preventing the white flash between tabs.
-        contentStyle: { backgroundColor: t.bg },
       }}
       tabBar={(props) => <BottomTabBar {...props} />}
       sceneContainerStyle={{ backgroundColor: t.bg }}
