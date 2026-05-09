@@ -1,0 +1,359 @@
+{
+  "repo": "kevinthelago/Mobile-Studio-Code",
+  "branch": "main",
+  "syncedAt": 1778308533564,
+  "files": {
+    "README.md": {
+      "sha": "4d2a064cdb7fe75ee68173bcf78d0ad663ca9fef",
+      "modified": false
+    },
+    ".gitignore": {
+      "sha": "c387fdf8f6d24ec127504002b68a1668d78db9f8",
+      "modified": false
+    },
+    "App.tsx": {
+      "sha": "170aa72350512e3223b918bbe0878e36a543a588",
+      "modified": false
+    },
+    "app.json": {
+      "sha": "71823cd44ba171005d21f28d3b19914fd517f759",
+      "modified": false
+    },
+    "babel.config.js": {
+      "sha": "6b2006979c0f1f8f27f27df49d4bb0b2a407756e",
+      "modified": false
+    },
+    "design/Mobile IDE.html": {
+      "sha": "0e792655901809d6822a7eb619568c60741b94d2",
+      "modified": false
+    },
+    "design/code-content.jsx": {
+      "sha": "ee3f0cba4f18735c8e8a7b448e5760a8dbcc98ef",
+      "modified": false
+    },
+    "design/design-canvas.jsx": {
+      "sha": "5e685a6df0d54755daa34abafe22679ee458ecff",
+      "modified": false
+    },
+    "design/ios-frame.jsx": {
+      "sha": "1a15e2712c0ec45bd632127ee9ad483eb060d1ea",
+      "modified": false
+    },
+    "design/page-edit.jsx": {
+      "sha": "13930be6a823652b748be414ba107a4ed528d4be",
+      "modified": false
+    },
+    "design/page-files.jsx": {
+      "sha": "eb70742b247c842929639928326054f5a5d396fe",
+      "modified": false
+    },
+    "design/page-find.jsx": {
+      "sha": "6c46e7adde1e0a2f1b5a283cefbf3b610b280376",
+      "modified": false
+    },
+    "design/page-git.jsx": {
+      "sha": "145a13cffba770a79b580fca4c13fba38c4296cf",
+      "modified": false
+    },
+    "design/page-terminal.jsx": {
+      "sha": "94896794b94ceca8cff36b5442347a552aa5b603",
+      "modified": false
+    },
+    "design/shell.jsx": {
+      "sha": "611a426fb8d141ddd76f7ead6e5eac178518f141",
+      "modified": false
+    },
+    "design/themes.jsx": {
+      "sha": "35b34cf5a06023f13b2cae185038321315383528",
+      "modified": false
+    },
+    "design/variant-basic.jsx": {
+      "sha": "7e019e5318888ddf1cac8996182302b1388b63b6",
+      "modified": false
+    },
+    "design/variant-dawn.jsx": {
+      "sha": "84c9f7b0e26f318f06d8bfa52139b0c980581592",
+      "modified": false
+    },
+    "design/variant-glass.jsx": {
+      "sha": "e316904feb1acad89d5455737f944f6401a9e45c",
+      "modified": false
+    },
+    "design/variant-paper.jsx": {
+      "sha": "d4844751faec0146e6dfd8ee044d667d0f857d6f",
+      "modified": false
+    },
+    "design/variant-terminal.jsx": {
+      "sha": "c3ad2728f8227a9e8673e25a930e00dcb2180adc",
+      "modified": false
+    },
+    "package-lock.json": {
+      "sha": "4dc912ff281415ff4c38a15529c444abbcb32484",
+      "modified": false
+    },
+    "package.json": {
+      "sha": "6e16f1bff3f6b5585bad889c41cd13a0c0604fcb",
+      "modified": false
+    },
+    "src/lib/anthropic.ts": {
+      "sha": "360edb9b1228c2b9072e4b105a5d81f143125769",
+      "modified": false
+    },
+    "src/lib/storage.ts": {
+      "sha": "7c2e0efaf1beb988b4461e7b276719a08e2b7c8d",
+      "modified": false
+    },
+    "src/screens/ChatScreen.tsx": {
+      "sha": "8e6279d126eebd620b6981916c96dc5d91c1132e",
+      "modified": false
+    },
+    "src/screens/SettingsScreen.tsx": {
+      "sha": "13a16d50c42a6ec16ad38958948d353afd0194b0",
+      "modified": false
+    },
+    "tsconfig.json": {
+      "sha": "0b5a70dbf99925cc063996dca2881f1b991d337e",
+      "modified": false
+    },
+    "src/theme/themes.ts": {
+      "sha": "83d973d131d8086d7120e811c5259ad338d74b45",
+      "modified": false
+    },
+    "src/theme/ThemeContext.tsx": {
+      "sha": "e7ed2dc4c37c7cf30bab6b834b4057a3435100e4",
+      "modified": false
+    },
+    "src/components/Surface.tsx": {
+      "sha": "02c93c02c3e1fc92cd64ff5e4315641ce22e4754",
+      "modified": false
+    },
+    "src/components/IconBtn.tsx": {
+      "sha": "7859f1905892d321f7306c513ee37e5b17b1cfb8",
+      "modified": false
+    },
+    "src/theme.ts": {
+      "sha": "9c4b651df98b53612dc7c0e584472d4e7a67dff0",
+      "modified": false
+    },
+    "src/ThemeContext.tsx": {
+      "sha": "58d735535af9f75f69cf2967ca2b868e271a5e2a",
+      "modified": false
+    },
+    "src/data/sampleCode.ts": {
+      "sha": "38d259a1b422cd3a4b89d11044c7e441255d9063",
+      "modified": false
+    },
+    "src/components/CodeLine.tsx": {
+      "sha": "e8eb7f7857962e6be468c939955334737b2ea201",
+      "modified": false
+    },
+    "app/(tabs)/_layout.tsx": {
+      "sha": "834d0d2b19f5fb2867276059c5f5b409fbf3e56e",
+      "modified": false
+    },
+    "app/_layout.tsx": {
+      "sha": "d72e6019fc0096e049829bf9a9eb9fa91b46c71b",
+      "modified": false
+    },
+    "src/components/TabIcons.tsx": {
+      "sha": "7da647ec97ae885f9d257fdbd8186ed134cf2d9c",
+      "modified": false
+    },
+    "app/index.tsx": {
+      "sha": "064050d62832bbd0e6e79db90284436723232573",
+      "modified": false
+    },
+    "app/find.tsx": {
+      "sha": "ae19f2fe011329bde4724baa23dfca32ad0d07fa",
+      "modified": false
+    },
+    "app/edit.tsx": {
+      "sha": "0ab5e27fed121fb27a6ea66dacc1343e676fd8c0",
+      "modified": false
+    },
+    "app/run.tsx": {
+      "sha": "773a3b770b02fbe205c9ec869f3876c3903e0659",
+      "modified": false
+    },
+    "app/git.tsx": {
+      "sha": "77ade97d8442d7257cfbe61b3b5a5144d6c976f6",
+      "modified": false
+    },
+    "src/codeContent.ts": {
+      "sha": "cbc14af3fcb1a065fd18ce28c8fa2143c3e99040",
+      "modified": false
+    },
+    "src/components/CodeView.tsx": {
+      "sha": "7e10289d794fc54ffbc3d67a9e05b3d47a6d20e6",
+      "modified": false
+    },
+    "src/theme/tokens.ts": {
+      "sha": "2bea3eb87dda2fc8d0404a7ff7adb0690f700daf",
+      "modified": false
+    },
+    "src/components/ui/Surface.tsx": {
+      "sha": "60eac4a9aafc1e28eeae83288e2508c4a29dc0a1",
+      "modified": false
+    },
+    "src/components/ui/IconBtn.tsx": {
+      "sha": "b4de99a68ff6a4fcbf3b681717f1efc9e9d7940d",
+      "modified": false
+    },
+    "src/components/ui/TokenText.tsx": {
+      "sha": "e651bf7c50c11a9d69a3f30eebadf5b994d40e47",
+      "modified": false
+    },
+    "src/components/ui/Icons.tsx": {
+      "sha": "016cb79e7c4ee50b29eac8d070636e8e0a5eec09",
+      "modified": false
+    },
+    "src/components/ui/TopPill.tsx": {
+      "sha": "fbab0482863401301145f7533bd6ac175ba5747c",
+      "modified": false
+    },
+    "src/lib/llm.ts": {
+      "sha": "95b2bdad5a769f6b4e38ff20087cebc583588aa3",
+      "modified": false
+    },
+    "app/(tabs)/files.tsx": {
+      "sha": "ad8100cd9af14c685042ccc0c5f88875af02ebb8",
+      "modified": false
+    },
+    "app/(tabs)/find.tsx": {
+      "sha": "4fe29ba85af6300b678da7aca2357e780d19e502",
+      "modified": false
+    },
+    "app/(tabs)/edit.tsx": {
+      "sha": "925de4c1b1a2dd1cb75b51201f347adef4e76ad9",
+      "modified": false
+    },
+    "app/(tabs)/run.tsx": {
+      "sha": "a95108b6f748fb7a21a6309b1b90d2c4893ffab5",
+      "modified": false
+    },
+    "app/(tabs)/git.tsx": {
+      "sha": "01b2fff45a91a0ff3407f024f0ed12a568a6dfc9",
+      "modified": false
+    },
+    "app/(tabs)/settings.tsx": {
+      "sha": "a8896a82baa86d7001500ff99aee45f2deae8bea",
+      "modified": false
+    },
+    "src/lib/agent.ts": {
+      "sha": "aa1666cf1d0235f9ad207af9d4f3b15c12f33a01",
+      "modified": false
+    },
+    "src/lib/errorBus.ts": {
+      "sha": "4630e9548af345e8d3586913223a2234c90f10d8",
+      "modified": false
+    },
+    "src/lib/gitClient.ts": {
+      "sha": "2b7825783d0ffa2ead620953c776201c7eda854f",
+      "modified": false
+    },
+    "app/errors.tsx": {
+      "sha": "e75add37a6cd1478a06fa0f917ef29ca9741412f",
+      "modified": false
+    },
+    "app/(tabs)/index.tsx": {
+      "sha": "1976eb7aabf154ceaee58917cd4980fb10c5d8f3",
+      "modified": false
+    },
+    "app/repo.tsx": {
+      "sha": "0da498700f6bae3ca05daff3751a636806edf709",
+      "modified": false
+    },
+    "app/setup.tsx": {
+      "sha": "a18a03c4ac4fc2f66dba56e1d230dc920af7a9d9",
+      "modified": false
+    },
+    "src/components/ui/BottomTabBar.tsx": {
+      "sha": "a6ce7023c792000276db9f0d10f520148dd9ac0f",
+      "modified": false
+    },
+    "src/components/ui/ClaudeAvatar.tsx": {
+      "sha": "8e420be8d3555d5316e6e2b1c01c5f60990a1b79",
+      "modified": false
+    },
+    "src/components/ui/IssueLinkSheet.tsx": {
+      "sha": "ca8662875e573c239d07f9d50af8c7673edeb94b",
+      "modified": false
+    },
+    "src/components/ui/Orbs.tsx": {
+      "sha": "26b6486bc9d4fd39e2efdbf2c482f4fffe87cd5b",
+      "modified": false
+    },
+    "src/components/ui/TaskSheet.tsx": {
+      "sha": "7b57f44ed46a133e88bff15276ee248022ae5cd8",
+      "modified": false
+    },
+    "src/components/ui/ThemePicker.tsx": {
+      "sha": "69fb78c8393c1969f6a7ea5b41153028b2f0c1a7",
+      "modified": false
+    },
+    "src/lib/contextOptimizer.ts": {
+      "sha": "ed01137e94800fbbd49c998725c21c34bd23bf7d",
+      "modified": false
+    },
+    "src/lib/fs.ts": {
+      "sha": "fa98a52da8189c03b5acae2e7e6929b1220c3b74",
+      "modified": false
+    },
+    "src/lib/github.ts": {
+      "sha": "5deee3a33e9c3ff40ef00cc905a7c5e259e87814",
+      "modified": false
+    },
+    "src/lib/session.tsx": {
+      "sha": "81a4c7794e693cb7c9698623559734bb94968901",
+      "modified": false
+    },
+    "src/lib/syntax.ts": {
+      "sha": "374288aed9da96b708fcf345ecacb3e1bafebd14",
+      "modified": false
+    },
+    "src/lib/tasks.ts": {
+      "sha": "13e1b7c6dd11d0e6433e14d62ff54b52c9501431",
+      "modified": false
+    },
+    "src/lib/types.ts": {
+      "sha": "e3412ff79e7fee0b0744c8868934b1e95192c536",
+      "modified": false
+    },
+    "docs/git-feature-handoff.md": {
+      "sha": "4df945f66fe9b4e7453681f8858adb00d6190838",
+      "modified": false
+    },
+    ".github/workflows/expo-preview.yml": {
+      "sha": null,
+      "modified": true
+    },
+    ".github/workflows/issue-branch-check.yml": {
+      "sha": null,
+      "modified": true
+    },
+    ".github/ISSUE_TEMPLATE/feature.md": {
+      "sha": "b57c07e153c815b44569dc8478f7a6ef709c7ada",
+      "modified": false
+    },
+    ".github/ISSUE_TEMPLATE/bug.md": {
+      "sha": "2ce3d1dbd471a6e24d0e123a8c9943e6e1bdf0ff",
+      "modified": false
+    },
+    ".github/ISSUE_TEMPLATE/chore.md": {
+      "sha": "692f0b3ccad2182b923ca53849744ba6db1bdb3b",
+      "modified": false
+    },
+    ".github/pull_request_template.md": {
+      "sha": "7f831d789e9abf062249b2f45fc801020df323f7",
+      "modified": false
+    },
+    ".github/workflows/.gitkeep": {
+      "sha": "945c9b46d684f08ec84cb316e1dc0061e361f794",
+      "modified": false
+    },
+    ".msc-manifest.json": {
+      "sha": null,
+      "modified": true
+    }
+  }
+}
