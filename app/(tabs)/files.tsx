@@ -1,1 +1,1 @@
-export { default } from '../../app/index';
+// deleted - legacy unused route
