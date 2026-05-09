@@ -107,7 +107,7 @@ function ChatTurnView({ turn }: { turn: ChatTurn }) {
       <Text style={[styles.noteLine, {
         color: t.fgDim, fontFamily: t.fontMono, borderLeftColor: t.borderColor,
       }]}>
-        ⌃ {turn.text}
+        ↳ {turn.text}
       </Text>
     );
   }
@@ -225,7 +225,7 @@ export default function EditScreen() {
             ) : (
               <IconBtn onPress={() => setEditMode((m) => !m)}>
                 <Text style={[styles.modeBadge, { color: editMode ? t.accent : t.fgMuted }]}>
-                  {editMode ? '✎' : '◉'}
+                  {editMode ? '✎' : '◎'}
                 </Text>
               </IconBtn>
             )}
