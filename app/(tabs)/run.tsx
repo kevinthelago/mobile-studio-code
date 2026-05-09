@@ -3,7 +3,7 @@ import {
   ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
@@ -14,6 +14,8 @@ import { TopPill } from '../../src/components/ui/TopPill';
 import { IconBtn } from '../../src/components/ui/IconBtn';
 import { ClaudeAvatar } from '../../src/components/ui/ClaudeAvatar';
 import { TaskSheet } from '../../src/components/ui/TaskSheet';
+
+const TAB_BAR_HEIGHT = 60;
 
 function summarizeToolInput(name: string, input: Record<string, unknown>) {
   if (typeof input.path === 'string') {
@@ -84,7 +86,7 @@ function TurnView({ turn }: { turn: ChatTurn }) {
       <Text style={[styles.noteLine, {
         color: t.fgDim, fontFamily: t.fontMono, borderLeftColor: t.borderColor,
       }]}>
-        ⏳ {turn.text}
+        Ⳡ{turn.text}
       </Text>
     );
   }
@@ -117,6 +119,7 @@ const SUGGESTIONS = ['Explain this repo', 'Show recent changes', 'Run the tests'
 
 export default function RunScreen() {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const {
     manifest, activeTask, turns, send, chatBusy, retry, cancelChat,
     resumeNotice, clearChat,
@@ -125,6 +128,9 @@ export default function RunScreen() {
   const [taskSheetOpen, setTaskSheetOpen] = useState(false);
   const [pendingImages, setPendingImages] = useState<AttachedImage[]>([]);
   const scrollRef = useRef<ScrollView>(null);
+
+  // keyboardVerticalOffset: tab bar + safe-area bottom so KAV lifts correctly
+  const kbOffset = TAB_BAR_HEIGHT + insets.bottom;
 
   useEffect(() => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
@@ -183,189 +189,190 @@ export default function RunScreen() {
   const isEmpty = turns.length === 0 && !chatBusy && !resumeNotice;
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.flex1}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.container}>
-          <TopPill
-            left={<ClaudeAvatar size={24} />}
-            center={
-              <Pressable onPress={() => setTaskSheetOpen(true)} hitSlop={6}>
-                <View style={styles.taskCenter}>
-                  <Text style={[styles.pillTitle, { color: t.fg }]} numberOfLines={1}>
-                    {activeTask?.title ?? 'Claude'}
-                    <Text style={{ color: t.fgDim }}>  ⌄</Text>
-                  </Text>
-                  <Text
-                    style={[styles.pillSub, { color: t.fgMuted, fontFamily: t.fontMono }]}
-                    numberOfLines={1}
-                  >
-                    {activeTask?.linkedIssue ? `#${activeTask.linkedIssue.number} · ` : ''}
-                    {userTurns} turn{userTurns === 1 ? '' : 's'} · {toolCalls} tool call{toolCalls === 1 ? '' : 's'}
-                  </Text>
-                </View>
-              </Pressable>
-            }
-            right={
-              <IconBtn onPress={confirmClear}>
-                <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-                  <Path
-                    d="M3 4h8M5 4V3a1 1 0 011-1h2a1 1 0 011 1v1M4 4l1 8a1 1 0 001 1h2a1 1 0 001-1l1-8"
-                    stroke={t.fg} strokeWidth={1.4} strokeLinecap="round"
-                  />
-                </Svg>
-              </IconBtn>
-            }
-          />
-
-          <TaskSheet
-            visible={taskSheetOpen}
-            onClose={() => setTaskSheetOpen(false)}
-          />
-
-          {resumeNotice && (
-            <View style={[styles.resumeBanner, {
-              backgroundColor: t.glass ? 'rgba(192,132,252,0.12)' : t.surface,
-            }]}>
-              <ActivityIndicator size="small" color={t.accent} />
-              <Text style={[styles.resumeText, { color: t.accent2 }]}>{resumeNotice}</Text>
-            </View>
-          )}
-
-          <ScrollView
-            ref={scrollRef}
-            style={styles.transcript}
-            contentContainerStyle={styles.transcriptContent}
-            showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
-          >
-            <Text style={[styles.systemLine, { color: t.fgDim, fontFamily: t.fontMono }]}>
-              · workspace: {manifest?.repo ?? '(none)'}
-            </Text>
-            {isEmpty && (
-              <Text style={[styles.placeholder, { color: t.fgDim }]}>
-                Ask Claude anything about your repo. It can list directories, read
-                files, and write changes.
-              </Text>
-            )}
-            {turns.map((turn, i) => <TurnView key={i} turn={turn} />)}
-            {chatBusy && !retry && (
-              <View style={styles.thinkingRow}>
-                <View style={[styles.thinkingDot, { backgroundColor: t.code.ty }]} />
-                <Text style={[styles.thinkingText, { color: t.fgMuted, fontFamily: t.fontMono }]}>
-                  thinking…
+    // KAV must be the outermost flex container so it can shrink the content
+    // area when the keyboard appears. SafeAreaView inside means the top inset
+    // is still respected, and bottom padding comes from insets manually.
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={kbOffset}
+    >
+      <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        <TopPill
+          left={<ClaudeAvatar size={24} />}
+          center={
+            <Pressable onPress={() => setTaskSheetOpen(true)} hitSlop={6}>
+              <View style={styles.taskCenter}>
+                <Text style={[styles.pillTitle, { color: t.fg }]} numberOfLines={1}>
+                  {activeTask?.title ?? 'Claude'}
+                  <Text style={{ color: t.fgDim }}>  ›</Text>
+                </Text>
+                <Text
+                  style={[styles.pillSub, { color: t.fgMuted, fontFamily: t.fontMono }]}
+                  numberOfLines={1}
+                >
+                  {activeTask?.linkedIssue ? `#${activeTask.linkedIssue.number} · ` : ''}
+                  {userTurns} turn{userTurns === 1 ? '' : 's'} · {toolCalls} tool call{toolCalls === 1 ? '' : 's'}
                 </Text>
               </View>
-            )}
-          </ScrollView>
+            </Pressable>
+          }
+          right={
+            <IconBtn onPress={confirmClear}>
+              <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+                <Path
+                  d="M3 4h8M5 4V3a1 1 0 011-1h2a1 1 0 011 1v1M4 4l1 8a1 1 0 001 1h2a1 1 0 001-1l1-8"
+                  stroke={t.fg} strokeWidth={1.4} strokeLinecap="round"
+                />
+              </Svg>
+            </IconBtn>
+          }
+        />
 
-          {retry && <RetryBanner status={retry} onCancel={cancelChat} />}
+        <TaskSheet
+          visible={taskSheetOpen}
+          onClose={() => setTaskSheetOpen(false)}
+        />
 
+        {resumeNotice && (
+          <View style={[styles.resumeBanner, {
+            backgroundColor: t.glass ? 'rgba(192,132,252,0.12)' : t.surface,
+          }]}>
+            <ActivityIndicator size="small" color={t.accent} />
+            <Text style={[styles.resumeText, { color: t.accent2 }]}>{resumeNotice}</Text>
+          </View>
+        )}
+
+        <ScrollView
+          ref={scrollRef}
+          style={styles.transcript}
+          contentContainerStyle={styles.transcriptContent}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+        >
+          <Text style={[styles.systemLine, { color: t.fgDim, fontFamily: t.fontMono }]}>
+            · workspace: {manifest?.repo ?? '(none)'}
+          </Text>
           {isEmpty && (
+            <Text style={[styles.placeholder, { color: t.fgDim }]}>
+              Ask Claude anything about your repo. It can list directories, read
+              files, and write changes.
+            </Text>
+          )}
+          {turns.map((turn, i) => <TurnView key={i} turn={turn} />)}
+          {chatBusy && !retry && (
+            <View style={styles.thinkingRow}>
+              <View style={[styles.thinkingDot, { backgroundColor: t.code.ty }]} />
+              <Text style={[styles.thinkingText, { color: t.fgMuted, fontFamily: t.fontMono }]}>
+                thinking…
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {retry && <RetryBanner status={retry} onCancel={cancelChat} />}
+
+        {isEmpty && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.suggestionRow}
+          >
+            {SUGGESTIONS.map((s, i) => (
+              <Pressable
+                key={s}
+                onPress={() => handleSend(s)}
+                style={[
+                  styles.suggestionChip,
+                  {
+                    backgroundColor: i === 0
+                      ? t.accent
+                      : t.glass ? 'rgba(255,255,255,0.10)' : t.surface,
+                    borderColor: t.borderColor,
+                    borderWidth: i === 0 ? 0 : StyleSheet.hairlineWidth,
+                    borderRadius: t.sharp ? 4 : 16,
+                  },
+                ]}
+              >
+                <Text style={[styles.suggestionText, {
+                  color: i === 0 ? '#fff' : t.fg,
+                }]}>{s}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+
+        <View style={[styles.inputWrap, { borderTopColor: t.borderColor }]}>
+          {pendingImages.length > 0 && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.suggestionRow}
+              contentContainerStyle={styles.thumbStrip}
             >
-              {SUGGESTIONS.map((s, i) => (
-                <Pressable
-                  key={s}
-                  onPress={() => handleSend(s)}
-                  style={[
-                    styles.suggestionChip,
-                    {
-                      backgroundColor: i === 0
-                        ? t.accent
-                        : t.glass ? 'rgba(255,255,255,0.10)' : t.surface,
-                      borderColor: t.borderColor,
-                      borderWidth: i === 0 ? 0 : StyleSheet.hairlineWidth,
-                      borderRadius: t.sharp ? 4 : 16,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.suggestionText, {
-                    color: i === 0 ? '#fff' : t.fg,
-                  }]}>{s}</Text>
-                </Pressable>
+              {pendingImages.map((img, i) => (
+                <View key={img.uri + i} style={styles.thumbWrap}>
+                  <Image source={{ uri: img.uri }} style={styles.thumb} />
+                  <Pressable
+                    onPress={() => handleRemoveImage(i)}
+                    hitSlop={6}
+                    style={styles.thumbRemove}
+                  >
+                    <Text style={styles.thumbRemoveText}>×</Text>
+                  </Pressable>
+                </View>
               ))}
             </ScrollView>
           )}
-
-          <View style={styles.inputWrap}>
-            {pendingImages.length > 0 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.thumbStrip}
+          <Surface style={styles.inputBar} radius={26}>
+            <IconBtn onPress={handlePickImage} disabled={chatBusy}>
+              <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+                <Path
+                  d="M7 1v12M1 7h12"
+                  stroke={t.fg} strokeWidth={1.6} strokeLinecap="round"
+                />
+              </Svg>
+            </IconBtn>
+            <TextInput
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask Claude…"
+              placeholderTextColor={t.fgDim}
+              style={[styles.inputText, { color: t.fg }]}
+              multiline
+              editable={!chatBusy}
+            />
+            {chatBusy ? (
+              <Pressable onPress={cancelChat} style={[styles.cancelBtn, {
+                backgroundColor: 'rgba(255,138,138,0.15)',
+                borderColor: 'rgba(255,138,138,0.4)',
+              }]}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </Pressable>
+            ) : (
+              <IconBtn
+                primary
+                size={40}
+                onPress={() => handleSend()}
+                disabled={!input.trim() && pendingImages.length === 0}
               >
-                {pendingImages.map((img, i) => (
-                  <View key={img.uri + i} style={styles.thumbWrap}>
-                    <Image source={{ uri: img.uri }} style={styles.thumb} />
-                    <Pressable
-                      onPress={() => handleRemoveImage(i)}
-                      hitSlop={6}
-                      style={styles.thumbRemove}
-                    >
-                      <Text style={styles.thumbRemoveText}>×</Text>
-                    </Pressable>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-            <Surface style={styles.inputBar} radius={26}>
-              <IconBtn onPress={handlePickImage} disabled={chatBusy}>
                 <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
                   <Path
-                    d="M7 1v12M1 7h12"
-                    stroke={t.fg} strokeWidth={1.6} strokeLinecap="round"
+                    d="M7 11V3M3 7l4-4 4 4"
+                    stroke="#fff" strokeWidth={2} strokeLinecap="round"
                   />
                 </Svg>
               </IconBtn>
-              <TextInput
-                value={input}
-                onChangeText={setInput}
-                placeholder="Ask Claude…"
-                placeholderTextColor={t.fgDim}
-                style={[styles.inputText, { color: t.fg }]}
-                multiline
-                editable={!chatBusy}
-              />
-              {chatBusy ? (
-                <Pressable onPress={cancelChat} style={[styles.cancelBtn, {
-                  backgroundColor: 'rgba(255,138,138,0.15)',
-                  borderColor: 'rgba(255,138,138,0.4)',
-                }]}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </Pressable>
-              ) : (
-                <IconBtn
-                  primary
-                  size={40}
-                  onPress={() => handleSend()}
-                  disabled={!input.trim() && pendingImages.length === 0}
-                >
-                  <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-                    <Path
-                      d="M7 11V3M3 7l4-4 4 4"
-                      stroke="#fff" strokeWidth={2} strokeLinecap="round"
-                    />
-                  </Svg>
-                </IconBtn>
-              )}
-            </Surface>
-          </View>
+            )}
+          </Surface>
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: 'transparent' },
-  flex1: { flex: 1 },
-  container: { flex: 1, paddingBottom: 110 },
+  root: { flex: 1, backgroundColor: 'transparent' },
+  container: { flex: 1 },
 
   pillTitle: { fontSize: 14, fontWeight: '600' },
   pillSub: { fontSize: 11 },
@@ -427,9 +434,12 @@ const styles = StyleSheet.create({
   },
   suggestionText: { fontSize: 12.5, fontWeight: '500' },
 
-  inputWrap: { paddingHorizontal: 12, paddingTop: 4 },
+  inputWrap: {
+    paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   inputBar: {
-    height: 52,
+    minHeight: 52,
     flexDirection: 'row', alignItems: 'center',
     paddingLeft: 8, paddingRight: 6, gap: 8,
   },

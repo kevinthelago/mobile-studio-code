@@ -1,18 +1,21 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { useTheme } from '../../src/theme';
 import { BottomTabBar } from '../../src/components/ui/BottomTabBar';
 
 export default function TabsLayout() {
+  const t = useTheme();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        // Force the native RNSScreen layer to be transparent so the root
-        // ThemedFrame (bg colour + Orbs) shows through every tab.
-        contentStyle: { backgroundColor: 'transparent' },
+        // Use the actual theme bg, not transparent — the native RNSScreen
+        // layer ignores 'transparent' on iOS but will honour a real colour,
+        // preventing the white flash between tabs.
+        contentStyle: { backgroundColor: t.bg },
       }}
       tabBar={(props) => <BottomTabBar {...props} />}
-      sceneContainerStyle={{ backgroundColor: 'transparent' }}
+      sceneContainerStyle={{ backgroundColor: t.bg }}
     >
       <Tabs.Screen name="index" options={{ title: 'Files' }} />
       <Tabs.Screen name="find" options={{ title: 'Find' }} />

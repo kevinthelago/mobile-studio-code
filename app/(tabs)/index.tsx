@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Pressable, ScrollView, StyleSheet, Text, TextInput,
+  Alert, Pressable, ScrollView, StyleSheet, Text, TextInput,
   TouchableOpacity, View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme';
@@ -28,72 +28,57 @@ function buildTree(
     return allPaths
       .filter((p) => p.toLowerCase().includes(trimmedFilter))
       .slice(0, 200)
-      .map((p) => ({
-        type: 'file' as const,
-        path: p,
-        name: p,
-        depth: 0,
-        modified: files[p].modified,
-        current: p === currentPath,
-      }));
+      .map((p) => {
+        const parts = p.split('/');
+        const name = parts[parts.length - 1];
+        return {
+          type: 'file' as const,
+          path: p,
+          name,
+          depth: 0,
+          modified: files[p].modified,
+          current: p === currentPath,
+        };
+      });
   }
 
-  const folders = new Set<string>();
-  for (const p of allPaths) {
-    const parts = p.split('/');
-    let acc = '';
-    for (let i = 0; i < parts.length - 1; i++) {
-      acc = acc ? acc + '/' + parts[i] : parts[i];
-      folders.add(acc);
+  const rows: TreeRow[] = [];
+  const addedFolders = new Set<string>();
+
+  for (const filePath of allPaths) {
+    const parts = filePath.split('/');
+    for (let d = 0; d < parts.length - 1; d++) {
+      const folderPath = parts.slice(0, d + 1).join('/');
+      if (!addedFolders.has(folderPath)) {
+        addedFolders.add(folderPath);
+        rows.push({
+          type: 'folder',
+          path: folderPath,
+          name: parts[d],
+          depth: d,
+          open: expanded.has(folderPath),
+        });
+      }
     }
-  }
-
-  const byParent: Record<string, { folders: string[]; files: string[] }> = {};
-  function ensure(parent: string) {
-    if (!byParent[parent]) byParent[parent] = { folders: [], files: [] };
-  }
-  ensure('');
-  for (const f of folders) {
-    const lastSlash = f.lastIndexOf('/');
-    const parent = lastSlash === -1 ? '' : f.slice(0, lastSlash);
-    ensure(parent);
-    byParent[parent].folders.push(f);
-  }
-  for (const p of allPaths) {
-    const lastSlash = p.lastIndexOf('/');
-    const parent = lastSlash === -1 ? '' : p.slice(0, lastSlash);
-    ensure(parent);
-    byParent[parent].files.push(p);
-  }
-  for (const k of Object.keys(byParent)) {
-    byParent[k].folders.sort();
-    byParent[k].files.sort();
-  }
-
-  const out: TreeRow[] = [];
-  function walk(parent: string, depth: number) {
-    const node = byParent[parent];
-    if (!node) return;
-    for (const f of node.folders) {
-      const name = parent ? f.slice(parent.length + 1) : f;
-      const open = expanded.has(f);
-      out.push({ type: 'folder', path: f, name, depth, open });
-      if (open) walk(f, depth + 1);
-    }
-    for (const fp of node.files) {
-      const name = parent ? fp.slice(parent.length + 1) : fp;
-      out.push({
+    const parentFolder = parts.slice(0, parts.length - 1).join('/');
+    if (parts.length === 1 || expanded.has(parentFolder)) {
+      rows.push({
         type: 'file',
-        path: fp,
-        name,
-        depth,
-        modified: files[fp].modified,
-        current: fp === currentPath,
+        path: filePath,
+        name: parts[parts.length - 1],
+        depth: parts.length - 1,
+        modified: files[filePath].modified,
+        current: filePath === currentPath,
       });
     }
   }
-  walk('', 0);
-  return out;
+
+  return rows.filter((row) => {
+    if (row.type === 'folder') return true;
+    if (row.depth === 0) return true;
+    const parent = row.path.split('/').slice(0, -1).join('/');
+    return expanded.has(parent);
+  });
 }
 
 function FolderChevron({ open, color }: { open: boolean; color: string }) {
@@ -115,9 +100,12 @@ function FileGlyph({ color }: { color: string }) {
   );
 }
 
+const TAB_BAR_HEIGHT = 60;
+
 export default function FilesScreen() {
   const t = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { manifest, openFile, currentPath } = useSession();
   const [q, setQ] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -156,8 +144,13 @@ export default function FilesScreen() {
   }
 
   async function handleFileTap(path: string) {
-    await openFile(path);
-    router.push('/(tabs)/edit');
+    try {
+      await openFile(path);
+      router.navigate('/(tabs)/edit');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert('Could not open file', msg);
+    }
   }
 
   if (!manifest) {
@@ -171,6 +164,8 @@ export default function FilesScreen() {
   }
 
   const repoLeaf = manifest.repo.split('/').slice(-1)[0];
+  // Bottom clearance = tab bar + device bottom safe area (home indicator)
+  const bottomClearance = TAB_BAR_HEIGHT + insets.bottom;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -254,7 +249,7 @@ export default function FilesScreen() {
           </Text>
         </View>
 
-        <View style={styles.treeWrap}>
+        <View style={[styles.treeWrap, { marginBottom: bottomClearance }]}>
           <Surface style={styles.treeCard}>
             <ScrollView showsVerticalScrollIndicator={false}>
               {tree.length === 0 && (
@@ -370,7 +365,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, marginTop: 10, marginBottom: 6,
   },
   treeAction: { fontSize: 11.5 },
-  treeWrap: { flex: 1, marginHorizontal: 12, marginBottom: 110 },
+  treeWrap: { flex: 1, marginHorizontal: 12 },
   treeCard: { flex: 1, paddingVertical: 6 },
   emptyTreeText: { padding: 16, textAlign: 'center' },
   treeRow: {
