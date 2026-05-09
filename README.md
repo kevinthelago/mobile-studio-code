@@ -6,36 +6,24 @@ A mobile IDE built with Expo and React Native — write, edit, and ship code fro
 
 ## Status
 
-[![Expo Preview](https://img.shields.io/github/actions/workflow/status/kevinthelago/Mobile-Studio-Code/expo-preview.yml?label=Expo%20Preview&logo=expo&logoColor=white)](https://github.com/kevinthelago/Mobile-Studio-Code/actions/workflows/expo-preview.yml)
-[![Issue Branch Check](https://img.shields.io/github/actions/workflow/status/kevinthelago/Mobile-Studio-Code/issue-branch-check.yml?label=Issue%20Check&logo=github)](https://github.com/kevinthelago/Mobile-Studio-Code/actions/workflows/issue-branch-check.yml)
 [![EAS Update](https://img.shields.io/github/actions/workflow/status/kevinthelago/Mobile-Studio-Code/update.yml?label=EAS%20Update&logo=expo&logoColor=white)](https://github.com/kevinthelago/Mobile-Studio-Code/actions/workflows/update.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/kevinthelago/Mobile-Studio-Code/ci.yml?label=CI&logo=github)](https://github.com/kevinthelago/Mobile-Studio-Code/actions/workflows/ci.yml)
+[![Expo Preview](https://img.shields.io/github/actions/workflow/status/kevinthelago/Mobile-Studio-Code/expo-preview.yml?label=Expo%20Preview&logo=expo&logoColor=white)](https://github.com/kevinthelago/Mobile-Studio-Code/actions/workflows/expo-preview.yml)
 [![GitHub Issues](https://img.shields.io/github/issues/kevinthelago/Mobile-Studio-Code?logo=github)](https://github.com/kevinthelago/Mobile-Studio-Code/issues)
 [![GitHub PRs](https://img.shields.io/github/issues-pr/kevinthelago/Mobile-Studio-Code?logo=github)](https://github.com/kevinthelago/Mobile-Studio-Code/pulls)
 
 ---
 
-## 📱 Open in Expo Go
+## 📱 Run the latest in Expo Go
 
-Scan or tap the link below to open the latest published update directly in **Expo Go**:
+Every push to `main` publishes an EAS Update to the `main` channel. To open the latest build in Expo Go on your iOS device:
 
-**[▶️ Open in Expo Go → expo.dev/@kevinthelago/mobile-studio-code](https://expo.dev/@kevinthelago/mobile-studio-code)**
+**Tap on iOS:** [exp://u.expo.dev/a11a7b6c-6d05-4b39-9ff1-ea694b914b66?channel-name=main](exp://u.expo.dev/a11a7b6c-6d05-4b39-9ff1-ea694b914b66?channel-name=main)
 
-> Requires the [Expo Go](https://expo.dev/client) app on your iOS device.  
-> Updates publish automatically on every push to `main`.
+**Or scan the QR for the latest update on `main`:**
+[expo.dev → branches/main](https://expo.dev/accounts/kevinthelago/projects/mobile-studio-code/branches/main)
 
----
-
-## 📦 Latest Preview Build
-
-> Preview bundles are built automatically on every PR to `main`.  
-> Find the latest artifact on the Actions page:
-
-**[⬇️ Download Latest Preview Bundle →](https://github.com/kevinthelago/Mobile-Studio-Code/actions/workflows/expo-preview.yml)**
-
-1. Open the latest successful run
-2. Scroll to **Artifacts** → download `expo-preview-pr-N`
-3. Unzip and serve: `npx serve dist/`
-4. Open Expo Go → enter the local URL
+> The deeplink is stable; the QR on the branch page always points at the most recent commit. Requires [Expo Go](https://expo.dev/client) installed.
 
 ---
 
@@ -52,7 +40,7 @@ Open Issue  →  Create Branch  →  Open PR  →  Merge  →  Issue Closes
 | New task | Open a GitHub Issue (use a template below) |
 | Start work | Create branch `issue-{number}/short-slug` |
 | Open PR | Fill in PR template — include `Closes #N` |
-| Merge | Issue auto-closes, artifact is uploaded |
+| Merge | Issue auto-closes, EAS Update publishes |
 
 ### Issue Templates
 - [✨ Feature](https://github.com/kevinthelago/Mobile-Studio-Code/issues/new?template=feature.md)
@@ -61,14 +49,14 @@ Open Issue  →  Create Branch  →  Open PR  →  Merge  →  Issue Closes
 
 ---
 
-## Getting Started
+## Getting Started (local dev)
 
 ```bash
 npm install
-npx expo start
+npx expo start --tunnel
 ```
 
-Requires [Expo Go](https://expo.dev/client) on your iOS device.
+Scan the QR with Expo Go. `--tunnel` works from anywhere; drop the flag if your phone is on the same Wi-Fi.
 
 ---
 
@@ -78,5 +66,6 @@ Requires [Expo Go](https://expo.dev/client) on your iOS device.
 |---|---|
 | Framework | Expo SDK 54 / React Native 0.81 |
 | Router | expo-router |
+| OTA updates | EAS Update (channel: `main`) |
 | AI | Anthropic Claude (`@anthropic-ai/sdk`) |
 | Language | TypeScript |
