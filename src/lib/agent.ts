@@ -14,11 +14,11 @@ const BASE_SYSTEM_PROMPT = `You are an AI coding assistant integrated into Mobil
 
 You also have access to optimization context:
 - Older turns may be auto-summarized; if you need detail from earlier, ask the user to clarify.
-- read_file results may be evicted with a stale marker if a file changed later — re-read with read_file when needed.
+- read_file results may be evicted with a stale marker if a file changed later — do NOT re-read; scroll forward in the conversation for the live copy.
 - When a task is linked to a GitHub issue, read it once at the start with read_issue rather than asking the user to paste the body.`;
 
 const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000];
-const MAX_AGENT_ITERATIONS = 12;
+const MAX_AGENT_ITERATIONS = 25;
 
 const FILE_TOOL_DEFS: ToolDefinition[] = [
   {
@@ -176,7 +176,7 @@ export async function runTool(
       const issue = await getIssue(ctx.pat, ctx.manifest.repo, num);
       const comments = await getIssueComments(ctx.pat, ctx.manifest.repo, num);
       const lines: string[] = [
-        `Issue #${issue.number} — ${issue.title}  (${issue.state})`,
+        `Issue #${issue.number} â ${issue.title}  (${issue.state})`,
         `URL: ${issue.url}`,
         issue.labels.length ? `Labels: ${issue.labels.join(', ')}` : '',
         '',
