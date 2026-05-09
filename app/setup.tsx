@@ -237,38 +237,36 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   flex1: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 60 },
-  heroBlock: { paddingTop: 24, paddingBottom: 24 },
+  heroBlock: { paddingTop: 16, paddingBottom: 22 },
   eyebrow: {
     fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase',
     fontWeight: '600', marginBottom: 4,
   },
   title: { fontSize: 30, fontWeight: '700', letterSpacing: -0.6, marginBottom: 10 },
   subtitle: { fontSize: 14, lineHeight: 20 },
-
   card: { padding: 16, marginBottom: 14 },
   cardHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: 8,
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 8,
   },
   cardTitle: { fontSize: 17, fontWeight: '600' },
-  savedTag: {
-    fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.6,
-  },
-  helpText: { fontSize: 12.5, lineHeight: 18, marginBottom: 12 },
+  savedTag: { fontSize: 11, letterSpacing: 0.6 },
+  helpText: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
   input: {
     borderWidth: StyleSheet.hairlineWidth, borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 13, marginBottom: 12,
   },
   primary: {
-    paddingVertical: 12, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center', minHeight: 44,
+    paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+    justifyContent: 'center', minHeight: 44, marginTop: 6,
   },
   primaryText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   disabled: { opacity: 0.4 },
   statusMsg: { fontSize: 12, marginTop: 10, lineHeight: 17 },
   continue: {
-    paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 8,
+    paddingVertical: 14, borderRadius: 14, alignItems: 'center',
+    justifyContent: 'center', marginTop: 8,
   },
-  continueText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  continueText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });
