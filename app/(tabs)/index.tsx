@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput,
+  Pressable, ScrollView, StyleSheet, Text, TextInput,
   TouchableOpacity, View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme';
@@ -131,8 +132,6 @@ export default function FilesScreen() {
     [manifest, expanded, q, currentPath],
   );
 
-  // "Recents" surfaces files the user has touched: current file first, then
-  // any modified files. Keeps the row useful without needing extra storage.
   const recents = useMemo(() => {
     if (!manifest) return [];
     const out: { path: string; modified: boolean; current: boolean }[] = [];

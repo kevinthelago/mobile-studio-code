@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable,
-  SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme';
@@ -28,9 +29,6 @@ export default function GitScreen() {
 
   const linkedIssue = activeTask?.linkedIssue ?? null;
 
-  // Build the final commit message by appending an issue reference when one
-  // is linked. The agent never sees this string — it's the user's choice on
-  // each push how they want the commit attributed.
   function withIssueRef(base: string): string {
     if (!linkedIssue || issueRefMode === 'none') return base;
     const ref = issueRefMode === 'fixes'
@@ -120,8 +118,6 @@ export default function GitScreen() {
     setDrafting(true);
     try {
       const fileLines = changes.map((c) => `${c.state} ${c.path}`).join('\n');
-      // If a task is linked to an issue, prepend the issue context so the
-      // generated message naturally aligns with what the work is about.
       const summary = linkedIssue
         ? `Task: ${activeTask?.title ?? ''}\nLinked issue #${linkedIssue.number}: ${linkedIssue.title}\n\nChanged files:\n${fileLines}`
         : fileLines;
@@ -155,9 +151,7 @@ export default function GitScreen() {
           await openFile(row.path);
           router.push('/(tabs)/edit');
         }}
-        style={[styles.fileRow, {
-          borderTopColor: t.borderColor,
-        }]}
+        style={[styles.fileRow, { borderTopColor: t.borderColor }]}
       >
         <View style={[styles.stateBadge, { backgroundColor: badgeBg }]}>
           <Text style={[styles.stateText, { color: badgeFg, fontFamily: t.fontMono }]}>
@@ -217,9 +211,7 @@ export default function GitScreen() {
             <Pressable style={styles.actionItem} onPress={onPush} disabled={pushing}>
               {modifiedCount > 0 ? (
                 <View style={[styles.actionSurface, styles.actionReady, {
-                  backgroundColor: t.accent,
-                  borderRadius: 14,
-                  borderWidth: 0,
+                  backgroundColor: t.accent, borderRadius: 14, borderWidth: 0,
                 }]}>
                   {pushing ? (
                     <ActivityIndicator size="small" color="#fff" />
@@ -372,26 +364,19 @@ const styles = StyleSheet.create({
     fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', fontWeight: '600',
   },
   branchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  branchName: {
-    fontSize: 22, fontWeight: '700', letterSpacing: -0.4, flexShrink: 1,
-  },
+  branchName: { fontSize: 22, fontWeight: '700', letterSpacing: -0.4, flexShrink: 1 },
   upstreamText: { fontSize: 12, marginTop: 4 },
 
   actionRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginTop: 12 },
   actionItem: { flex: 1 },
-  actionSurface: {
-    height: 56,
-    alignItems: 'center', justifyContent: 'center', gap: 2,
-  },
+  actionSurface: { height: 56, alignItems: 'center', justifyContent: 'center', gap: 2 },
   actionReady: { alignItems: 'center', justifyContent: 'center', gap: 2 },
   actionIcon: { fontSize: 18, lineHeight: 22 },
   actionIconReady: { color: '#fff' },
   actionLabel: { fontSize: 11, fontWeight: '500' },
   actionLabelReady: { color: '#fff' },
 
-  changesWrap: {
-    flex: 1, marginHorizontal: 12, marginTop: 12,
-  },
+  changesWrap: { flex: 1, marginHorizontal: 12, marginTop: 12 },
   changesCard: { flex: 1 },
   sectionHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -414,32 +399,22 @@ const styles = StyleSheet.create({
   stateText: { fontSize: 10, fontWeight: '700' },
   filePath: { flex: 1, fontSize: 13 },
 
-  commitWrap: {
-    marginHorizontal: 12, marginTop: 10, marginBottom: 110,
-  },
+  commitWrap: { marginHorizontal: 12, marginTop: 10, marginBottom: 110 },
   commitCard: { padding: 12 },
   commitInput: {
     fontSize: 13.5, paddingVertical: 4, paddingHorizontal: 4,
     paddingBottom: 10, minHeight: 44,
   },
-  issueRefRow: {
-    paddingTop: 8, paddingBottom: 4,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+  issueRefRow: { paddingTop: 8, paddingBottom: 4, borderTopWidth: StyleSheet.hairlineWidth },
   issueRefLabel: { fontSize: 11, marginBottom: 6 },
   issueRefChips: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  issueRefChip: {
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+  issueRefChip: { paddingHorizontal: 10, paddingVertical: 5, borderWidth: StyleSheet.hairlineWidth },
   issueRefChipText: { fontSize: 11, fontWeight: '500' },
   commitActions: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10,
   },
-  draftBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-  },
+  draftBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   draftBtnText: { fontSize: 11.5 },
   commitBtn: {
     paddingVertical: 8, paddingHorizontal: 16, borderRadius: 14,

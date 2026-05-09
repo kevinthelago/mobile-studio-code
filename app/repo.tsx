@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator, KeyboardAvoidingView, Platform, Pressable,
-  SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View,
+  ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../src/theme';
 import { useSession } from '../src/lib/session';

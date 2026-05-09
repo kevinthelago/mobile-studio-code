@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
-  Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View,
+  Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../src/theme';
 import { useSession } from '../src/lib/session';
 import { verifyGithubPat } from '../src/lib/github';

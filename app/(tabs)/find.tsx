@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TextInput,
+  ActivityIndicator, ScrollView, StyleSheet, Text, TextInput,
   TouchableOpacity, View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme';
