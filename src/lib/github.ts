@@ -228,7 +228,7 @@ export async function pullRepo(
   return { updated, added, unchanged, conflicts, manifest };
 }
 
-// ── Issues ─────────────────────────────────────────────────────────────────
+// -- Issues ------------------------------------------------------------------
 
 export type GithubIssue = {
   number: number;
@@ -398,6 +398,62 @@ export async function commentOnIssue(
   }
 }
 
+// -- Push (Git Trees API) ----------------------------------------------------
+//
+// Uses the low-level Git Data API instead of PUT /contents so that:
+//  1. New files in nested directories work without a prior remote SHA.
+//  2. All modified files land in a single atomic commit.
+//
+// Flow: create blobs → create tree (on top of current HEAD tree) →
+//       create commit → PATCH ref to point at new commit.
+
+async function ghPost<T>(
+  pat: string,
+  url: string,
+  body: unknown,
+): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${pat}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`POST ${url} failed (${res.status}): ${err.slice(0, 300)}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function ghPatch<T>(
+  pat: string,
+  url: string,
+  body: unknown,
+): Promise<T> {
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${pat}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`PATCH ${url} failed (${res.status}): ${err.slice(0, 300)}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+/** Encode text as base64 (handles Unicode). */
+function toBase64(text: string): string {
+  return btoa(unescape(encodeURIComponent(text)));
+}
+
 export async function pushModifiedFiles(
   pat: string,
   manifest: Manifest,
@@ -407,20 +463,72 @@ export async function pushModifiedFiles(
     .filter(([, e]) => e.modified)
     .map(([p]) => p);
 
+  if (modifiedPaths.length === 0) {
+    return { pushed: 0, manifest };
+  }
+
+  const base = `https://api.github.com/repos/${manifest.repo}`;
+
+  // 1. Get current HEAD commit SHA and its tree SHA.
+  const refRes = await fetch(
+    `${base}/git/ref/heads/${manifest.branch}`,
+    { headers: { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github+json' } },
+  );
+  if (!refRes.ok) {
+    const err = await refRes.text();
+    throw new Error(`Ref fetch failed (${refRes.status}): ${err.slice(0, 200)}`);
+  }
+  const refData = (await refRes.json()) as { object: { sha: string } };
+  const headCommitSha = refData.object.sha;
+
+  const commitRes = await fetch(
+    `${base}/git/commits/${headCommitSha}`,
+    { headers: { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github+json' } },
+  );
+  if (!commitRes.ok) {
+    const err = await commitRes.text();
+    throw new Error(`Commit fetch failed (${commitRes.status}): ${err.slice(0, 200)}`);
+  }
+  const commitData = (await commitRes.json()) as { tree: { sha: string } };
+  const baseTreeSha = commitData.tree.sha;
+
+  // 2. Create a blob for each modified file.
+  const treeItems: { path: string; mode: string; type: string; sha: string }[] = [];
+
   for (const path of modifiedPaths) {
-    const entry = manifest.files[path];
     const content = await readText(repoDir(manifest.repo) + path);
-    const result = await putFileContent(
-      pat,
-      manifest.repo,
-      manifest.branch,
-      path,
-      content,
-      message,
-      entry.sha,
-    );
-    manifest.files[path] = { sha: result.sha, modified: false };
+    const blob = await ghPost<{ sha: string }>(pat, `${base}/git/blobs`, {
+      content: toBase64(content),
+      encoding: 'base64',
+    });
+    treeItems.push({ path, mode: '100644', type: 'blob', sha: blob.sha });
+  }
+
+  // 3. Create a new tree on top of the base tree.
+  const newTree = await ghPost<{ sha: string }>(pat, `${base}/git/trees`, {
+    base_tree: baseTreeSha,
+    tree: treeItems,
+  });
+
+  // 4. Create a new commit.
+  const newCommit = await ghPost<{ sha: string }>(pat, `${base}/git/commits`, {
+    message,
+    tree: newTree.sha,
+    parents: [headCommitSha],
+  });
+
+  // 5. Update the branch ref.
+  await ghPatch(pat, `${base}/git/refs/heads/${manifest.branch}`, {
+    sha: newCommit.sha,
+    force: false,
+  });
+
+  // 6. Update manifest: mark files as clean with their new blob SHAs.
+  for (let i = 0; i < modifiedPaths.length; i++) {
+    const path = modifiedPaths[i];
+    manifest.files[path] = { sha: treeItems[i].sha, modified: false };
   }
   await writeManifest(manifest);
+
   return { pushed: modifiedPaths.length, manifest };
 }
