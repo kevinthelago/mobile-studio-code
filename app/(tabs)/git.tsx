@@ -355,7 +355,7 @@ export default function GitScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: 'transparent' },
   flex1: { flex: 1 },
-  container: { flex: 1 },
+  container: { flex: 1, paddingBottom: 110 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontSize: 14 },
 
