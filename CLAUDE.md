@@ -1,7 +1,32 @@
-# CLAUDE.md — Mobile Studio Code
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > This file is the authoritative project reference for the AI agent.
 > Read it at the start of any new session before touching code.
+
+---
+
+## Commands
+
+```bash
+# Start dev server (use Expo Go or a dev build on device)
+npx expo start
+
+# Type-check (no tests exist — this is the primary correctness gate)
+npx tsc --noEmit
+
+# EAS builds (requires EAS CLI and login)
+eas build --platform ios --profile development   # dev client build
+eas build --platform ios --profile preview        # internal TestFlight
+eas build --platform ios --profile production     # App Store
+
+# OTA updates
+eas update --branch preview   # push to preview channel
+eas update --branch main      # push to production channel
+```
+
+There are no automated tests. `tsc --noEmit` is the only local correctness check.
 
 ---
 
