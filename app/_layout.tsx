@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SessionProvider, useSession } from '../src/lib/session';
+import { TunnelProvider } from '../src/lib/TunnelContext';
 import { ThemeProvider, useTheme } from '../src/theme';
 import { Orbs } from '../src/components/ui/Orbs';
 
@@ -68,11 +69,13 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <SessionProvider>
-        <ThemedFrame>
-          <StageGate>
-            <InnerStack />
-          </StageGate>
-        </ThemedFrame>
+        <TunnelProvider>
+          <ThemedFrame>
+            <StageGate>
+              <InnerStack />
+            </StageGate>
+          </ThemedFrame>
+        </TunnelProvider>
       </SessionProvider>
     </ThemeProvider>
   );

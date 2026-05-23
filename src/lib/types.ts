@@ -122,6 +122,70 @@ export type RetryStatus = {
 
 export type CancelSignal = { cancelled: boolean };
 
+// ── Tunnel / base-studio-code protocol ──────────────────────────────────────
+
+export type PaneStatus = 'running' | 'idle' | 'awaiting_input' | 'error';
+
+export type PaneStreamingState = 'streaming' | 'minimized' | 'dormant';
+
+export type PaneDescriptor = {
+  id: string;
+  cwd: string;
+  name: string;
+  status: PaneStatus;
+};
+
+export type PaneSessionState = {
+  paneId: string;
+  status: PaneStatus;
+  currentTask: string;
+  lastActivity: string; // ISO timestamp
+  prompt: string | null; // populated when status === 'awaiting_input'
+};
+
+/** Messages sent from base-studio-code desktop → mobile */
+export type TunnelServerMessage =
+  | { type: 'auth_ok' }
+  | { type: 'pane_list'; panes: PaneDescriptor[] }
+  | { type: 'pane_output'; paneId: string; data: string; coarse: boolean }
+  | {
+      type: 'session_state';
+      paneId: string;
+      status: PaneStatus;
+      currentTask: string;
+      lastActivity: string;
+      prompt: string | null;
+    }
+  | { type: 'user_request'; paneId: string; prompt: string };
+
+/** Messages sent from mobile → base-studio-code desktop */
+export type TunnelClientMessage =
+  | { type: 'auth'; token: string; fcmToken?: string }
+  | { type: 'pane_set_state'; paneId: string; state: PaneStreamingState }
+  | { type: 'pane_focus'; paneId: string }
+  | { type: 'pane_input'; paneId: string; data: string }
+  | { type: 'pane_resize'; paneId: string; cols: number; rows: number };
+
+/** Per-pane runtime state held in memory on the mobile side */
+export type PaneState = {
+  descriptor: PaneDescriptor;
+  streamingState: PaneStreamingState;
+  /** Accumulated PTY output — only populated for the streaming (focused) pane */
+  outputBuffer: string;
+  /** Latest structured state update — populated for minimized panes */
+  sessionState: PaneSessionState | null;
+  hasUserRequest: boolean;
+  lastUserRequestAt: number | null;
+  lastActivityAt: number | null;
+};
+
+export type TunnelConnectionState =
+  | 'disconnected'
+  | 'connecting'
+  | 'authenticating'
+  | 'connected'
+  | 'error';
+
 export type ToolDefinition = {
   name: string;
   description: string;
