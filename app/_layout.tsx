@@ -3,9 +3,12 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SessionProvider, useSession } from '../src/lib/session';
-import { TunnelProvider } from '../src/lib/TunnelContext';
+import { TunnelProvider, useTunnel } from '../src/lib/TunnelContext';
 import { ThemeProvider, useTheme } from '../src/theme';
 import { Orbs } from '../src/components/ui/Orbs';
+import {
+  initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
+} from '../src/lib/fcm';
 
 function StageGate({ children }: { children: React.ReactNode }) {
   const { stage } = useSession();
@@ -46,6 +49,53 @@ function ThemedFrame({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Initialises Firebase Cloud Messaging on mount, pushes the token to
+ * TunnelContext (which forwards it to the desktop during the auth handshake),
+ * and handles deep-link routing from notification taps.
+ */
+function FcmBootstrap() {
+  const { setFcmToken, focusPane } = useTunnel();
+  const router = useRouter();
+
+  useEffect(() => {
+    let cleanupSub: (() => void) | undefined;
+
+    (async () => {
+      const token = await initFcm();
+      if (token) setFcmToken(token);
+
+      // Handle taps on notifications while the app was quit (cold start)
+      const initialPaneId = await getInitialNotificationPaneId();
+      if (initialPaneId) {
+        focusPane(initialPaneId);
+        router.navigate('/(tabs)/run' as never);
+      }
+
+      cleanupSub = subscribeFcm(
+        // Token refresh — keep the desktop in sync
+        (newToken) => setFcmToken(newToken),
+        // Foreground user_request — pane state is already updated by TunnelClient;
+        // no additional action needed here since the SessionStrip will highlight it.
+        (_paneId, _prompt) => {},
+      );
+    })();
+
+    // Handle taps while the app was backgrounded (not quit)
+    const cleanupOpened = onNotificationOpened((paneId) => {
+      focusPane(paneId);
+      router.navigate('/(tabs)/run' as never);
+    });
+
+    return () => {
+      cleanupSub?.();
+      cleanupOpened();
+    };
+  }, [setFcmToken, focusPane, router]);
+
+  return null;
+}
+
 function InnerStack() {
   return (
     <Stack
@@ -70,6 +120,7 @@ export default function RootLayout() {
     <ThemeProvider>
       <SessionProvider>
         <TunnelProvider>
+          <FcmBootstrap />
           <ThemedFrame>
             <StageGate>
               <InnerStack />

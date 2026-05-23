@@ -34,3 +34,7 @@ expo-env.d.ts
 # Env
 .env
 .env.local
+
+# Firebase — contains project credentials, never commit
+GoogleService-Info.plist
+google-services.json

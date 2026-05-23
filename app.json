@@ -47,7 +47,9 @@
         {
           "cameraPermission": "Scan a QR code to pair with base-studio-code."
         }
-      ]
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging"
     ],
     "extra": {
       "eas": {
