@@ -17,6 +17,8 @@ export type TunnelValue = {
   focusPane: (paneId: string) => void;
   sendInput: (paneId: string, data: string) => void;
   sendResize: (paneId: string, cols: number, rows: number) => void;
+  /** Releases the active pane back to minimized state, returning to the grid */
+  unfocusPane: () => void;
   /** Call after FCM token is obtained so it is included in future auth handshakes */
   setFcmToken: (fcmToken: string) => void;
 };
@@ -87,6 +89,16 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     clientRef.current?.sendResize(paneId, cols, rows);
   }, []);
 
+  const unfocusPane = useCallback(() => {
+    const current = clientRef.current?.getActivePaneId();
+    if (current) {
+      clientRef.current?.sendInput(current, ''); // flush; actual minimise via focusPane override
+      // Tell the client to minimise the pane without switching to another
+      clientRef.current?.minimisePane(current);
+    }
+    setActivePaneId(null);
+  }, []);
+
   const setFcmToken = useCallback((fcmToken: string) => {
     fcmTokenRef.current = fcmToken;
     setSecret(KEYS.FCM_TOKEN, fcmToken).catch(() => {});
@@ -114,6 +126,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     focusPane,
     sendInput,
     sendResize,
+    unfocusPane,
     setFcmToken,
   };
 

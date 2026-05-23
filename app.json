@@ -21,6 +21,7 @@
       "backgroundColor": "#0b0d14",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Choose screenshots or images to send to Claude.",
+        "NSCameraUsageDescription": "Scan a QR code to pair with base-studio-code.",
         "UIUserInterfaceStyle": "Dark"
       }
     },
@@ -39,6 +40,12 @@
         "expo-image-picker",
         {
           "photosPermission": "Choose screenshots or images to send to Claude."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan a QR code to pair with base-studio-code."
         }
       ]
     ],

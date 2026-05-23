@@ -1,463 +1,586 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable,
-  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator, FlatList, KeyboardAvoidingView, Platform,
+  Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
-import { useSession } from '../../src/lib/session';
-import { AttachedImage, ChatTurn, RetryStatus } from '../../src/lib/types';
+import { useTunnel } from '../../src/lib/TunnelContext';
+import { PaneState, PaneStatus, TunnelConnectionState } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
-import { TopPill } from '../../src/components/ui/TopPill';
 import { IconBtn } from '../../src/components/ui/IconBtn';
-import { ClaudeAvatar } from '../../src/components/ui/ClaudeAvatar';
-import { TaskSheet } from '../../src/components/ui/TaskSheet';
+import { stripAnsi, lastLines } from '../../src/lib/ansi';
 
 const TAB_BAR_HEIGHT = 60;
+const TERMINAL_LINE_LIMIT = 200;
 
-function summarizeToolInput(name: string, input: Record<string, unknown>) {
-  if (typeof input.path === 'string') {
-    if (name === 'write_file' && typeof input.content === 'string') {
-      return `${input.path} (${input.content.length} chars)`;
-    }
-    return input.path;
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function statusColor(status: PaneStatus, accent: string): string {
+  switch (status) {
+    case 'running': return '#4ade80';
+    case 'idle': return 'rgba(255,255,255,0.3)';
+    case 'awaiting_input': return '#fbbf24';
+    case 'error': return '#f87171';
+    default: return accent;
   }
-  return JSON.stringify(input);
 }
 
-function truncate(s: string, n: number) {
-  return s.length > n ? s.slice(0, n) + '…' : s;
+function relativeTime(ts: number | null): string {
+  if (!ts) return '';
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.floor(m / 60)}h ago`;
 }
 
-function RetryBanner({
-  status, onCancel,
-}: { status: NonNullable<RetryStatus>; onCancel: () => void }) {
+/** Parse QR payload. Accepts JSON {url, token} or bare "url|token" strings. */
+function parseQrPayload(data: string): { url: string; token: string } | null {
+  try {
+    const obj = JSON.parse(data) as { url?: string; token?: string };
+    if (obj.url && obj.token) return { url: obj.url, token: obj.token };
+  } catch {
+    const parts = data.split('|');
+    if (parts.length === 2) return { url: parts[0], token: parts[1] };
+  }
+  return null;
+}
+
+// ── Sub-screens ───────────────────────────────────────────────────────────────
+
+function ConnectingView({ state }: { state: TunnelConnectionState }) {
   const t = useTheme();
-  const [remaining, setRemaining] = useState(status.delayMs);
-  useEffect(() => {
-    setRemaining(status.delayMs);
-    if (status.delayMs <= 0) return;
-    const start = Date.now();
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - start;
-      const left = Math.max(0, status.delayMs - elapsed);
-      setRemaining(left);
-      if (left <= 0) clearInterval(interval);
-    }, 100);
-    return () => clearInterval(interval);
-  }, [status]);
+  const label = state === 'authenticating' ? 'Authenticating…' : 'Connecting…';
   return (
-    <View style={[styles.retryBanner, { borderColor: t.borderColor }]}>
-      <ActivityIndicator size="small" color={t.accent} />
-      <View style={styles.retryTextWrap}>
-        <Text style={[styles.retryTitle, { color: t.fg }]}>
-          Retry {status.attempt} in {(remaining / 1000).toFixed(1)}s
-        </Text>
-        <Text style={[styles.retrySubtitle, { color: t.fgMuted }]} numberOfLines={1}>
-          {truncate(status.error, 80)}
-        </Text>
-      </View>
-      <TouchableOpacity onPress={onCancel} hitSlop={8} style={styles.retryCancel}>
-        <Text style={styles.retryCancelText}>Cancel</Text>
-      </TouchableOpacity>
+    <View style={styles.centered}>
+      <ActivityIndicator color={t.accent} size="large" />
+      <Text style={[styles.connectingText, { color: t.fgMuted }]}>{label}</Text>
     </View>
   );
 }
 
-function TurnView({ turn }: { turn: ChatTurn }) {
+function PairingView() {
   const t = useTheme();
-  if (turn.kind === 'user') {
+  const insets = useSafeAreaInsets();
+  const { connect, connectionState } = useTunnel();
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanning, setScanning] = useState(false);
+  const [manualUrl, setManualUrl] = useState('');
+  const [manualToken, setManualToken] = useState('');
+  const [showManual, setShowManual] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const scannedRef = useRef(false);
+
+  const handleQrScanned = useCallback(({ data }: { data: string }) => {
+    if (scannedRef.current) return;
+    const parsed = parseQrPayload(data);
+    if (!parsed) {
+      setError('Unrecognised QR code format.');
+      setScanning(false);
+      return;
+    }
+    scannedRef.current = true;
+    setScanning(false);
+    connect(parsed.url, parsed.token);
+  }, [connect]);
+
+  const handleScanPress = useCallback(async () => {
+    setError(null);
+    scannedRef.current = false;
+    if (!permission?.granted) {
+      const result = await requestPermission();
+      if (!result.granted) {
+        setError('Camera permission is required to scan QR codes.');
+        return;
+      }
+    }
+    setScanning(true);
+  }, [permission, requestPermission]);
+
+  const handleManualConnect = useCallback(() => {
+    setError(null);
+    const url = manualUrl.trim();
+    const token = manualToken.trim();
+    if (!url || !token) {
+      setError('Both URL and token are required.');
+      return;
+    }
+    connect(url, token);
+  }, [manualUrl, manualToken, connect]);
+
+  if (scanning) {
     return (
-      <View style={styles.userRow}>
-        <Text style={[styles.promptArrow, { color: t.accent, fontFamily: t.fontMono }]}>›</Text>
-        <Text style={[styles.userText, { color: t.fg, fontFamily: t.fontMono }]}>{turn.text}</Text>
+      <View style={styles.cameraWrap}>
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          onBarcodeScanned={handleQrScanned}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+        />
+        {/* Viewfinder frame */}
+        <View style={styles.viewfinderOuter} pointerEvents="none">
+          <View style={[styles.viewfinder, { borderColor: t.accent }]} />
+          <Text style={[styles.viewfinderLabel, { color: t.fg }]}>
+            Point at the QR code in base-studio-code
+          </Text>
+        </View>
+        <Pressable
+          style={[styles.cancelScan, { top: insets.top + 12 }]}
+          onPress={() => setScanning(false)}
+        >
+          <Text style={[styles.cancelScanText, { color: t.fg }]}>Cancel</Text>
+        </Pressable>
       </View>
     );
   }
-  if (turn.kind === 'assistant') {
-    return (
-      <Text style={[styles.replyText, { color: t.fg }]}>{turn.text}</Text>
-    );
-  }
-  if (turn.kind === 'note') {
-    return (
-      <Text style={[styles.noteLine, {
-        color: t.fgDim, fontFamily: t.fontMono, borderLeftColor: t.borderColor,
-      }]}>
-        Ⳡ{turn.text}
-      </Text>
-    );
-  }
+
+  const isConnecting = connectionState === 'connecting' || connectionState === 'authenticating';
+
   return (
-    <View style={[styles.toolCard, {
-      backgroundColor: t.glass ? 'rgba(255,255,255,0.05)' : t.surface,
-      borderColor: t.borderColor,
-    }]}>
-      <Text style={[styles.toolTitle, { color: t.fgMuted, fontFamily: t.fontMono }]}>
-        {turn.name} · {summarizeToolInput(turn.name, turn.input)}
-      </Text>
-      {turn.result === undefined ? (
-        <Text style={[styles.toolRunning, { color: t.fgMuted, fontFamily: t.fontMono }]}>
-          running…
+    <View style={[styles.pairing, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
+      <Surface style={styles.pairingCard} radius={20}>
+        <View style={styles.pairingIconWrap}>
+          <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
+            <Path
+              d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3m8 0h3a2 2 0 002-2v-3"
+              stroke={t.accent} strokeWidth={1.5} strokeLinecap="round"
+            />
+          </Svg>
+        </View>
+        <Text style={[styles.pairingTitle, { color: t.fg }]}>
+          Connect to base-studio-code
         </Text>
+        <Text style={[styles.pairingSubtitle, { color: t.fgMuted }]}>
+          Open base-studio-code on your desktop and show the pairing QR code.
+        </Text>
+
+        {error && (
+          <Text style={styles.errorText}>{error}</Text>
+        )}
+
+        <Pressable
+          onPress={handleScanPress}
+          disabled={isConnecting}
+          style={[styles.scanBtn, { backgroundColor: t.accent, opacity: isConnecting ? 0.5 : 1 }]}
+        >
+          {isConnecting ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"
+                  stroke="#fff" strokeWidth={2} strokeLinecap="round"
+                />
+              </Svg>
+              <Text style={styles.scanBtnText}>Scan QR Code</Text>
+            </>
+          )}
+        </Pressable>
+
+        <Pressable onPress={() => setShowManual((v) => !v)} style={styles.manualToggle}>
+          <Text style={[styles.manualToggleText, { color: t.fgMuted }]}>
+            {showManual ? 'Hide manual entry' : 'Enter URL and token manually'}
+          </Text>
+        </Pressable>
+
+        {showManual && (
+          <View style={styles.manualForm}>
+            <TextInput
+              value={manualUrl}
+              onChangeText={setManualUrl}
+              placeholder="ws://192.168.1.x:8765"
+              placeholderTextColor={t.fgDim}
+              style={[styles.manualInput, {
+                color: t.fg, borderColor: t.borderColor,
+                fontFamily: t.fontMono, backgroundColor: t.surface,
+              }]}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+            <TextInput
+              value={manualToken}
+              onChangeText={setManualToken}
+              placeholder="Pairing token"
+              placeholderTextColor={t.fgDim}
+              style={[styles.manualInput, {
+                color: t.fg, borderColor: t.borderColor,
+                fontFamily: t.fontMono, backgroundColor: t.surface,
+              }]}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+            />
+            <Pressable
+              onPress={handleManualConnect}
+              disabled={isConnecting}
+              style={[styles.manualConnectBtn, {
+                borderColor: t.accent, opacity: isConnecting ? 0.5 : 1,
+              }]}
+            >
+              <Text style={[styles.manualConnectText, { color: t.accent }]}>Connect</Text>
+            </Pressable>
+          </View>
+        )}
+      </Surface>
+    </View>
+  );
+}
+
+function SessionCard({ pane, onPress }: { pane: PaneState; onPress: () => void }) {
+  const t = useTheme();
+  const status = pane.sessionState?.status ?? pane.descriptor.status;
+  const dotColor = statusColor(status, t.accent);
+  const taskText = pane.sessionState?.currentTask ?? pane.descriptor.cwd;
+  const lastLine = pane.outputBuffer
+    ? stripAnsi(pane.outputBuffer).split('\n').filter(Boolean).at(-1) ?? ''
+    : '';
+  const preview = pane.sessionState?.prompt ?? lastLine;
+
+  return (
+    <Pressable onPress={onPress}>
+      <Surface style={[
+        styles.card,
+        pane.hasUserRequest && { borderColor: '#fbbf24' },
+      ]}>
+        <View style={[styles.statusDot, { backgroundColor: dotColor }]} />
+
+        <View style={styles.cardBody}>
+          <View style={styles.cardRow}>
+            <Text style={[styles.cardTitle, { color: t.fg, fontFamily: t.fontMono }]} numberOfLines={1}>
+              {pane.descriptor.name || pane.descriptor.id}
+            </Text>
+            {pane.hasUserRequest && (
+              <View style={styles.requestBadge}>
+                <Text style={styles.requestBadgeText}>input needed</Text>
+              </View>
+            )}
+          </View>
+
+          {taskText ? (
+            <Text style={[styles.cardTask, { color: t.fgMuted }]} numberOfLines={1}>
+              {taskText}
+            </Text>
+          ) : null}
+
+          {preview ? (
+            <Text style={[styles.cardPreview, {
+              color: pane.hasUserRequest ? '#fbbf24' : t.fgDim,
+              fontFamily: t.fontMono,
+            }]} numberOfLines={2}>
+              {preview}
+            </Text>
+          ) : null}
+        </View>
+
+        <View style={styles.cardMeta}>
+          <Text style={[styles.cardTime, { color: t.fgDim }]}>
+            {relativeTime(pane.lastActivityAt)}
+          </Text>
+          <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+            <Path d="M5 3l4 4-4 4" stroke={t.fgDim} strokeWidth={1.4} strokeLinecap="round" />
+          </Svg>
+        </View>
+      </Surface>
+    </Pressable>
+  );
+}
+
+function PaneGridView() {
+  const t = useTheme();
+  const insets = useSafeAreaInsets();
+  const { panes, orderedPaneIds, focusPane, disconnect } = useTunnel();
+  const ordered = orderedPaneIds.map((id) => panes[id]).filter(Boolean) as PaneState[];
+
+  return (
+    <View style={[styles.grid, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 8 }]}>
+      <View style={styles.gridHeader}>
+        <Text style={[styles.gridTitle, { color: t.fg }]}>Sessions</Text>
+        <Pressable onPress={disconnect} hitSlop={8}>
+          <Text style={[styles.disconnectText, { color: t.fgMuted }]}>Disconnect</Text>
+        </Pressable>
+      </View>
+
+      {ordered.length === 0 ? (
+        <View style={styles.centered}>
+          <Text style={[styles.emptyText, { color: t.fgDim }]}>
+            No active sessions.{'\n'}Start a Claude session in base-studio-code.
+          </Text>
+        </View>
       ) : (
-        <Text style={[styles.toolResult, {
-          color: turn.isError ? '#ff8a8a' : t.code.ty,
-          fontFamily: t.fontMono,
-        }]}>
-          {turn.isError ? '✗ ' : '✓ '}
-          {truncate(turn.result, 200)}
-        </Text>
+        <FlatList
+          data={ordered}
+          keyExtractor={(p) => p.descriptor.id}
+          renderItem={({ item }) => (
+            <SessionCard pane={item} onPress={() => focusPane(item.descriptor.id)} />
+          )}
+          contentContainerStyle={styles.cardList}
+          showsVerticalScrollIndicator={false}
+        />
       )}
     </View>
   );
 }
 
-const SUGGESTIONS = ['Explain this repo', 'Show recent changes', 'Run the tests'];
-
-export default function RunScreen() {
+function TerminalView({ paneId }: { paneId: string }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const {
-    manifest, activeTask, turns, send, chatBusy, retry, cancelChat,
-    resumeNotice, clearChat,
-  } = useSession();
-  const [input, setInput] = useState('');
-  const [taskSheetOpen, setTaskSheetOpen] = useState(false);
-  const [pendingImages, setPendingImages] = useState<AttachedImage[]>([]);
+  const { panes, sendInput, sendResize, unfocusPane } = useTunnel();
+  const [inputText, setInputText] = useState('');
   const scrollRef = useRef<ScrollView>(null);
-
-  // keyboardVerticalOffset: tab bar + safe-area bottom so KAV lifts correctly
   const kbOffset = TAB_BAR_HEIGHT + insets.bottom;
 
+  const pane = panes[paneId];
+
+  const output = pane
+    ? lastLines(stripAnsi(pane.outputBuffer), TERMINAL_LINE_LIMIT)
+    : '';
+
   useEffect(() => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
-  }, [turns.length, chatBusy]);
+    scrollRef.current?.scrollToEnd({ animated: false });
+  }, [output]);
 
-  async function handleSend(text?: string) {
-    const trimmed = (text ?? input).trim();
-    const imgs = pendingImages;
-    if ((!trimmed && imgs.length === 0) || chatBusy) return;
-    if (text === undefined) setInput('');
-    setPendingImages([]);
-    await send(trimmed, imgs.length > 0 ? imgs : undefined);
+  const handleSend = useCallback(() => {
+    const text = inputText;
+    setInputText('');
+    sendInput(paneId, text + '\n');
+  }, [inputText, paneId, sendInput]);
+
+  const handleLayout = useCallback(({ nativeEvent }: { nativeEvent: { layout: { width: number; height: number } } }) => {
+    const { width, height } = nativeEvent.layout;
+    // Approximate columns/rows based on monospace char dimensions
+    const cols = Math.floor(width / 7.2);
+    const rows = Math.floor(height / 14);
+    sendResize(paneId, Math.max(cols, 40), Math.max(rows, 10));
+  }, [paneId, sendResize]);
+
+  if (!pane) {
+    return (
+      <View style={styles.centered}>
+        <Text style={[styles.emptyText, { color: t.fgDim }]}>Session not found.</Text>
+      </View>
+    );
   }
 
-  async function handlePickImage() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Photo access needed',
-        'Allow photo library access in Settings to attach screenshots.',
-      );
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      quality: 0.8,
-      base64: true,
-      exif: false,
-    });
-    if (result.canceled) return;
-    const newImages: AttachedImage[] = result.assets
-      .filter((a) => a.base64)
-      .map((a) => ({
-        uri: a.uri,
-        base64: a.base64!,
-        mediaType: (a.mimeType ?? 'image/jpeg') as AttachedImage['mediaType'],
-      }));
-    setPendingImages((prev) => [...prev, ...newImages]);
-  }
-
-  function handleRemoveImage(index: number) {
-    setPendingImages((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function confirmClear() {
-    if (turns.length === 0) return;
-    Alert.alert('Clear conversation?', 'This wipes the local chat history for this repo.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Clear', style: 'destructive', onPress: () => clearChat() },
-    ]);
-  }
-
-  const toolCalls = turns.filter((x) => x.kind === 'tool').length;
-  const userTurns = turns.filter((x) => x.kind === 'user').length;
-  const isEmpty = turns.length === 0 && !chatBusy && !resumeNotice;
+  const status = pane.sessionState?.status ?? pane.descriptor.status;
+  const dotColor = statusColor(status, t.accent);
 
   return (
-    // KAV must be the outermost flex container so it can shrink the content
-    // area when the keyboard appears. SafeAreaView inside means the top inset
-    // is still respected, and bottom padding comes from insets manually.
     <KeyboardAvoidingView
-      style={styles.root}
+      style={styles.termRoot}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={kbOffset}
     >
-      <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-        <TopPill
-          left={<ClaudeAvatar size={24} />}
-          center={
-            <Pressable onPress={() => setTaskSheetOpen(true)} hitSlop={6}>
-              <View style={styles.taskCenter}>
-                <Text style={[styles.pillTitle, { color: t.fg }]} numberOfLines={1}>
-                  {activeTask?.title ?? 'Claude'}
-                  <Text style={{ color: t.fgDim }}>  ›</Text>
-                </Text>
-                <Text
-                  style={[styles.pillSub, { color: t.fgMuted, fontFamily: t.fontMono }]}
-                  numberOfLines={1}
-                >
-                  {activeTask?.linkedIssue ? `#${activeTask.linkedIssue.number} · ` : ''}
-                  {userTurns} turn{userTurns === 1 ? '' : 's'} · {toolCalls} tool call{toolCalls === 1 ? '' : 's'}
-                </Text>
-              </View>
-            </Pressable>
-          }
-          right={
-            <IconBtn onPress={confirmClear}>
-              <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-                <Path
-                  d="M3 4h8M5 4V3a1 1 0 011-1h2a1 1 0 011 1v1M4 4l1 8a1 1 0 001 1h2a1 1 0 001-1l1-8"
-                  stroke={t.fg} strokeWidth={1.4} strokeLinecap="round"
-                />
-              </Svg>
-            </IconBtn>
-          }
-        />
-
-        <TaskSheet
-          visible={taskSheetOpen}
-          onClose={() => setTaskSheetOpen(false)}
-        />
-
-        {resumeNotice && (
-          <View style={[styles.resumeBanner, {
-            backgroundColor: t.glass ? 'rgba(192,132,252,0.12)' : t.surface,
-          }]}>
-            <ActivityIndicator size="small" color={t.accent} />
-            <Text style={[styles.resumeText, { color: t.accent2 }]}>{resumeNotice}</Text>
-          </View>
-        )}
-
-        <ScrollView
-          ref={scrollRef}
-          style={styles.transcript}
-          contentContainerStyle={styles.transcriptContent}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
-        >
-          <Text style={[styles.systemLine, { color: t.fgDim, fontFamily: t.fontMono }]}>
-            · workspace: {manifest?.repo ?? '(none)'}
+      {/* Header */}
+      <View style={[styles.termHeader, { paddingTop: insets.top + 8, borderBottomColor: t.borderColor }]}>
+        <IconBtn onPress={unfocusPane}>
+          <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+            <Path d="M9 3L5 7l4 4" stroke={t.fg} strokeWidth={1.6} strokeLinecap="round" />
+          </Svg>
+        </IconBtn>
+        <View style={[styles.statusDot, { backgroundColor: dotColor }]} />
+        <Text style={[styles.termTitle, { color: t.fg, fontFamily: t.fontMono }]} numberOfLines={1}>
+          {pane.descriptor.name || pane.descriptor.id}
+        </Text>
+        {pane.sessionState?.currentTask ? (
+          <Text style={[styles.termTask, { color: t.fgMuted }]} numberOfLines={1}>
+            {pane.sessionState.currentTask}
           </Text>
-          {isEmpty && (
-            <Text style={[styles.placeholder, { color: t.fgDim }]}>
-              Ask Claude anything about your repo. It can list directories, read
-              files, and write changes.
-            </Text>
-          )}
-          {turns.map((turn, i) => <TurnView key={i} turn={turn} />)}
-          {chatBusy && !retry && (
-            <View style={styles.thinkingRow}>
-              <View style={[styles.thinkingDot, { backgroundColor: t.code.ty }]} />
-              <Text style={[styles.thinkingText, { color: t.fgMuted, fontFamily: t.fontMono }]}>
-                thinking…
-              </Text>
-            </View>
-          )}
-        </ScrollView>
+        ) : null}
+      </View>
 
-        {retry && <RetryBanner status={retry} onCancel={cancelChat} />}
-
-        {isEmpty && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.suggestionRow}
-          >
-            {SUGGESTIONS.map((s, i) => (
-              <Pressable
-                key={s}
-                onPress={() => handleSend(s)}
-                style={[
-                  styles.suggestionChip,
-                  {
-                    backgroundColor: i === 0
-                      ? t.accent
-                      : t.glass ? 'rgba(255,255,255,0.10)' : t.surface,
-                    borderColor: t.borderColor,
-                    borderWidth: i === 0 ? 0 : StyleSheet.hairlineWidth,
-                    borderRadius: t.sharp ? 4 : 16,
-                  },
-                ]}
-              >
-                <Text style={[styles.suggestionText, {
-                  color: i === 0 ? '#fff' : t.fg,
-                }]}>{s}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-
-        <View style={[styles.inputWrap, { borderTopColor: t.borderColor }]}>
-          {pendingImages.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.thumbStrip}
-            >
-              {pendingImages.map((img, i) => (
-                <View key={img.uri + i} style={styles.thumbWrap}>
-                  <Image source={{ uri: img.uri }} style={styles.thumb} />
-                  <Pressable
-                    onPress={() => handleRemoveImage(i)}
-                    hitSlop={6}
-                    style={styles.thumbRemove}
-                  >
-                    <Text style={styles.thumbRemoveText}>×</Text>
-                  </Pressable>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-          <Surface style={styles.inputBar} radius={26}>
-            <IconBtn onPress={handlePickImage} disabled={chatBusy}>
-              <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-                <Path
-                  d="M7 1v12M1 7h12"
-                  stroke={t.fg} strokeWidth={1.6} strokeLinecap="round"
-                />
-              </Svg>
-            </IconBtn>
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              placeholder="Ask Claude…"
-              placeholderTextColor={t.fgDim}
-              style={[styles.inputText, { color: t.fg }]}
-              multiline
-              editable={!chatBusy}
-            />
-            {chatBusy ? (
-              <Pressable onPress={cancelChat} style={[styles.cancelBtn, {
-                backgroundColor: 'rgba(255,138,138,0.15)',
-                borderColor: 'rgba(255,138,138,0.4)',
-              }]}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </Pressable>
-            ) : (
-              <IconBtn
-                primary
-                size={40}
-                onPress={() => handleSend()}
-                disabled={!input.trim() && pendingImages.length === 0}
-              >
-                <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-                  <Path
-                    d="M7 11V3M3 7l4-4 4 4"
-                    stroke="#fff" strokeWidth={2} strokeLinecap="round"
-                  />
-                </Svg>
-              </IconBtn>
-            )}
-          </Surface>
+      {/* user_request prompt banner */}
+      {pane.hasUserRequest && pane.sessionState?.prompt ? (
+        <View style={styles.promptBanner}>
+          <Text style={styles.promptIcon}>?</Text>
+          <Text style={styles.promptText} numberOfLines={3}>{pane.sessionState.prompt}</Text>
         </View>
+      ) : null}
+
+      {/* Output */}
+      <ScrollView
+        ref={scrollRef}
+        style={styles.termScroll}
+        contentContainerStyle={styles.termContent}
+        onLayout={handleLayout}
+        showsVerticalScrollIndicator={false}
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+      >
+        <Text style={[styles.termOutput, { color: t.fg, fontFamily: t.fontMono }]} selectable>
+          {output || ' '}
+        </Text>
+      </ScrollView>
+
+      {/* Input bar */}
+      <View style={[styles.termInputWrap, { borderTopColor: t.borderColor, paddingBottom: insets.bottom + 8 }]}>
+        <Surface style={styles.termInputBar} radius={20}>
+          <Text style={[styles.termPromptArrow, { color: t.accent, fontFamily: t.fontMono }]}>›</Text>
+          <TextInput
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="Send input…"
+            placeholderTextColor={t.fgDim}
+            style={[styles.termInput, { color: t.fg, fontFamily: t.fontMono }]}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="send"
+            onSubmitEditing={handleSend}
+          />
+          <IconBtn primary size={36} onPress={handleSend} disabled={!inputText.trim()}>
+            <Svg width={12} height={12} viewBox="0 0 14 14" fill="none">
+              <Path d="M7 11V3M3 7l4-4 4 4" stroke="#fff" strokeWidth={2} strokeLinecap="round" />
+            </Svg>
+          </IconBtn>
+        </Surface>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
+// ── Root ─────────────────────────────────────────────────────────────────────
+
+export default function SessionsScreen() {
+  const { connectionState, activePaneId } = useTunnel();
+
+  if (connectionState === 'disconnected' || connectionState === 'error') {
+    return <PairingView />;
+  }
+  if (connectionState === 'connecting' || connectionState === 'authenticating') {
+    return <ConnectingView state={connectionState} />;
+  }
+  if (activePaneId) {
+    return <TerminalView paneId={activePaneId} />;
+  }
+  return <PaneGridView />;
+}
+
+// ── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: 'transparent' },
-  container: { flex: 1 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  connectingText: { marginTop: 16, fontSize: 14 },
+  emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 22 },
 
-  pillTitle: { fontSize: 14, fontWeight: '600' },
-  pillSub: { fontSize: 11 },
-  taskCenter: { flex: 1, minWidth: 0 },
-
-  resumeBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 14, paddingVertical: 8,
-    marginHorizontal: 16, marginTop: 8, borderRadius: 12,
+  // Pairing
+  pairing: { flex: 1, paddingHorizontal: 20 },
+  pairingCard: {
+    padding: 24,
+    alignItems: 'center',
+    gap: 12,
   },
-  resumeText: { fontSize: 12 },
-
-  transcript: { flex: 1 },
-  transcriptContent: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 12 },
-  placeholder: { fontSize: 13, lineHeight: 18, paddingVertical: 10 },
-  systemLine: { fontSize: 11, marginBottom: 14 },
-  noteLine: {
-    fontSize: 11, marginVertical: 6, paddingLeft: 8,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    fontStyle: 'italic',
+  pairingIconWrap: {
+    width: 64, height: 64, borderRadius: 20,
+    backgroundColor: 'rgba(255,174,207,0.12)',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 4,
   },
-  userRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  promptArrow: { fontSize: 14 },
-  userText: { fontSize: 13, flex: 1 },
-  thinkingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  thinkingDot: { width: 6, height: 6, borderRadius: 3 },
-  thinkingText: { fontSize: 12 },
-  toolCard: {
+  pairingTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  pairingSubtitle: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  errorText: { fontSize: 12, color: '#f87171', textAlign: 'center' },
+  scanBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 24, paddingVertical: 13,
+    borderRadius: 24, marginTop: 4,
+  },
+  scanBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  manualToggle: { paddingVertical: 6 },
+  manualToggleText: { fontSize: 12.5 },
+  manualForm: { width: '100%', gap: 10 },
+  manualInput: {
+    width: '100%', height: 44, borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10, padding: 10, marginBottom: 8,
+    paddingHorizontal: 12, fontSize: 13,
   },
-  toolTitle: {
-    fontSize: 10.5, textTransform: 'uppercase',
-    letterSpacing: 0.5, marginBottom: 4,
+  manualConnectBtn: {
+    alignSelf: 'flex-end',
+    borderWidth: 1, borderRadius: 8,
+    paddingHorizontal: 16, paddingVertical: 8,
   },
-  toolRunning: { fontSize: 11.5 },
-  toolResult: { fontSize: 11.5 },
-  replyText: { fontSize: 13.5, lineHeight: 20, marginBottom: 14 },
+  manualConnectText: { fontSize: 13.5, fontWeight: '600' },
 
-  retryBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 14, paddingVertical: 10,
-    backgroundColor: 'rgba(255,184,107,0.10)',
-    borderTopWidth: StyleSheet.hairlineWidth,
+  // Camera
+  cameraWrap: { flex: 1, backgroundColor: '#000' },
+  viewfinderOuter: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center', justifyContent: 'center', gap: 20,
+  },
+  viewfinder: {
+    width: 220, height: 220, borderRadius: 20,
+    borderWidth: 2,
+  },
+  viewfinderLabel: { fontSize: 14, textAlign: 'center', opacity: 0.85 },
+  cancelScan: {
+    position: 'absolute', right: 20,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+  },
+  cancelScanText: { fontSize: 14, fontWeight: '600' },
+
+  // Pane grid
+  grid: { flex: 1 },
+  gridHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingBottom: 12,
+  },
+  gridTitle: { fontSize: 20, fontWeight: '700' },
+  disconnectText: { fontSize: 13 },
+  cardList: { paddingHorizontal: 16, gap: 10 },
+
+  // Session card
+  card: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 14, gap: 12,
+  },
+  statusDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  cardBody: { flex: 1, minWidth: 0, gap: 3 },
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardTitle: { fontSize: 13, fontWeight: '600', flexShrink: 1 },
+  requestBadge: {
+    backgroundColor: 'rgba(251,191,36,0.2)',
+    borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+  },
+  requestBadgeText: { fontSize: 10, color: '#fbbf24', fontWeight: '600' },
+  cardTask: { fontSize: 12 },
+  cardPreview: { fontSize: 11, marginTop: 2 },
+  cardMeta: { alignItems: 'flex-end', gap: 4, flexShrink: 0 },
+  cardTime: { fontSize: 10.5 },
+
+  // Terminal
+  termRoot: { flex: 1, backgroundColor: 'transparent' },
+  termHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingBottom: 10, gap: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  retryTextWrap: { flex: 1 },
-  retryTitle: { fontSize: 12.5, fontWeight: '600' },
-  retrySubtitle: { fontSize: 11, marginTop: 1 },
-  retryCancel: { paddingHorizontal: 8, paddingVertical: 4 },
-  retryCancelText: { fontSize: 12.5, color: '#ff8a8a', fontWeight: '500' },
+  termTitle: { fontSize: 13, fontWeight: '600', flex: 1 },
+  termTask: { fontSize: 11, flexShrink: 1 },
 
-  suggestionRow: {
-    paddingHorizontal: 16, paddingVertical: 8, gap: 8,
+  promptBanner: {
+    flexDirection: 'row', gap: 8, alignItems: 'flex-start',
+    backgroundColor: 'rgba(251,191,36,0.1)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(251,191,36,0.3)',
+    paddingHorizontal: 16, paddingVertical: 10,
   },
-  suggestionChip: {
-    height: 32, paddingHorizontal: 12,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  suggestionText: { fontSize: 12.5, fontWeight: '500' },
+  promptIcon: { color: '#fbbf24', fontWeight: '700', fontSize: 14 },
+  promptText: { color: '#fbbf24', fontSize: 13, flex: 1, lineHeight: 18 },
 
-  inputWrap: {
-    paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8,
+  termScroll: { flex: 1 },
+  termContent: { padding: 12 },
+  termOutput: { fontSize: 12, lineHeight: 17 },
+
+  termInputWrap: {
+    paddingHorizontal: 12, paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  inputBar: {
-    minHeight: 52,
-    flexDirection: 'row', alignItems: 'center',
-    paddingLeft: 8, paddingRight: 6, gap: 8,
+  termInputBar: {
+    minHeight: 48, flexDirection: 'row',
+    alignItems: 'center', paddingHorizontal: 12, gap: 8,
   },
-  inputText: { flex: 1, fontSize: 14, maxHeight: 120, paddingVertical: 6 },
-  cancelBtn: {
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  cancelBtnText: { color: '#ff8a8a', fontSize: 13, fontWeight: '600' },
-
-  thumbStrip: { paddingHorizontal: 4, paddingBottom: 6, gap: 8 },
-  thumbWrap: { position: 'relative', marginRight: 8 },
-  thumb: { width: 56, height: 56, borderRadius: 8, backgroundColor: '#222' },
-  thumbRemove: {
-    position: 'absolute', top: -4, right: -4,
-    width: 18, height: 18, borderRadius: 9,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  thumbRemoveText: { color: '#fff', fontSize: 13, lineHeight: 16, fontWeight: '600' },
+  termPromptArrow: { fontSize: 16 },
+  termInput: { flex: 1, fontSize: 13, paddingVertical: 4 },
 });
