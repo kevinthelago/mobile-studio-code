@@ -19,6 +19,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.mobilestudiocode.app",
       "backgroundColor": "#0b0d14",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Choose screenshots or images to send to Claude.",
         "NSCameraUsageDescription": "Scan a QR code to pair with base-studio-code.",
