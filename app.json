@@ -9,9 +9,7 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0b0d14",
     "newArchEnabled": true,
-    "runtimeVersion": {
-      "policy": "sdkVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/a11a7b6c-6d05-4b39-9ff1-ea694b914b66"
     },
