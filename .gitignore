@@ -35,6 +35,6 @@ expo-env.d.ts
 .env
 .env.local
 
-# Firebase — contains project credentials, never commit
-GoogleService-Info.plist
+# Firebase server-side credentials — never commit
+# GoogleService-Info.plist is client config (bundle-ID-restricted), safe to commit
 google-services.json
