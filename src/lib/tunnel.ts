@@ -60,6 +60,13 @@ export class TunnelClient {
     this.send({ type: 'pane_focus', paneId });
   }
 
+  /** Transitions a pane to minimized without switching focus to another pane. */
+  minimisePane(paneId: string) {
+    this.setPaneStreamingState(paneId, 'minimized');
+    this.send({ type: 'pane_set_state', paneId, state: 'minimized' });
+    if (this.activePaneId === paneId) this.activePaneId = null;
+  }
+
   sendInput(paneId: string, data: string) {
     this.send({ type: 'pane_input', paneId, data });
   }
