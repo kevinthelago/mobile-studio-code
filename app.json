@@ -35,6 +35,7 @@
       "package": "com.mobilestudiocode.app"
     },
     "plugins": [
+      "./plugins/withFirebasePodfile",
       "expo-router",
       "expo-secure-store",
       "expo-updates",
