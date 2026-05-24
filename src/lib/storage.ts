@@ -6,6 +6,9 @@ export const KEYS = {
   ANTHROPIC_KEY: 'anthropic_api_key',
   REPO: 'repo_full_name',
   BRANCH: 'repo_branch',
+  TUNNEL_URL: 'tunnel_url',
+  TUNNEL_TOKEN: 'tunnel_token',
+  FCM_TOKEN: 'fcm_token',
 } as const;
 
 export async function getSecret(key: string): Promise<string | null> {
