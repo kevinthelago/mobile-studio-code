@@ -1,0 +1,479 @@
+/* ============================================================
+   MSC Redesign — shared tokens
+   Marries mobile-studio-code's `dawn` theme palette with
+   base-studio-code's monospace-first vocabulary.
+
+   Mapping (mobile  →  base):
+     bg          #1a1612   var(--bg-canvas)
+     surface     #13100d   var(--bg-panel)
+     surface2    #221c17   var(--bg-elev)
+     borderSoft  #2a241f   var(--border-soft)
+     border      #3a322b   var(--border)
+     fg          #e8e2d8   var(--fg)
+     fgMuted     #a8a095   var(--fg-muted)
+     fgDim       #7a736b   var(--fg-dim)
+     accent      #d97757   var(--accent)
+   ============================================================ */
+:root {
+  --msc-bg:          #1a1612;
+  --msc-panel:       #13100d;
+  --msc-elev:        #221c17;
+  --msc-elev2:       #2c2520;
+  --msc-border-soft: #2a241f;
+  --msc-border:      #3a322b;
+  --msc-fg:          #e8e2d8;
+  --msc-fg-muted:    #a8a095;
+  --msc-fg-dim:      #7a736b;
+  --msc-accent:      #d97757;
+  --msc-accent-dim:  #8a4a32;
+  --msc-success:     #6fb777;
+  --msc-info:        #7dabd9;
+  --msc-warn:        #d9a04a;
+  --msc-danger:      #d97757;
+  --msc-pink:        #ffaecf;
+
+  --msc-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --msc-sans: "Inter", -apple-system, system-ui, sans-serif;
+}
+
+/* ============================================================
+   Reset inside iOS frames
+   ============================================================ */
+.msc {
+  font-family: var(--msc-sans);
+  color: var(--msc-fg);
+  background: var(--msc-bg);
+  -webkit-font-smoothing: antialiased;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.msc * { box-sizing: border-box; }
+
+/* ============================================================
+   Top — Session strip (always present)
+   ============================================================ */
+.msc-strip {
+  flex: 0 0 40px;
+  height: 40px;
+  background: var(--msc-panel);
+  border-bottom: 1px solid var(--msc-border-soft);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  overflow-x: auto;
+  position: relative;
+}
+.msc-strip-tunnel {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 7px 3px 6px;
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--msc-success), transparent 88%);
+  border: 1px solid color-mix(in oklch, var(--msc-success), transparent 65%);
+  font-family: var(--msc-mono); font-size: 10px;
+  color: var(--msc-success);
+  flex-shrink: 0;
+}
+.msc-strip-tunnel .tunnel-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--msc-success);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--msc-success), transparent 75%);
+  animation: tunnelPulse 2s ease-in-out infinite;
+}
+.msc-strip-tunnel .tunnel-arrow { font-size: 11px; line-height: 1; }
+@keyframes tunnelPulse {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.msc-strip-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--msc-elev);
+  border: 1px solid var(--msc-border-soft);
+  font-family: var(--msc-mono);
+  font-size: 10.5px;
+  color: var(--msc-fg-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.msc-strip-chip.active {
+  background: color-mix(in oklch, var(--msc-accent), transparent 80%);
+  border-color: var(--msc-accent-dim);
+  color: var(--msc-accent);
+}
+.msc-strip-chip .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--msc-success);
+  flex: 0 0 6px;
+}
+.msc-strip-chip .dot.idle { background: var(--msc-fg-dim); }
+.msc-strip-chip .dot.warn { background: var(--msc-warn); }
+.msc-strip-chip .dot.err  { background: var(--msc-danger); }
+.msc-strip-chip .pip {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--msc-warn);
+}
+.msc-strip-more {
+  margin-left: auto;
+  width: 30px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  background: var(--msc-elev);
+  border: 1px solid var(--msc-border-soft);
+  color: var(--msc-fg-muted);
+  font-family: var(--msc-mono);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Page header — github-style, no titles
+   ============================================================ */
+.msc-head {
+  flex: 0 0 auto;
+  padding: 12px 16px 8px;
+  background: var(--msc-bg);
+  border-bottom: 1px solid var(--msc-border-soft);
+}
+.msc-head .crumbs {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--msc-mono);
+  font-size: 10.5px;
+  color: var(--msc-fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.msc-head .crumbs b { color: var(--msc-fg-muted); font-weight: 500; }
+.msc-head .crumbs .sep { color: var(--msc-fg-dim); }
+
+.msc-head .row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.msc-head h1 {
+  margin: 0;
+  font-family: var(--msc-mono);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--msc-fg);
+  letter-spacing: -0.01em;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msc-head .meta {
+  font-family: var(--msc-mono);
+  font-size: 10.5px;
+  color: var(--msc-fg-muted);
+}
+.msc-head .meta b { color: var(--msc-fg); font-weight: 500; }
+
+/* ============================================================
+   Primitives
+   ============================================================ */
+.msc-card {
+  background: var(--msc-panel);
+  border: 1px solid var(--msc-border-soft);
+  border-radius: 8px;
+}
+.msc-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--msc-elev2);
+  border: 1px solid var(--msc-border-soft);
+  color: var(--msc-fg-muted);
+  font-family: var(--msc-mono);
+  font-size: 9.5px;
+  line-height: 1.6;
+}
+.msc-tag.amber { color: var(--msc-accent); border-color: color-mix(in oklch, var(--msc-accent), transparent 70%); background: color-mix(in oklch, var(--msc-accent), transparent 88%); }
+.msc-tag.green { color: var(--msc-success); border-color: color-mix(in oklch, var(--msc-success), transparent 70%); background: color-mix(in oklch, var(--msc-success), transparent 88%); }
+.msc-tag.info  { color: var(--msc-info);    border-color: color-mix(in oklch, var(--msc-info),    transparent 70%); background: color-mix(in oklch, var(--msc-info),    transparent 88%); }
+.msc-tag.warn  { color: var(--msc-warn);    border-color: color-mix(in oklch, var(--msc-warn),    transparent 70%); background: color-mix(in oklch, var(--msc-warn),    transparent 88%); }
+
+.msc-kbd {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid var(--msc-border);
+  border-radius: 3px;
+  font-family: var(--msc-mono);
+  font-size: 9.5px;
+  color: var(--msc-fg-muted);
+  background: var(--msc-elev);
+}
+
+.msc-btn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--msc-elev);
+  border: 1px solid var(--msc-border-soft);
+  color: var(--msc-fg);
+  font-family: var(--msc-mono);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.msc-btn.primary {
+  background: var(--msc-accent);
+  color: #1a120a;
+  border-color: transparent;
+  font-weight: 600;
+}
+.msc-btn.ghost { background: transparent; }
+.msc-btn.small { height: 26px; padding: 0 10px; font-size: 10.5px; }
+.msc-btn.icon { width: 32px; padding: 0; justify-content: center; }
+
+.msc-input {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--msc-elev);
+  border: 1px solid var(--msc-border-soft);
+  color: var(--msc-fg);
+  font-family: var(--msc-mono);
+  font-size: 12.5px;
+  width: 100%;
+}
+.msc-input::placeholder { color: var(--msc-fg-dim); }
+
+.msc-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--msc-success);
+  flex: 0 0 7px;
+}
+.msc-dot.idle { background: var(--msc-fg-dim); }
+.msc-dot.warn { background: var(--msc-warn); }
+.msc-dot.err  { background: var(--msc-danger); }
+
+.msc-section-label {
+  font-family: var(--msc-mono);
+  font-size: 10px;
+  color: var(--msc-fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 12px 16px 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.msc-section-label .count {
+  color: var(--msc-fg-muted);
+}
+.msc-section-label .spacer { flex: 1; }
+.msc-section-label .action {
+  color: var(--msc-accent);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ============================================================
+   Body scrollable region
+   ============================================================ */
+.msc-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--msc-bg);
+  -webkit-overflow-scrolling: touch;
+}
+.msc-body::-webkit-scrollbar { display: none; }
+
+/* ============================================================
+   Bottom tab bar — github-style pill
+   ============================================================ */
+.msc-tabs {
+  flex: 0 0 auto;
+  height: 60px;
+  background: var(--msc-panel);
+  border-top: 1px solid var(--msc-border-soft);
+  display: flex;
+  align-items: stretch;
+  padding: 0 4px;
+}
+.msc-tabs .tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-family: var(--msc-mono);
+  font-size: 9px;
+  color: var(--msc-fg-dim);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  position: relative;
+  min-width: 0;
+}
+.msc-tabs .tab .glyph {
+  font-family: var(--msc-mono);
+  font-size: 13px;
+  color: var(--msc-fg-dim);
+  line-height: 1;
+}
+.msc-tabs .tab.on { color: var(--msc-accent); }
+.msc-tabs .tab.on .glyph { color: var(--msc-accent); }
+.msc-tabs .tab.on::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 20%; right: 20%;
+  height: 2px;
+  background: var(--msc-accent);
+  border-radius: 0 0 2px 2px;
+}
+.msc-tabs .tab .pip {
+  position: absolute;
+  top: 8px; right: 30%;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--msc-warn);
+}
+
+/* ============================================================
+   List row primitive (used by all pages)
+   ============================================================ */
+.msc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--msc-border-soft);
+  min-height: 44px;
+}
+.msc-row .glyph {
+  width: 16px;
+  flex: 0 0 16px;
+  text-align: center;
+  font-family: var(--msc-mono);
+  font-size: 11px;
+  color: var(--msc-fg-muted);
+}
+.msc-row .name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--msc-mono);
+  font-size: 12.5px;
+  color: var(--msc-fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msc-row.current {
+  background: color-mix(in oklch, var(--msc-accent), transparent 90%);
+  border-left: 2px solid var(--msc-accent);
+  padding-left: 14px;
+}
+.msc-row.current .name {
+  color: var(--msc-fg);
+  font-weight: 500;
+}
+.msc-row.folder .name {
+  color: var(--msc-fg);
+  font-weight: 500;
+}
+.msc-row .meta {
+  font-family: var(--msc-mono);
+  font-size: 9.5px;
+  color: var(--msc-fg-dim);
+}
+.msc-row .dirty {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--msc-accent);
+  flex: 0 0 6px;
+}
+
+/* ============================================================
+   Code block
+   ============================================================ */
+.msc-code {
+  font-family: var(--msc-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--msc-fg);
+  white-space: pre;
+}
+.msc-code .ln-no {
+  display: inline-block;
+  width: 28px;
+  text-align: right;
+  color: var(--msc-fg-dim);
+  margin-right: 12px;
+  user-select: none;
+}
+.msc-code .kw { color: #e0a3ff; }
+.msc-code .fn { color: #9bd9ff; }
+.msc-code .st { color: #ffb088; }
+.msc-code .nm { color: #ffd479; }
+.msc-code .cm { color: #5a5550; }
+.msc-code .ty { color: #a8e6c4; }
+.msc-code .pn { color: #6a655f; }
+
+/* ============================================================
+   Chat (Edit page bottom panel)
+   ============================================================ */
+.msc-chat-msg {
+  padding: 8px 12px;
+  border-radius: 10px;
+  margin: 6px 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  max-width: 80%;
+}
+.msc-chat-msg.you {
+  background: var(--msc-elev);
+  border: 1px solid var(--msc-border-soft);
+  color: var(--msc-fg);
+  margin-left: auto;
+}
+.msc-chat-msg.claude {
+  background: transparent;
+  color: var(--msc-fg);
+  border: 0;
+  padding-left: 28px;
+  position: relative;
+}
+.msc-chat-msg.claude::before {
+  content: "◉";
+  position: absolute;
+  left: 12px;
+  top: 8px;
+  color: var(--msc-accent);
+  font-size: 11px;
+}
+.msc-chat-tool {
+  margin: 4px 12px 4px 28px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--msc-elev);
+  border: 1px solid var(--msc-border-soft);
+  font-family: var(--msc-mono);
+  font-size: 10.5px;
+  color: var(--msc-fg-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.msc-chat-tool .arrow { color: var(--msc-accent); }
+.msc-chat-tool .ok    { color: var(--msc-success); margin-left: auto; }

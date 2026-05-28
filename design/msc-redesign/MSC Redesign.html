@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>mobile-studio-code · redesign</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+
+<link rel="stylesheet" href="msc-redesign/styles.css"/>
+
+<style>
+  html, body { margin:0; height:100%; background:#0e0c0a; }
+  body { font-family:"Inter", -apple-system, system-ui, sans-serif; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="design/design-canvas.jsx"></script>
+<script type="text/babel" src="design/ios-frame.jsx"></script>
+
+<script type="text/babel" src="msc-redesign/scaffold.jsx"></script>
+<script type="text/babel" src="msc-redesign/screen-files-find.jsx"></script>
+<script type="text/babel" src="msc-redesign/screen-edit-run-git.jsx"></script>
+<script type="text/babel" src="msc-redesign/screen-session-switcher.jsx"></script>
+<script type="text/babel" src="msc-redesign/screen-plan.jsx"></script>
+
+<script type="text/babel">
+
+// iOS frame at iPhone 14 size — 390×844. We use the starter device shell.
+function Phone({ children, label }) {
+  return (
+    <IOSDevice dark>
+      <div className="msc-frame-host" style={{
+        height:"100%",
+        paddingTop: 50,  // clear iOS status bar
+        background:"var(--msc-bg)",
+        display:"flex", flexDirection:"column",
+      }}>
+        {children}
+      </div>
+    </IOSDevice>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection
+        id="pages"
+        title="A · The five tabs, redesigned"
+        subtitle="Same five routes (Files · Find · Edit · Run · Git), same theme system underneath — but now sharing base-studio-code's monospace-first vocabulary, github-style headers, and density. Dawn palette is kept; other themes (glass / terminal / paper / basic) still work via the existing useTheme() switch."
+      >
+        <DCArtboard id="msc-files" label="Files — repo tree + recents" width={430} height={920}>
+          <Phone><FilesScreen/></Phone>
+        </DCArtboard>
+
+        <DCArtboard id="msc-find" label="Find — search across repo" width={430} height={920}>
+          <Phone><FindScreen/></Phone>
+        </DCArtboard>
+
+        <DCArtboard id="msc-edit" label="Edit — code + inline Claude chat" width={430} height={920}>
+          <Phone><EditScreen/></Phone>
+        </DCArtboard>
+
+        <DCArtboard id="msc-run" label="Run — multi-session view" width={430} height={920}>
+          <Phone><RunScreen/></Phone>
+        </DCArtboard>
+
+        <DCArtboard id="msc-git" label="Git — diff + AI-drafted commit" width={430} height={920}>
+          <Phone><GitScreen/></Phone>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection
+        id="nav"
+        title="B · Session navigation"
+        subtitle="Three complementary moves for jumping between Claude sessions running on the tunneled base-studio-code host. The strip is always visible; the switcher drops down from the strip with a tap or a swipe-down; per-tab pinning means muscle-memory."
+      >
+        <DCArtboard id="msc-switcher" label="Switcher sheet — pulled down from the session strip" width={430} height={920}>
+          <Phone><SessionSwitcherScreen/></Phone>
+        </DCArtboard>
+
+        <DCPostIt top={20} left={20} rotate={-2} width={290}>
+          The session strip at the top is always
+          on. Tap any chip to focus that pane and
+          route to whichever tab is currently
+          showing — so the same Edit tab can be
+          "the @scratch one" or "the @reviewer
+          one" depending on which chip you tapped.
+
+          Pull down on the strip → opens the
+          switcher sheet (B-1). Long-press a chip
+          → pin it to a specific bottom tab.
+        </DCPostIt>
+
+        <DCPostIt top={20} left={340} rotate={2} width={280}>
+          Backwards-compatible mapping:
+          - Strip = existing SessionStrip,
+            taller (40px) + mono labels.
+          - Switcher = TaskSheet's spiritual
+            successor, grouped by project,
+            with status dots reused 1:1.
+          - Pin = new — stored alongside
+            tab state in session.tsx.
+        </DCPostIt>
+      </DCSection>
+
+      <DCSection
+        id="plan"
+        title="C · Plan — tunneled to base-studio-code"
+        subtitle="The 6th tab. Project planning is hosted by the desktop — mobile reads & edits the same boards, issues, AI breakdowns, and scoping sessions over the tunnel. The mobile UI follows the same mono-first vocabulary and label/avatar palette as the desktop so a chip on iPhone reads as the same chip on macOS."
+      >
+        <DCArtboard id="plan-projects" label="Plan · Projects list" width={430} height={920}>
+          <Phone><PlanProjectsScreen/></Phone>
+        </DCArtboard>
+
+        <DCArtboard id="plan-board" label="Plan · Kanban (column pager)" width={430} height={920}>
+          <Phone><PlanBoardScreen/></Phone>
+        </DCArtboard>
+
+        <DCArtboard id="plan-issue" label="Plan · Issue + AI subtask breakdown" width={430} height={920}>
+          <Phone><PlanIssueScreen/></Phone>
+        </DCArtboard>
+
+        <DCArtboard id="plan-scoping" label="Plan · Live scoping session w/ Claude" width={430} height={920}>
+          <Phone><PlanScopingScreen/></Phone>
+        </DCArtboard>
+
+        <DCArtboard id="plan-pairing" label="Plan · Tunnel pairing (disconnected state)" width={430} height={920}>
+          <Phone><PlanPairingScreen/></Phone>
+        </DCArtboard>
+
+        <DCPostIt top={20} left={20} rotate={-2} width={290}>
+          The mobile Plan tab is a thin reader
+          over the desktop's planning host.
+          Every screen mirrors a desktop
+          screen 1:1:
+
+          · list   = ScreenProjectsList
+          · board  = ScreenProjectBoard
+          · issue  = ScreenIssueDrawer
+          · scope  = paired scoping flow
+
+          The green ⇋ chip in the session
+          strip is the only new chrome —
+          tap it for tunnel status / re-pair.
+        </DCPostIt>
+
+        <DCPostIt top={20} left={340} rotate={2} width={280}>
+          Backwards-compat moves:
+
+          · Plan is a 6th bottom tab — the tab
+            bar now compresses glyph+label by
+            ~10% to fit. Existing 5 tabs
+            unaffected behaviorally.
+          · Reuses dawn-theme tokens; adds no
+            new colors. Label / avatar palette
+            matches desktop verbatim.
+          · When the tunnel is down, Plan
+            falls into a Pairing screen instead
+            of being hidden — reachable from
+            any tab via the strip's status chip.
+        </DCPostIt>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
