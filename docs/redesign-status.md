@@ -67,8 +67,16 @@ design has landed.
       scope/ext filtering, debounced scan, caps, `openFile` navigation).
       Extracted `hexAlpha` to `src/lib/color.ts` (now shared by `Tag`, Files,
       and Find).
-- [ ] **Edit** (`app/(tabs)/edit.tsx`) — code view + collapsing inline chat
-      dock (folds the dedicated chat into Edit; removes the separate chat screen)
+- [x] **Edit** (`app/(tabs)/edit.tsx`) — migrated to `PageHeader` + `Tag` +
+      `Card`. Breadcrumb header (dirs › filename) with a `lang · ● modified`
+      meta and the save / edit-mode toggle in the right slot. The chat is now a
+      bottom **dock** under the code viewport: a status header (dot + `Claude ·
+      idle/working` + `N tools used` tag), a capped scroll of recent turns
+      (Claude replies get an accent ◉ marker, tool calls render as `→ name(args)
+      … ✓/✗` Cards), the image-preview strip, and the `›`-prefixed input bar.
+      All real wiring preserved (`send`, `turns`, `chatBusy`, `saveCurrentFile`,
+      `setCurrentContent`, image attach/remove, tokenized + plain editors).
+      Dropped the `Surface`/`TopPill`/`ClaudeAvatar`-based chrome.
 - [ ] **Run** (`app/(tabs)/run.tsx`) — already implemented as PaneGrid; needs
       visual alignment (PageHeader, status chips, awaiting-input border)
 - [ ] **Git** (`app/(tabs)/git.tsx`) — AI-drafted commit message card with

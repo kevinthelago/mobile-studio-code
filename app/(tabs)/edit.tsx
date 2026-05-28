@@ -3,44 +3,23 @@ import {
   ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/theme';
 import { useSession } from '../../src/lib/session';
 import { detectLang, tokenizeFile } from '../../src/lib/syntax';
 import { AttachedImage, ChatTurn } from '../../src/lib/types';
-import { Surface } from '../../src/components/ui/Surface';
-import { TopPill } from '../../src/components/ui/TopPill';
 import { IconBtn } from '../../src/components/ui/IconBtn';
-import { ClaudeAvatar } from '../../src/components/ui/ClaudeAvatar';
+import { PageHeader } from '../../src/components/ui/PageHeader';
+import { Tag } from '../../src/components/ui/Tag';
+import { Card } from '../../src/components/ui/Card';
 
 // Height of our custom bottom tab bar
 const TAB_BAR_HEIGHT = 60;
-
-function FilePathBreadcrumb({ path, dirty }: { path: string; dirty: boolean }) {
-  const t = useTheme();
-  const parts = path.split('/');
-  const file = parts[parts.length - 1];
-  const dirs = parts.slice(0, -1);
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.breadcrumb}>
-      {dirs.map((d, i) => (
-        <React.Fragment key={i}>
-          <Text style={[styles.pathSegment, { color: t.fgDim, fontFamily: t.fontMono }]}>{d}</Text>
-          <Text style={[styles.pathSegment, { color: t.fgDim, fontFamily: t.fontMono }]}>/</Text>
-        </React.Fragment>
-      ))}
-      <Text style={[styles.pathSegment, styles.pathActive, { color: t.fg, fontFamily: t.fontMono }]}>
-        {file}
-      </Text>
-      {dirty && <View style={[styles.dirtyDot, { backgroundColor: t.accent }]} />}
-    </ScrollView>
-  );
-}
+// Cap the chat dock's message list so the code viewport keeps room above it.
+const CHAT_MAX_HEIGHT = 200;
 
 function TokenizedCode({ content, path }: { content: string; path: string }) {
   const t = useTheme();
@@ -48,7 +27,7 @@ function TokenizedCode({ content, path }: { content: string; path: string }) {
   const lines = useMemo(() => tokenizeFile(content, lang), [content, lang]);
   const palette = t.code as unknown as Record<string, string>;
   return (
-    <ScrollView style={styles.editor} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.codeScroll} showsVerticalScrollIndicator={false}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={styles.codeBody}>
           {lines.map((line) => (
@@ -76,7 +55,7 @@ function PlainEditor({
 }: { value: string; onChange: (v: string) => void }) {
   const t = useTheme();
   return (
-    <ScrollView style={styles.editor} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.codeScroll} showsVerticalScrollIndicator={false}>
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -125,8 +104,12 @@ function ChatTurnView({ turn }: { turn: ChatTurn }) {
     );
   }
   if (turn.kind === 'assistant') {
+    // Claude reply — accent ◉ marker per the design's .msc-chat-msg.claude.
     return (
-      <Text style={[styles.replyText, { color: t.fg }]}>{turn.text}</Text>
+      <View style={styles.claudeMsg}>
+        <Text style={[styles.claudeMarker, { color: t.accent }]}>◉</Text>
+        <Text style={[styles.replyText, { color: t.fg }]}>{turn.text}</Text>
+      </View>
     );
   }
   if (turn.kind === 'note') {
@@ -138,31 +121,26 @@ function ChatTurnView({ turn }: { turn: ChatTurn }) {
       </Text>
     );
   }
+  // Tool call — design's .msc-chat-tool: → name(args) … ✓
   return (
-    <View style={[styles.toolCard, {
-      backgroundColor: t.glass ? 'rgba(255,255,255,0.05)' : t.surface,
-      borderColor: t.borderColor,
-    }]}>
-      <Text style={[styles.toolTitle, { color: t.fgMuted, fontFamily: t.fontMono }]}>
-        {turn.name}{typeof turn.input.path === 'string' ? ` · ${turn.input.path}` : ''}
+    <Card style={styles.toolCard} background={t.elev}>
+      <Text style={[styles.toolArrow, { color: t.accent, fontFamily: t.fontMono }]}>→</Text>
+      <Text style={[styles.toolName, { color: t.fgMuted, fontFamily: t.fontMono }]} numberOfLines={1}>
+        {turn.name}
+        {typeof turn.input.path === 'string' && (
+          <Text style={{ color: t.fgDim }}>{` (${turn.input.path})`}</Text>
+        )}
       </Text>
       {turn.result === undefined ? (
-        <Text style={[styles.toolStatus, { color: t.fgMuted, fontFamily: t.fontMono }]}>
-          running…
-        </Text>
+        <Text style={[styles.toolStatus, { color: t.fgDim, fontFamily: t.fontMono }]}>…</Text>
       ) : (
-        <Text
-          style={[
-            styles.toolStatus,
-            { color: turn.isError ? '#ff8a8a' : t.code.ty, fontFamily: t.fontMono },
-          ]}
-          numberOfLines={2}
-        >
-          {turn.isError ? '✗ ' : '✓ '}
-          {turn.result.length > 120 ? turn.result.slice(0, 120) + '…' : turn.result}
+        <Text style={[styles.toolStatus, {
+          color: turn.isError ? t.danger : t.success, fontFamily: t.fontMono,
+        }]}>
+          {turn.isError ? '✗' : '✓'}
         </Text>
       )}
-    </View>
+    </Card>
   );
 }
 
@@ -283,7 +261,7 @@ export default function EditScreen() {
 
   if (!currentPath || currentContent === null) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]} edges={['top']}>
         <View style={styles.empty}>
           <Text style={[styles.emptyTitle, { color: t.fg }]}>No file open</Text>
           <Text style={[styles.emptySub, { color: t.fgMuted }]}>
@@ -300,22 +278,29 @@ export default function EditScreen() {
     );
   }
 
+  const parts = currentPath.split('/');
+  const fileName = parts[parts.length - 1];
+  const dirs = parts.slice(0, -1);
+  const lang = detectLang(currentPath);
+
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]} edges={['top']}>
       <KeyboardAvoidingView
         style={styles.flex1}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={kbOffset}
       >
-        <View style={styles.container}>
-          <TopPill
-            left={
-              <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-                <Path d="M2 3h3l1 1h6v7H2z" stroke={t.fgMuted} strokeWidth={1.6} />
-              </Svg>
-            }
-            center={<FilePathBreadcrumb path={currentPath} dirty={isCurrentDirty} />}
-            right={isCurrentDirty ? (
+        <PageHeader
+          crumbs={dirs.length > 0 ? dirs : undefined}
+          title={fileName}
+          meta={
+            <>
+              {lang}
+              {isCurrentDirty && <Text style={{ color: t.accent }}> · ● modified</Text>}
+            </>
+          }
+          right={
+            isCurrentDirty ? (
               <IconBtn primary onPress={handleSave} disabled={saving}>
                 {saving ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -327,99 +312,108 @@ export default function EditScreen() {
               </IconBtn>
             ) : (
               <IconBtn onPress={() => setEditMode((m) => !m)}>
-                <Text style={[styles.modeBadge, { color: editMode ? t.accent : t.fgMuted }]}>
-                  {editMode ? '✎' : '✎'}
-                </Text>
+                <Text style={[styles.modeBadge, { color: editMode ? t.accent : t.fgMuted }]}>✎</Text>
               </IconBtn>
-            )}
-          />
+            )
+          }
+        />
 
+        {/* Code viewport */}
+        <View style={styles.codeContainer}>
           {editMode ? (
             <PlainEditor value={currentContent} onChange={setCurrentContent} />
           ) : (
             <TokenizedCode content={currentContent} path={currentPath} />
           )}
+        </View>
 
-          <View style={styles.claudeChipWrapper}>
-            <Surface style={styles.claudeChip} radius={14}>
-              <ClaudeAvatar size={14} />
-              <Text style={[styles.claudeChipText, { color: t.fg }]}>
-                Claude · sonnet 4.6
-              </Text>
-              <View style={[styles.claudeDivider, { backgroundColor: t.borderColor }]} />
-              <Text style={[styles.claudeTools, { color: t.fgMuted }]}>
-                {toolCount} tool{toolCount === 1 ? '' : 's'}
-              </Text>
-            </Surface>
+        {/* Chat dock — Claude inline, folded under the code view */}
+        <View style={[styles.dock, {
+          borderTopColor: t.borderColor,
+          backgroundColor: t.surface,
+          paddingBottom: insets.bottom + TAB_BAR_HEIGHT,
+        }]}>
+          {/* Dock header: session status + tool count */}
+          <View style={styles.dockHeader}>
+            <View style={[styles.statusDot, {
+              backgroundColor: chatBusy ? t.warn : t.success,
+            }]} />
+            <Text style={[styles.dockLabel, { color: t.fgMuted, fontFamily: t.fontMono }]}>
+              Claude · {chatBusy ? 'working' : 'idle'}
+            </Text>
+            <View style={styles.flex1} />
+            {toolCount > 0 && (
+              <Tag variant="amber">{`${toolCount} tool${toolCount === 1 ? '' : 's'} used`}</Tag>
+            )}
           </View>
 
-          <View style={styles.claudePanelWrap}>
-            <Surface style={styles.claudePanel} radius={28}>
-              <ScrollView
-                ref={chatScrollRef}
-                style={styles.flex1}
-                showsVerticalScrollIndicator={false}
-                onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
-              >
-                {recentTurns.length === 0 && (
-                  <Text style={[styles.placeholder, { color: t.fgDim }]}>
-                    Ask Claude to read or change this file. It can edit any file in
-                    the repo. Tap 📎 to attach a screenshot.
-                  </Text>
-                )}
-                {recentTurns.map((turn, i) => (
-                  <ChatTurnView key={i} turn={turn} />
-                ))}
-                {chatBusy && (
-                  <View style={styles.thinkingRow}>
-                    <View style={[styles.thinkingDot, { backgroundColor: t.code.ty }]} />
-                    <Text style={[styles.thinkingText, { color: t.fgMuted, fontFamily: t.fontMono }]}>
-                      thinking…
-                    </Text>
-                  </View>
-                )}
-              </ScrollView>
-
-              {/* Pending image strip */}
-              <ImagePreviewStrip images={pendingImages} onRemove={handleRemoveImage} />
-
-              <View style={[styles.inputBar, {
-                backgroundColor: t.glass ? 'rgba(0,0,0,0.25)' : t.bg,
-                borderColor: t.borderColor,
-              }]}>
-                {/* Image attach button */}
-                <Pressable
-                  onPress={handlePickImage}
-                  disabled={chatBusy}
-                  style={({ pressed }) => [styles.attachBtn, { opacity: pressed ? 0.5 : 1 }]}
-                  hitSlop={8}
-                >
-                  <Text style={[styles.attachIcon, { color: pendingImages.length > 0 ? t.accent : t.fgMuted }]}>
-                    📎
-                  </Text>
-                </Pressable>
-
-                <TextInput
-                  value={input}
-                  onChangeText={setInput}
-                  placeholder="Ask Claude…"
-                  placeholderTextColor={t.fgDim}
-                  style={[styles.inputText, { color: t.fg }]}
-                  multiline
-                  editable={!chatBusy}
-                />
-                <IconBtn
-                  primary
-                  onPress={handleSend}
-                  disabled={(!input.trim() && pendingImages.length === 0) || chatBusy}
-                >
-                  <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-                    <Path d="M7 11V3M3 7l4-4 4 4"
-                      stroke="#fff" strokeWidth={2} strokeLinecap="round" />
-                  </Svg>
-                </IconBtn>
+          {/* Recent turns */}
+          <ScrollView
+            ref={chatScrollRef}
+            style={styles.chatScroll}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
+          >
+            {recentTurns.length === 0 && (
+              <Text style={[styles.placeholder, { color: t.fgDim }]}>
+                Ask Claude to read or change this file. It can edit any file in
+                the repo. Tap 📎 to attach a screenshot.
+              </Text>
+            )}
+            {recentTurns.map((turn, i) => (
+              <ChatTurnView key={i} turn={turn} />
+            ))}
+            {chatBusy && (
+              <View style={styles.thinkingRow}>
+                <View style={[styles.thinkingDot, { backgroundColor: t.code.ty }]} />
+                <Text style={[styles.thinkingText, { color: t.fgMuted, fontFamily: t.fontMono }]}>
+                  thinking…
+                </Text>
               </View>
-            </Surface>
+            )}
+          </ScrollView>
+
+          {/* Pending image strip */}
+          <ImagePreviewStrip images={pendingImages} onRemove={handleRemoveImage} />
+
+          {/* Input bar */}
+          <View style={[styles.inputBar, {
+            backgroundColor: t.elev,
+            borderColor: t.borderColor,
+          }]}>
+            <Pressable
+              onPress={handlePickImage}
+              disabled={chatBusy}
+              style={({ pressed }) => [styles.attachBtn, { opacity: pressed ? 0.5 : 1 }]}
+              hitSlop={8}
+            >
+              <Text style={[styles.attachIcon, { color: pendingImages.length > 0 ? t.accent : t.fgMuted }]}>
+                📎
+              </Text>
+            </Pressable>
+
+            <Text style={[styles.inputArrow, { color: t.accent, fontFamily: t.fontMono }]}>›</Text>
+
+            <TextInput
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask Claude…"
+              placeholderTextColor={t.fgDim}
+              style={[styles.inputText, { color: t.fg, fontFamily: t.fontMono }]}
+              multiline
+              editable={!chatBusy}
+            />
+            <IconBtn
+              primary
+              onPress={handleSend}
+              disabled={(!input.trim() && pendingImages.length === 0) || chatBusy}
+            >
+              <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+                <Path d="M7 11V3M3 7l4-4 4 4"
+                  stroke="#fff" strokeWidth={2} strokeLinecap="round" />
+              </Svg>
+            </IconBtn>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -428,9 +422,8 @@ export default function EditScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: 'transparent' },
+  safe: { flex: 1 },
   flex1: { flex: 1 },
-  container: { flex: 1, paddingBottom: 110 },
   empty: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 24,
@@ -440,13 +433,11 @@ const styles = StyleSheet.create({
   emptyBtn: { paddingVertical: 10, paddingHorizontal: 22, borderRadius: 22 },
   emptyBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 
-  breadcrumb: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  pathSegment: { fontSize: 13 },
-  pathActive: { fontWeight: '600' },
-  dirtyDot: { width: 6, height: 6, borderRadius: 3, marginLeft: 6 },
   modeBadge: { fontSize: 14, fontWeight: '600' },
 
-  editor: { flex: 1, paddingVertical: 4, maxHeight: 280 },
+  // Code viewport
+  codeContainer: { flex: 1 },
+  codeScroll: { flex: 1, paddingVertical: 4 },
   codeBody: { paddingVertical: 4, paddingRight: 16 },
   codeLine: { flexDirection: 'row' },
   lineNum: {
@@ -459,59 +450,60 @@ const styles = StyleSheet.create({
     fontSize: 12.5, lineHeight: 20,
   },
 
-  claudeChipWrapper: { alignItems: 'center', marginVertical: 8 },
-  claudeChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-    paddingVertical: 6, paddingHorizontal: 12,
+  // Chat dock
+  dock: {
+    flex: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  claudeChipText: { fontSize: 12, fontWeight: '600' },
-  claudeDivider: { width: 1, height: 12, marginHorizontal: 2 },
-  claudeTools: { fontSize: 12 },
+  dockHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6,
+  },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  dockLabel: { fontSize: 10.5 },
 
-  claudePanelWrap: {
-    flex: 1, marginHorizontal: 12, marginBottom: 12,
-  },
-  claudePanel: {
-    flex: 1,
-    padding: 16,
-  },
+  chatScroll: { maxHeight: CHAT_MAX_HEIGHT, paddingHorizontal: 12 },
   placeholder: { fontSize: 13, lineHeight: 18, paddingVertical: 6 },
 
   // User turns
   promptRow: { flexDirection: 'row', gap: 8, marginBottom: 6 },
   promptArrow: { fontSize: 14, marginTop: 2 },
   promptBody: { flex: 1 },
-  promptText: { fontSize: 13, flex: 1 },
+  promptText: { fontSize: 12.5, flex: 1 },
   thumbScroll: { marginBottom: 4 },
   thumbRow: { gap: 6 },
-  thumbImage: {
-    width: 72, height: 72, borderRadius: 8,
-  },
+  thumbImage: { width: 72, height: 72, borderRadius: 8 },
 
-  thinkingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginVertical: 6 },
-  thinkingDot: { width: 6, height: 6, borderRadius: 3 },
-  thinkingText: { fontSize: 12 },
-  toolCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10, padding: 10, marginBottom: 6,
-  },
-  toolTitle: {
-    fontSize: 10.5, textTransform: 'uppercase',
-    letterSpacing: 0.5, marginBottom: 4,
-  },
-  toolStatus: { fontSize: 11.5 },
-  replyText: { fontSize: 13, lineHeight: 18, marginBottom: 8 },
+  // Claude reply
+  claudeMsg: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  claudeMarker: { fontSize: 11, marginTop: 3 },
+  replyText: { fontSize: 12.5, lineHeight: 18, flex: 1 },
+
   noteLine: {
     fontSize: 11, marginVertical: 4, paddingLeft: 8,
     borderLeftWidth: StyleSheet.hairlineWidth,
     fontStyle: 'italic',
   },
 
+  thinkingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginVertical: 6 },
+  thinkingDot: { width: 6, height: 6, borderRadius: 3 },
+  thinkingText: { fontSize: 12 },
+
+  // Tool call card
+  toolCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 10, paddingVertical: 6, marginBottom: 6,
+  },
+  toolArrow: { fontSize: 11 },
+  toolName: { flex: 1, fontSize: 10.5 },
+  toolStatus: { fontSize: 11 },
+
   // Image preview strip (above input)
   previewStrip: {
     maxHeight: 90,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 8,
+    marginHorizontal: 12,
   },
   previewStripContent: { paddingHorizontal: 4, gap: 8 },
   previewItem: { position: 'relative' },
@@ -523,13 +515,15 @@ const styles = StyleSheet.create({
   },
   previewRemoveText: { color: '#fff', fontSize: 9, fontWeight: '700' },
 
+  // Input bar
   inputBar: {
-    marginTop: 10, minHeight: 44, borderRadius: 22,
+    marginHorizontal: 12, marginTop: 8, minHeight: 44, borderRadius: 12,
     paddingLeft: 10, paddingRight: 6,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row', alignItems: 'center', gap: 6,
   },
   attachBtn: { padding: 4 },
   attachIcon: { fontSize: 18 },
-  inputText: { flex: 1, fontSize: 14, maxHeight: 80, paddingVertical: 6 },
+  inputArrow: { fontSize: 14 },
+  inputText: { flex: 1, fontSize: 13, maxHeight: 80, paddingVertical: 6 },
 });
