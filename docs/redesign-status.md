@@ -57,8 +57,16 @@ design has landed.
       prop to `SectionLabel` for the dim "tap folder to expand" helper text
       (distinct from the accent `action` affordance). Behavior note: Recents now
       hide while a filter is active (was always shown).
-- [ ] **Find** (`app/(tabs)/find.tsx`) — large search input, scoping tags,
-      collapsible per-file hit groups with line numbers + highlighted matches
+- [x] **Find** (`app/(tabs)/find.tsx`) — migrated to `PageHeader` + `Tag` +
+      `Card`. Breadcrumb header (repo › branch › search) with the query as title
+      and a `N matches · M files` meta. Search input in the `msc-input` style;
+      scope chips + the case-sensitive toggle rendered as `Tag`s (amber when
+      active) with an `in: <scope>` info tag; per-file groups with a mono header
+      (name · count · `open ›`) and one `Card` per match line with line number +
+      accent-highlighted match. All real grep wiring preserved (`grepInText`,
+      scope/ext filtering, debounced scan, caps, `openFile` navigation).
+      Extracted `hexAlpha` to `src/lib/color.ts` (now shared by `Tag`, Files,
+      and Find).
 - [ ] **Edit** (`app/(tabs)/edit.tsx`) — code view + collapsing inline chat
       dock (folds the dedicated chat into Edit; removes the separate chat screen)
 - [ ] **Run** (`app/(tabs)/run.tsx`) — already implemented as PaneGrid; needs

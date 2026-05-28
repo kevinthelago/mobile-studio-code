@@ -11,19 +11,11 @@ import { FileEntry } from '../../src/lib/types';
 import { PageHeader } from '../../src/components/ui/PageHeader';
 import { SectionLabel } from '../../src/components/ui/SectionLabel';
 import { Card } from '../../src/components/ui/Card';
+import { hexAlpha } from '../../src/lib/color';
 
 type TreeRow =
   | { type: 'folder'; path: string; name: string; depth: number; open: boolean }
   | { type: 'file'; path: string; name: string; depth: number; modified: boolean; current: boolean };
-
-// Convert a #rrggbb token to rgba() at the given alpha. Mirrors the design's
-// `color-mix(in oklch, <token>, transparent <n>%)` tints (RN has no color-mix).
-function hexAlpha(hex: string, alpha: number): string {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return hex;
-  const n = parseInt(m[1], 16);
-  return `rgba(${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff}, ${alpha})`;
-}
 
 function buildTree(
   files: Record<string, FileEntry>,

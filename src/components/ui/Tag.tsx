@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, ViewProps } from 'react-native';
 import { Theme, useTheme } from '../../theme';
+import { hexAlpha } from '../../lib/color';
 
 // Port of the design's `.msc-tag` — a monospace pill used for status chips,
 // counts, and inline metadata. Five visual variants:
@@ -23,18 +24,6 @@ export interface TagProps extends ViewProps {
   /** Override font size (default 9.5 to match design). */
   fontSize?: number;
   children?: React.ReactNode;
-}
-
-function hexAlpha(hex: string, alpha: number): string {
-  // Robust: accepts #rrggbb, falls back to the raw value if anything else
-  // (e.g. an rgba() string) so the tag still renders even off the happy path.
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return hex;
-  const n = parseInt(m[1], 16);
-  const r = (n >> 16) & 0xff;
-  const g = (n >> 8) & 0xff;
-  const b = n & 0xff;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function variantTokens(t: Theme, variant: TagVariant): {
