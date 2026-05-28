@@ -29,16 +29,24 @@ design has landed.
       `useTunnel()`: a "tunnel offline → pair via Run tab" empty state, and a
       "coming soon" state when connected. Themed via the new tokens.
 - [x] `tsc --noEmit` green
+- [x] **Visual primitives** under `src/components/ui/` (next section). Pure
+      additive — no screen has been migrated to use them yet, so the existing
+      `Surface`/`IconBtn` continue to be the only primitives in active use until
+      the per-screen migrations land.
 
 ## Not yet landed (sequence)
 
-### Visual primitives — `src/components/ui/*`
-- [ ] `PageHeader` — crumbs + title + meta + right slot (replaces ad-hoc headers
+### Visual primitives — `src/components/ui/*` ✅
+- [x] `PageHeader` — crumbs + title + meta + right slot (replaces ad-hoc headers
       across screens)
-- [ ] `Card` — bordered panel using `theme.surface` / `theme.borderColor`
-- [ ] `Tag` — pill with variants (default / amber / green / info / warn)
-- [ ] `SectionLabel` — uppercase letter-spaced section header with count + action
-- [ ] `Btn` — sized + variant button (default / primary / ghost / icon)
+- [x] `Card` — bordered panel using `theme.surface` / `theme.borderColor`
+- [x] `Tag` — pill with `default | amber | green | info | warn` variants. The
+      design's `color-mix(in oklch, ...)` tints are approximated with a small
+      `hexAlpha()` helper that emits `rgba()` at the same 12% / 30% alpha steps.
+- [x] `SectionLabel` — uppercase letter-spaced section header with `count` +
+      optional `action` (pressable when `onActionPress` is supplied)
+- [x] `Btn` — `default | primary | ghost` variants × `md | sm` sizes. Existing
+      `IconBtn` is kept distinct for icon-only round buttons.
 
 ### Screen migrations (one PR each, target `develop`)
 - [ ] **Files** (`app/(tabs)/index.tsx`) — filter input, Recents row, tree with
