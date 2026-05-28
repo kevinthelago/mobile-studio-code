@@ -47,3 +47,14 @@ export function GitIcon({ color }: { color: string }) {
     </Svg>
   );
 }
+
+// Kanban / project board glyph — matches the design's "▩" mark.
+export function PlanIcon({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 20 20" fill="none">
+      <Rect x={3} y={4} width={14} height={12} rx={2} stroke={color} strokeWidth={1.6} />
+      <Path d="M3 8h14" stroke={color} strokeWidth={1.6} />
+      <Path d="M8 8v8M12 8v8" stroke={color} strokeWidth={1.6} />
+    </Svg>
+  );
+}

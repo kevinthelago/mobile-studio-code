@@ -6,7 +6,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Surface } from './Surface';
 import { useTheme } from '../../theme';
 import {
-  FilesIcon, FindIcon, EditIcon, RunIcon, GitIcon,
+  FilesIcon, FindIcon, EditIcon, RunIcon, GitIcon, PlanIcon,
 } from '../TabIcons';
 
 type IconCmp = (props: { color: string }) => React.ReactElement;
@@ -17,6 +17,7 @@ const ICONS: Record<string, IconCmp> = {
   edit: EditIcon,
   run: RunIcon,
   git: GitIcon,
+  plan: PlanIcon,
 };
 
 const LABELS: Record<string, string> = {
@@ -25,6 +26,7 @@ const LABELS: Record<string, string> = {
   edit: 'Edit',
   run: 'Run',
   git: 'Git',
+  plan: 'Plan',
 };
 
 // Custom themed bottom tab bar. Each theme renders a different chrome:

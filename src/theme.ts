@@ -33,6 +33,18 @@ export interface Theme {
   fontMono: string;
   code: CodePalette;
   statusFg: string;
+  // msc-redesign tokens (see design/msc-redesign/.../styles.css). Each theme
+  // provides a coherent set so the redesign primitives read the same regardless
+  // of which theme is active.
+  elev: string;          // surface tier 2 — chips, buttons, input bg
+  elev2: string;         // surface tier 3 — pill tags, faint emphasis
+  borderStrong: string;  // higher-contrast border (msc-border)
+  accentDim: string;     // darker accent for borders / focused ring
+  success: string;       // status: running / clean / green tag
+  info: string;          // status: tunnel / cool tag
+  warn: string;          // status: awaiting input / dirty
+  danger: string;        // status: error / destructive
+  pink: string;          // claude/orb pink accent
   glass?: boolean;
   orbs?: boolean;
   sharp?: boolean;
@@ -61,6 +73,15 @@ export const THEMES: Record<ThemeId, Theme> = {
       pn: 'rgba(220,225,240,0.5)', pa: '#ffaecf', id: '#e6e9f2', sp: '#e6e9f2',
     },
     statusFg: '#fff',
+    elev: '#1a1f2e',
+    elev2: '#222837',
+    borderStrong: 'rgba(255,255,255,0.18)',
+    accentDim: '#aa6a8a',
+    success: '#7fc488',
+    info: '#7ebbef',
+    warn: '#e0b85a',
+    danger: '#ef7b9a',
+    pink: '#ffaecf',
     glass: true,
     orbs: true,
   },
@@ -83,6 +104,17 @@ export const THEMES: Record<ThemeId, Theme> = {
       pn: '#6a655f', pa: '#ffaecf', id: '#e8e2d8', sp: '#e8e2d8',
     },
     statusFg: '#e8e2d8',
+    // Canonical msc-redesign tokens — the redesign styles.css explicitly
+    // "marries dawn palette". These match design/msc-redesign/.../styles.css :root.
+    elev: '#221c17',
+    elev2: '#2c2520',
+    borderStrong: '#3a322b',
+    accentDim: '#8a4a32',
+    success: '#6fb777',
+    info: '#7dabd9',
+    warn: '#d9a04a',
+    danger: '#d97757',
+    pink: '#ffaecf',
   },
   terminal: {
     name: 'Terminal',
@@ -103,6 +135,15 @@ export const THEMES: Record<ThemeId, Theme> = {
       pn: '#6b7280', pa: '#f0a3c0', id: '#d4d4d8', sp: '#d4d4d8',
     },
     statusFg: '#d4d4d8',
+    elev: '#11141a',
+    elev2: '#1a1e26',
+    borderStrong: '#2b3242',
+    accentDim: '#5a8a1a',
+    success: '#a3e635',
+    info: '#7dd3fc',
+    warn: '#fcd34d',
+    danger: '#ef4444',
+    pink: '#f0a3c0',
     sharp: true,
   },
   paper: {
@@ -124,6 +165,15 @@ export const THEMES: Record<ThemeId, Theme> = {
       pn: '#b8aea0', pa: '#7a4a2a', id: '#3a3530', sp: '#3a3530',
     },
     statusFg: '#1a1612',
+    elev: '#fbf8f1',
+    elev2: '#f0ebde',
+    borderStrong: '#d6cdb8',
+    accentDim: '#9b5532',
+    success: '#3f7a3f',
+    info: '#4a73a3',
+    warn: '#a37a30',
+    danger: '#9b3d2e',
+    pink: '#c96442',
     light: true,
   },
   basic: {
@@ -145,6 +195,15 @@ export const THEMES: Record<ThemeId, Theme> = {
       pn: '#6a737d', pa: '#953800', id: '#24292f', sp: '#24292f',
     },
     statusFg: '#000',
+    elev: '#f6f8fa',
+    elev2: '#eef0f3',
+    borderStrong: '#afb8c1',
+    accentDim: '#054f9c',
+    success: '#1a7f37',
+    info: '#0969da',
+    warn: '#9a6700',
+    danger: '#cf222e',
+    pink: '#bf3989',
     light: true,
   },
 };
