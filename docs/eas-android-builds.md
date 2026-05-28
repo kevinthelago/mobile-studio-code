@@ -43,16 +43,19 @@ testers (see #25).
 1. **Google Play service account key.** `eas submit --platform android` needs a
    Play Console service-account JSON. Configure it via `eas credentials` (managed,
    recommended) or add `serviceAccountKeyPath` to `submit.production.android`.
-   **Do not commit the key** — it is a server-side secret (`.gitignore` ignores
-   `*-firebase-adminsdk-*.json`; keep Play keys out of the repo too).
-2. **`google-services.json`** must be present for any Android build — see
-   [firebase-android-setup.md](./firebase-android-setup.md) (#21).
+   **Do not commit the key** — it's a server-side secret; keep it out of the
+   repo entirely.
+2. **`google-services.json`** must be present for any Android build — see issue
+   **#21 / PR #30** (and `docs/firebase-android-setup.md` once that PR lands).
+   Until then, `eas build --platform android` will fail at prebuild with
+   "google-services.json not found".
 3. **Real-device check (acceptance criterion):**
    ```bash
    npm run build:android:dev
    ```
-   Install the resulting APK on a physical Android device and confirm the app
-   launches and reaches the main screen. Covered more fully by #23.
+   *(requires #21 landed and the Android Firebase credential committed.)* Install
+   the resulting APK on a physical Android device and confirm the app launches
+   and reaches the main screen. Covered more fully by #23.
 
 ## Acceptance criteria (issue #22)
 
