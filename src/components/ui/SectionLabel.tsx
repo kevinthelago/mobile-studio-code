@@ -19,6 +19,12 @@ export interface SectionLabelProps extends ViewProps {
   action?: React.ReactNode;
   /** Makes the action pressable. */
   onActionPress?: () => void;
+  /**
+   * Optional right-aligned dim hint (fgDim, normal-case) — for passive helper
+   * text like "tap folder to expand". Distinct from `action`, which is an
+   * accent-colored affordance. If both are given, `action` wins.
+   */
+  hint?: React.ReactNode;
 }
 
 export function SectionLabel({
@@ -26,23 +32,29 @@ export function SectionLabel({
   count,
   action,
   onActionPress,
+  hint,
   style,
   ...rest
 }: SectionLabelProps) {
   const t = useTheme();
 
-  const actionEl =
-    action == null ? null : onActionPress ? (
-      <Pressable onPress={onActionPress} hitSlop={6}>
-        <Text style={[styles.action, { color: t.accent, fontFamily: t.fontMono }]}>
-          {action}
-        </Text>
-      </Pressable>
-    ) : (
+  let rightEl: React.ReactNode = null;
+  if (action != null) {
+    const actionText = (
       <Text style={[styles.action, { color: t.accent, fontFamily: t.fontMono }]}>
         {action}
       </Text>
     );
+    rightEl = onActionPress ? (
+      <Pressable onPress={onActionPress} hitSlop={6}>{actionText}</Pressable>
+    ) : actionText;
+  } else if (hint != null) {
+    rightEl = (
+      <Text style={[styles.hint, { color: t.fgDim, fontFamily: t.fontMono }]}>
+        {hint}
+      </Text>
+    );
+  }
 
   return (
     <View {...rest} style={[styles.row, style]}>
@@ -55,7 +67,7 @@ export function SectionLabel({
         </Text>
       )}
       <View style={styles.spacer} />
-      {actionEl}
+      {rightEl}
     </View>
   );
 }
@@ -82,5 +94,8 @@ const styles = StyleSheet.create({
   spacer: { flex: 1 },
   action: {
     fontSize: 10.5,
+  },
+  hint: {
+    fontSize: 9.5,
   },
 });

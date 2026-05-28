@@ -49,8 +49,14 @@ design has landed.
       `IconBtn` is kept distinct for icon-only round buttons.
 
 ### Screen migrations (one PR each, target `develop`)
-- [ ] **Files** (`app/(tabs)/index.tsx`) — filter input, Recents row, tree with
-      current/modified markers per the mockup
+- [x] **Files** (`app/(tabs)/index.tsx`) — migrated to `PageHeader` +
+      `SectionLabel` + `Card`. Breadcrumb header (repo › branch), `Filter files…`
+      input, horizontal Recents cards, and a mono tree with folder ▾/▸ glyphs,
+      current-row accent tint + left border, and modified dots. All real wiring
+      (`useSession`, `buildTree`, `openFile`, recents) preserved. Added a `hint`
+      prop to `SectionLabel` for the dim "tap folder to expand" helper text
+      (distinct from the accent `action` affordance). Behavior note: Recents now
+      hide while a filter is active (was always shown).
 - [ ] **Find** (`app/(tabs)/find.tsx`) — large search input, scoping tags,
       collapsible per-file hit groups with line numbers + highlighted matches
 - [ ] **Edit** (`app/(tabs)/edit.tsx`) — code view + collapsing inline chat
