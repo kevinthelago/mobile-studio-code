@@ -7,8 +7,12 @@ pass that confirms each Expo capability and the agent loop behave the same on a
 Run an Android dev build and install it on a real device:
 
 ```bash
-npm run build:android:dev   # needs eas.json Android profile (#22) + google-services.json (#21)
+eas build --platform android --profile development
 ```
+
+Depends on **#22 / PR #31** (adds the EAS Android `development` profile and the
+`build:android:dev` npm shortcut) and **#21 / PR #30** (the Firebase
+`google-services.json` credential). Without both, prebuild fails.
 
 ## Code change done in #23
 
@@ -32,8 +36,8 @@ npm run build:android:dev   # needs eas.json Android profile (#22) + google-serv
       completes a turn (Anthropic calls succeed on Android networking).
 - [ ] **Tunnel client** — once #15 lands, confirm it connects on Android; until
       then confirm the app is fully usable with no tunnel (standalone).
-- [ ] **Push (FCM)** — backgrounded notification delivered (see
-      [firebase-android-setup.md](./firebase-android-setup.md), #21).
+- [ ] **Push (FCM)** — backgrounded notification delivered (see issue #21 /
+      PR #30, and `docs/firebase-android-setup.md` once that PR lands).
 
 ## Acceptance criteria (issue #23)
 

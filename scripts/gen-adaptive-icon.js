@@ -11,8 +11,12 @@ const path = require('path');
 const zlib = require('zlib');
 
 const SIZE = 1024;
-// Orb diameter 600px (radius 300), centered. The adaptive-icon safe zone is the
-// central ~66% (~676px), so a 600px disc sits comfortably inside any mask shape.
+// Orb diameter 600px (radius 300), centered. Android adaptive icons get masked
+// to the launcher's shape (circle, squircle, rounded square, teardrop...), and
+// only the central 66% of the foreground image is guaranteed visible — the
+// "safe zone" is 0.66 * 1024 ≈ 676px. A 600px disc (radius 300) sits
+// comfortably inside that, so the mark survives every mask. Do not enlarge the
+// radius without re-checking the safe zone on the launcher shapes.
 const R = 300;
 const CX = (SIZE - 1) / 2;
 const CY = (SIZE - 1) / 2;
