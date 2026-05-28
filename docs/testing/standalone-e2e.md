@@ -2,19 +2,20 @@
 
 > **Scenario #1 from the project plan's testing section.** This is a **release
 > gate**: it must pass before any build is promoted to a release channel
-> (`preview` → TestFlight/internal, `production` → App Store/Play Store). It
-> locks in the standalone path — the app working entirely on its own against
-> GitHub + Claude, with **no desktop host and no tunnel** — so that future tunnel
-> work (#15/#16) cannot silently break the primary workflow.
+> (`preview` → internal testers / Ad Hoc, `production` → TestFlight / App Store /
+> Play Store internal track). It locks in the standalone path — the app working
+> entirely on its own against GitHub + Claude, with **no desktop host and no
+> tunnel** — so that future tunnel work (#15/#16) cannot silently break the
+> primary workflow.
 
 ---
 
 ## Why this exists
 
 Mobile Studio Code is a **fully standalone IDE first**; desktop pairing is an
-optional, additive capability (see [#12](../../README.md) / `CLAUDE.md`). The
-standalone path is the one every user depends on, so it gets a fixed,
-repeatable, end-to-end check that a human runs before each release.
+optional, additive capability (see `CLAUDE.md` and issue #12). The standalone
+path is the one every user depends on, so it gets a fixed, repeatable,
+end-to-end check that a human runs before each release.
 
 There are no automated tests for this flow — it requires a real device, a live
 GitHub PAT, and a live Anthropic API key, none of which run in CI. `tsc --noEmit`
@@ -71,16 +72,19 @@ the device.
   (`src/lib/anthropic.ts`) → tool calls `read_file` then `write_file` executed by
   `runTool()`. `write_file` updates the file on disk and marks the manifest entry
   `modified: true`.
-- **Expected:** The agent reports completion within the iteration cap (25). The
-  Edit tab shows the new content. The file is now flagged modified.
+- **Expected:** The agent reports completion within the iteration cap
+  (`MAX_AGENT_ITERATIONS = 20` in `src/lib/agent.ts`). The Edit tab shows the
+  new content. The file is now flagged modified.
 
 ### 4. Commit (push) to GitHub
 - **Action:** Go to the Git tab (`app/(tabs)/git.tsx`). Confirm the changed file
   appears in the changed-files list. Optionally tap **Draft with Claude** for a
   commit message, then **Push**.
-- **Path:** push routine in `src/lib/github.ts` / `gitClient.ts` → for each
-  `modified: true` file, `PUT /repos/{repo}/contents/{path}` with its last-known
-  SHA → manifest SHA updated and `modified` cleared on success.
+- **Path:** `pushModifiedFiles()` in `src/lib/github.ts` → GitHub **Git Data
+  API**: POST a blob per modified file → POST a new tree built on the base tree
+  → POST a new commit → PATCH `refs/heads/{branch}` to the new commit. On
+  success, each file's manifest SHA is updated and `modified` cleared. This is a
+  single atomic commit, *not* per-file `PUT /contents` calls.
 - **Expected:** Push succeeds with no error surfaced on the `errorBus`. The
   changed-files list empties; the manifest entry returns to `modified: false`
   with a refreshed `sha`.
@@ -114,7 +118,7 @@ the failed step before promoting anything.
 - Before promoting a build to `preview` (TestFlight / internal track).
 - Before promoting a build to `production` (App Store / Play Store).
 - After any change to: `setup.tsx`, `repo.tsx`, `agent.ts`, `github.ts`,
-  `gitClient.ts`, `fs.ts`, `session.tsx`, or the manifest/push logic.
+  `fs.ts`, `session.tsx`, or the manifest/push logic.
 - **Mandatory** on every PR that touches the tunnel client (#15) or pairing
   (#16), to prove standalone still works with the tunnel off.
 
