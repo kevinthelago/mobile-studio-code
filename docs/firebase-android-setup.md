@@ -10,13 +10,15 @@ ignored in `.gitignore`.
 
 ## What's already wired (code, done in #21)
 
-- `app.json` → `android.googleServicesFile: "./google-services.json"`. The
-  `@react-native-firebase/app` config plugin reads this and injects the
-  `com.google.gms.google-services` Gradle plugin during prebuild — no extra
-  Android plugin is needed (the `withFirebasePodfile` plugin is iOS-only).
 - `@react-native-firebase/app` and `@react-native-firebase/messaging` are already
-  in the `plugins` array and apply to both platforms.
-- `.gitignore` un-ignores `google-services.json` so it can be tracked.
+  in the `plugins` array of `app.json` and apply to both platforms.
+- `.gitignore` un-ignores `google-services.json` so it can be tracked (the iOS
+  plist is already tracked the same way).
+- The `app.json` `android.googleServicesFile` wiring intentionally lands **with
+  the credential commit** below — not in this PR. Wiring app.json to a
+  nonexistent file would break Android prebuild on `develop`; the one-line
+  wiring is trivial and is best added in the same commit that adds the real
+  credential so the two never get out of sync.
 
 ## What you must do (credential — not doable from a coding session)
 
@@ -29,14 +31,25 @@ ignored in `.gitignore`.
    ```
    mobile-studio-code/google-services.json
    ```
-5. Commit it (it is no longer gitignored):
+5. Add the `app.json` wiring in the same commit (one line under `expo.android`):
+   ```diff
+       "android": {
+         "adaptiveIcon": { "backgroundColor": "#0b0d14" },
+         "backgroundColor": "#0b0d14",
+   -    "package": "com.mobilestudiocode.app"
+   +    "package": "com.mobilestudiocode.app",
+   +    "googleServicesFile": "./google-services.json"
+       },
    ```
-   git add google-services.json
-   git commit -m "chore(firebase): add Android google-services.json client config"
+6. Commit both together (the credential is no longer gitignored):
+   ```
+   git add google-services.json app.json
+   git commit -m "chore(firebase): add Android google-services.json + wire app.json"
    ```
 
-> Without this file, an Android EAS build (#22) will fail at prebuild with a
-> "google-services.json not found" error. iOS builds are unaffected.
+> Adding the `googleServicesFile` wiring before the file exists would break
+> Android prebuild on `develop`; do them in one commit. iOS builds are
+> unaffected regardless.
 
 ## Verify FCM on a real Android device (device — handed off)
 
@@ -45,8 +58,9 @@ ignored in `.gitignore`.
    ```
    eas build --platform android --profile development
    ```
-2. Launch the app and grant the notification permission (Android 13+ prompts at
-   runtime via `expo-notifications` / `@react-native-firebase/messaging`).
+2. Launch the app and grant the notification permission (Android 13+ requires
+   the runtime `POST_NOTIFICATIONS` permission, requested via
+   `@react-native-firebase/messaging`).
 3. Retrieve the device FCM token (log it on registration) and send a test message
    from **Firebase console → Messaging → "Send test message"**, or via the FCM
    HTTP v1 API using the device token.
@@ -56,8 +70,10 @@ ignored in `.gitignore`.
 
 ## Acceptance criteria (issue #21)
 
-- [x] `google-services.json` wired via `android.googleServicesFile` in `app.json`
-- [ ] `google-services.json` downloaded from the console and committed *(you)*
+- [x] `.gitignore` un-ignores `google-services.json` so the credential can be
+      tracked; doc + handoff steps in place
+- [ ] `google-services.json` downloaded from the console + committed alongside
+      the `app.json` `android.googleServicesFile` wiring *(you)*
 - [ ] FCM delivers a backgrounded notification on a real Android device *(you)*
 - [x] iOS Firebase path unchanged (plist, `withFirebasePodfile`, plugins intact)
 

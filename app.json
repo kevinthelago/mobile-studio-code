@@ -30,8 +30,7 @@
         "backgroundColor": "#0b0d14"
       },
       "backgroundColor": "#0b0d14",
-      "package": "com.mobilestudiocode.app",
-      "googleServicesFile": "./google-services.json"
+      "package": "com.mobilestudiocode.app"
     },
     "plugins": [
       "./plugins/withFirebasePodfile",
