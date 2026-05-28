@@ -79,8 +79,17 @@ design has landed.
       Dropped the `Surface`/`TopPill`/`ClaudeAvatar`-based chrome.
 - [ ] **Run** (`app/(tabs)/run.tsx`) — already implemented as PaneGrid; needs
       visual alignment (PageHeader, status chips, awaiting-input border)
-- [ ] **Git** (`app/(tabs)/git.tsx`) — AI-drafted commit message card with
-      branch metadata strip
+- [x] **Git** (`app/(tabs)/git.tsx`) — migrated to `PageHeader` + `SectionLabel`
+      + `Card` + `Tag` + `Btn`. Breadcrumb header (repo › branch) + branch title
+      + `N changed`/`clean` meta + push `Btn` in the right slot; pull / switch-repo
+      ghost `Btn`s; a `Changes` section of M/A `Card` rows (tap → open in Edit);
+      a `Commit message` section whose `action` slot drives draft/regenerate
+      (the old "Draft with Claude"); linked-issue ref modes (refs/fixes/none) as
+      `Tag`s; commit `Btn`. All real wiring preserved (`pull`/`push`/`pulling`/
+      `pushing`, `anthropicDraftCommitMessage`, issue-ref composition, conflict
+      reporting). **Omitted** the design's per-file `+adds/-dels` and `stage all`
+      — this app tracks neither line diffs nor a staging area (see CLAUDE.md
+      known issues), so they'd be fake controls.
 
 ### Plan sub-screens (depends on the tunnel exposing planning state)
 - [ ] `PlanProjectsScreen` — project list, host vs. other-host grouping
