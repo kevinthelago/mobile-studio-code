@@ -2,7 +2,6 @@ import {
   PaneState, PaneStreamingState, TunnelClientMessage,
   TunnelConnectionState, TunnelServerMessage,
 } from './types';
-import { PinnedWebSocket } from '../../modules/tls-websocket';
 
 export type TunnelCallbacks = {
   onConnectionStateChange: (state: TunnelConnectionState) => void;
@@ -28,8 +27,6 @@ export class TunnelClient {
   private url = '';
   private token = '';
   private fcmToken: string | undefined;
-  /** Pinned SHA-256 of the desktop's self-signed TLS cert (see openSocket). */
-  private fingerprint: string | undefined;
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
@@ -43,18 +40,13 @@ export class TunnelClient {
     this.cb = callbacks;
   }
 
-  connect(url: string, token: string, fcmToken?: string, fingerprint?: string) {
+  connect(url: string, token: string, fcmToken?: string) {
     this.url = url;
     this.token = token;
     this.fcmToken = fcmToken;
-    this.fingerprint = fingerprint;
     this.destroyed = false;
     this.reconnectAttempt = 0;
-    tunnelLog('connect requested', {
-      url,
-      pinned: !!fingerprint && url.startsWith('wss'),
-      hasFcm: !!fcmToken,
-    });
+    tunnelLog('connect requested', { url, hasFcm: !!fcmToken });
     this.openSocket();
   }
 
@@ -101,18 +93,8 @@ export class TunnelClient {
     if (this.destroyed) return;
     this.setConnectionState('connecting');
     try {
-      // RN's built-in WebSocket can't trust a self-signed TLS cert. When the
-      // desktop serves `wss://` with a self-signed cert we have a pinned
-      // fingerprint for, route through the native TlsWebSocket module, which
-      // validates the cert's SHA-256 against `this.fingerprint`. Plain `ws://`
-      // (or `wss://` with a CA-trusted cert and no pin) uses the JS WebSocket.
-      const pin = this.fingerprint && this.url.startsWith('wss')
-        ? this.fingerprint
-        : undefined;
-      tunnelLog('opening socket', { transport: pin ? 'pinned-wss' : 'plain' });
-      this.ws = (pin
-        ? new PinnedWebSocket(this.url, pin)
-        : new WebSocket(this.url)) as unknown as WebSocket;
+      tunnelLog('opening socket', { url: this.url });
+      this.ws = new WebSocket(this.url);
     } catch (e) {
       tunnelLog('socket construction failed', e);
       this.scheduleReconnect();

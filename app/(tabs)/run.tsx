@@ -8,7 +8,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
 import { useTunnel } from '../../src/lib/TunnelContext';
-import { PaneState, PaneStatus, QrPairingPayload, TunnelConnectionState } from '../../src/lib/types';
+import { PaneState, PaneStatus, TunnelConnectionState } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
 import { stripAnsi, lastLines } from '../../src/lib/ansi';
@@ -38,17 +38,13 @@ function relativeTime(ts: number | null): string {
 }
 
 /** Parse QR payload. Accepts JSON {url, token} or bare "url|token" strings. */
-function parseQrPayload(data: string): QrPairingPayload | null {
+function parseQrPayload(data: string): { url: string; token: string } | null {
   try {
-    const obj = JSON.parse(data) as Partial<QrPairingPayload>;
-    if (obj.url && obj.token) {
-      return { url: obj.url, token: obj.token, fingerprint: obj.fingerprint };
-    }
+    const obj = JSON.parse(data) as { url?: string; token?: string };
+    if (obj.url && obj.token) return { url: obj.url, token: obj.token };
   } catch {
-    // Bar-delimited fallback: `url|token` or `url|token|fingerprint`.
     const parts = data.split('|');
     if (parts.length === 2) return { url: parts[0], token: parts[1] };
-    if (parts.length === 3) return { url: parts[0], token: parts[1], fingerprint: parts[2] };
   }
   return null;
 }
@@ -95,7 +91,7 @@ function PairingView() {
     }
     scannedRef.current = true;
     setScanning(false);
-    connect(parsed.url, parsed.token, parsed.fingerprint);
+    connect(parsed.url, parsed.token);
   }, [connect]);
 
   const handleScanPress = useCallback(async () => {

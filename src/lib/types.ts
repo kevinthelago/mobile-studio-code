@@ -186,24 +186,6 @@ export type TunnelConnectionState =
   | 'connected'
   | 'error';
 
-/**
- * Canonical pairing payload encoded in the desktop's QR code (and accepted via
- * manual entry). This is the wire contract the desktop (base-studio-code)
- * conforms to.
- *
- * - `url`   — the tunnel WebSocket URL, e.g. `wss://192.168.4.22:7878`.
- * - `token` — bearer token sent in the `auth` message after the socket opens.
- * - `fingerprint` — lowercase hex SHA-256 of the desktop's self-signed TLS
- *   certificate (DER), used to pin trust over the LAN. Optional: absent for
- *   plaintext `ws://` LAN setups; required to trust a self-signed `wss://`
- *   cert (iOS will otherwise reject it — see TunnelClient).
- */
-export interface QrPairingPayload {
-  url: string;
-  token: string;
-  fingerprint?: string;
-}
-
 export type ToolDefinition = {
   name: string;
   description: string;

@@ -16,7 +16,7 @@ export type TunnelValue = {
    *  whether the socket is currently live. Drives the "Unpair" affordance. */
   hasPairing: boolean;
 
-  connect: (url: string, token: string, fingerprint?: string) => Promise<void>;
+  connect: (url: string, token: string) => Promise<void>;
   /** Transient close — stays paired; auto-connects again on next launch. */
   disconnect: () => void;
   /** Permanent: forgets the desktop (deletes saved tunnel creds) and closes the
@@ -61,17 +61,16 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
 
     // Auto-connect if credentials were saved from a previous pairing
     (async () => {
-      const [url, token, fingerprint, fcm] = await Promise.all([
+      const [url, token, fcm] = await Promise.all([
         getSecret(KEYS.TUNNEL_URL),
         getSecret(KEYS.TUNNEL_TOKEN),
-        getSecret(KEYS.TUNNEL_FINGERPRINT),
         getSecret(KEYS.FCM_TOKEN),
       ]);
       if (fcm) fcmTokenRef.current = fcm;
       if (url && token) {
-        tunnelLog('auto-connect from saved pairing', { hasFingerprint: !!fingerprint });
+        tunnelLog('auto-connect from saved pairing');
         setHasPairing(true);
-        client.connect(url, token, fcm ?? undefined, fingerprint ?? undefined);
+        client.connect(url, token, fcm ?? undefined);
       } else {
         tunnelLog('no saved pairing — standalone');
       }
@@ -80,19 +79,14 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     return () => { client.disconnect(); };
   }, []);
 
-  const connect = useCallback(async (url: string, token: string, fingerprint?: string) => {
-    tunnelLog('pairing', { url, hasFingerprint: !!fingerprint });
+  const connect = useCallback(async (url: string, token: string) => {
+    tunnelLog('pairing', { url });
     await Promise.all([
       setSecret(KEYS.TUNNEL_URL, url),
       setSecret(KEYS.TUNNEL_TOKEN, token),
-      // Persist the pinned cert fingerprint (or clear a stale one) so reconnects
-      // and next-launch auto-connect can re-verify the desktop's self-signed cert.
-      fingerprint
-        ? setSecret(KEYS.TUNNEL_FINGERPRINT, fingerprint)
-        : deleteSecret(KEYS.TUNNEL_FINGERPRINT),
     ]);
     setHasPairing(true);
-    clientRef.current?.connect(url, token, fcmTokenRef.current, fingerprint);
+    clientRef.current?.connect(url, token, fcmTokenRef.current);
   }, []);
 
   const disconnect = useCallback(() => {
@@ -107,7 +101,6 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     await Promise.all([
       deleteSecret(KEYS.TUNNEL_URL),
       deleteSecret(KEYS.TUNNEL_TOKEN),
-      deleteSecret(KEYS.TUNNEL_FINGERPRINT),
     ]);
     tunnelLog('unpaired — cleared saved pairing, returning to standalone');
     setHasPairing(false);
