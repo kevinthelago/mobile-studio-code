@@ -64,56 +64,72 @@ export function SessionStrip() {
   const router = useRouter();
   const { connectionState, panes, activePaneId, orderedPaneIds, focusPane } = useTunnel();
 
-  if (connectionState !== 'connected' || orderedPaneIds.length === 0) return null;
-
   const handleChipPress = (paneId: string) => {
     focusPane(paneId);
     router.navigate('/(tabs)/run' as never);
   };
 
   const STRIP_H = 40;
+  // The chips bar only appears once a tunnel is connected with panes. The ▦
+  // settings button is always available (it's the only entry to Settings, and
+  // is where you pair/add credentials) — pinned top-right so it never overlaps
+  // a screen's own header actions, which sit in the lower title row.
+  const showChips = connectionState === 'connected' && orderedPaneIds.length > 0;
 
   return (
     // absoluteFill overlay — box-none so taps fall through to content beneath
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <View
-        style={[styles.bar, { top: insets.top, height: STRIP_H }]}
-        pointerEvents="auto"
-      >
-        {t.glass ? (
-          <BlurView
-            intensity={Platform.OS === 'ios' ? 50 : 100}
-            tint="dark"
-            style={StyleSheet.absoluteFill}
-          />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: t.surface }]} />
-        )}
-        {/* subtle top highlight to lift the strip off content */}
-        <View style={[styles.topHighlight, { backgroundColor: t.borderColor }]} />
-        {/* bottom hairline border */}
-        <View style={[styles.bottomBorder, { backgroundColor: t.borderColor }]} />
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-          style={styles.scroll}
+      {showChips && (
+        <View
+          style={[styles.bar, { top: insets.top, height: STRIP_H, right: 44 }]}
+          pointerEvents="auto"
         >
-          {orderedPaneIds.map((id) => {
-            const pane = panes[id];
-            if (!pane) return null;
-            return (
-              <Chip
-                key={id}
-                pane={pane}
-                active={id === activePaneId}
-                onPress={() => handleChipPress(id)}
-              />
-            );
-          })}
-        </ScrollView>
-      </View>
+          {t.glass ? (
+            <BlurView
+              intensity={Platform.OS === 'ios' ? 50 : 100}
+              tint="dark"
+              style={StyleSheet.absoluteFill}
+            />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: t.surface }]} />
+          )}
+          {/* subtle top highlight to lift the strip off content */}
+          <View style={[styles.topHighlight, { backgroundColor: t.borderColor }]} />
+          {/* bottom hairline border */}
+          <View style={[styles.bottomBorder, { backgroundColor: t.borderColor }]} />
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+            style={styles.scroll}
+          >
+            {orderedPaneIds.map((id) => {
+              const pane = panes[id];
+              if (!pane) return null;
+              return (
+                <Chip
+                  key={id}
+                  pane={pane}
+                  active={id === activePaneId}
+                  onPress={() => handleChipPress(id)}
+                />
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      <Pressable
+        onPress={() => router.navigate('/settings' as never)}
+        hitSlop={10}
+        style={[styles.gearBtn, { top: insets.top + 4 }]}
+        pointerEvents="auto"
+        accessibilityRole="button"
+        accessibilityLabel="Settings"
+      >
+        <Text style={[styles.gearGlyph, { color: t.fgMuted, fontFamily: t.fontMono }]}>▦</Text>
+      </Pressable>
     </View>
   );
 }
@@ -149,4 +165,10 @@ const styles = StyleSheet.create({
     width: 5, height: 5, borderRadius: 3,
     backgroundColor: '#fbbf24',
   },
+  gearBtn: {
+    position: 'absolute', right: 10,
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  gearGlyph: { fontSize: 18, lineHeight: 20 },
 });

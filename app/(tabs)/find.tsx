@@ -128,7 +128,7 @@ export default function FindScreen() {
 
   if (!manifest) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+      <SafeAreaView style={styles.safe}>
         <View style={styles.empty}>
           <Text style={[styles.emptyTitle, { color: t.fgMuted }]}>No repo loaded</Text>
         </View>
@@ -145,7 +145,7 @@ export default function FindScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <PageHeader
         crumbs={[manifest.repo, manifest.branch, 'search']}
         title={q.trim() || 'Find'}

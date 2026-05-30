@@ -11,6 +11,7 @@ import { FileEntry } from '../../src/lib/types';
 import { PageHeader } from '../../src/components/ui/PageHeader';
 import { SectionLabel } from '../../src/components/ui/SectionLabel';
 import { Card } from '../../src/components/ui/Card';
+import { Btn } from '../../src/components/ui/Btn';
 import { hexAlpha } from '../../src/lib/color';
 
 type TreeRow =
@@ -138,9 +139,21 @@ export default function FilesScreen() {
 
   if (!manifest) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]}>
+      <SafeAreaView style={styles.safe}>
         <View style={styles.emptyState}>
           <Text style={[styles.emptyTitle, { color: t.fgMuted }]}>No repo loaded</Text>
+          <Text style={[styles.emptySub, { color: t.fgDim }]}>
+            Download a repo to browse and edit files, or pair a desktop to work in
+            tunnel mode.
+          </Text>
+          <View style={styles.emptyActions}>
+            <Btn variant="primary" size="md" onPress={() => router.navigate('/repo')}>
+              Add a repo
+            </Btn>
+            <Btn variant="ghost" size="md" onPress={() => router.navigate('/settings' as never)}>
+              Settings
+            </Btn>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -150,7 +163,7 @@ export default function FilesScreen() {
   const currentTint = hexAlpha(t.accent, 0.10);
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <PageHeader
         crumbs={[manifest.repo, manifest.branch]}
         title={repoLeaf}
@@ -301,8 +314,10 @@ export default function FilesScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { fontSize: 14 },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36 },
+  emptyTitle: { fontSize: 16, fontWeight: '600' },
+  emptySub: { fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 8 },
+  emptyActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
 
   body: { flex: 1 },
 

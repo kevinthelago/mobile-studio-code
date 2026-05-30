@@ -27,7 +27,9 @@ export default function RepoScreen() {
       return;
     }
     if (!pat) {
-      setError('No GitHub token. Reset and reauthenticate.');
+      // No GitHub token yet — send the user to Settings to connect (just-in-time
+      // credentials). They can return here once GitHub is linked.
+      router.navigate('/settings' as never);
       return;
     }
     setBusy(true);
@@ -57,16 +59,29 @@ export default function RepoScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {manifest && (
-            <Pressable
-              onPress={() => router.replace('/(tabs)')}
-              hitSlop={12}
-              style={styles.backLink}
-            >
-              <Text style={[styles.backLinkText, { color: t.accent }]}>
-                ← Back to {manifest.repo}
+          <Pressable
+            onPress={() => router.navigate('/(tabs)')}
+            hitSlop={12}
+            style={styles.backLink}
+          >
+            <Text style={[styles.backLinkText, { color: t.accent }]}>
+              {manifest ? `← Back to ${manifest.repo}` : '← Back to app'}
+            </Text>
+          </Pressable>
+
+          {!pat && (
+            <Surface style={styles.card} radius={20}>
+              <Text style={[styles.label, { color: t.fgDim }]}>GitHub not connected</Text>
+              <Text style={[styles.subtitle, { color: t.fgMuted }]}>
+                Connect a GitHub token in Settings to download a repo.
               </Text>
-            </Pressable>
+              <Pressable
+                style={[styles.primary, { backgroundColor: t.accent }]}
+                onPress={() => router.navigate('/settings' as never)}
+              >
+                <Text style={styles.primaryText}>Open Settings</Text>
+              </Pressable>
+            </Surface>
           )}
 
           <View style={styles.heroBlock}>

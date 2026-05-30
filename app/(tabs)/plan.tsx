@@ -25,7 +25,6 @@ export default function PlanScreen() {
       style={[
         styles.root,
         {
-          backgroundColor: t.bg,
           paddingTop: insets.top + STRIP_HEIGHT + 12,
           paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 12,
         },

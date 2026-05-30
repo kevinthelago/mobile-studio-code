@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme';
 import { useSession } from '../../src/lib/session';
+import { useApiKeyPrompt } from '../../src/lib/ApiKeyContext';
 import { anthropicDraftCommitMessage } from '../../src/lib/anthropic';
 import { PageHeader } from '../../src/components/ui/PageHeader';
 import { SectionLabel } from '../../src/components/ui/SectionLabel';
@@ -28,6 +29,7 @@ export default function GitScreen() {
     apiKey, manifest, modifiedCount, openFile, activeTask,
     pull, push, pulling, pushing,
   } = useSession();
+  const { requestApiKey } = useApiKeyPrompt();
   const [commitMsg, setCommitMsg] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [issueRefMode, setIssueRefMode] = useState<IssueRefMode>('refs');
@@ -119,14 +121,21 @@ export default function GitScreen() {
   }
 
   async function onDraftCommit() {
-    if (!apiKey || drafting || changes.length === 0) return;
+    if (drafting || changes.length === 0) return;
+    // Drafting uses the on-device key — prompt just-in-time if it's missing,
+    // and use the returned key directly (session state won't have updated yet).
+    let key = apiKey;
+    if (!key) {
+      key = await requestApiKey();
+      if (!key) return;
+    }
     setDrafting(true);
     try {
       const fileLines = changes.map((c) => `${c.state} ${c.path}`).join('\n');
       const summary = linkedIssue
         ? `Task: ${activeTask?.title ?? ''}\nLinked issue #${linkedIssue.number}: ${linkedIssue.title}\n\nChanged files:\n${fileLines}`
         : fileLines;
-      const msg = await anthropicDraftCommitMessage(apiKey, summary);
+      const msg = await anthropicDraftCommitMessage(key, summary);
       setCommitMsg(msg);
     } catch (e) {
       Alert.alert('Draft failed', e instanceof Error ? e.message : 'Unknown error');
@@ -137,7 +146,7 @@ export default function GitScreen() {
 
   if (!manifest) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]} edges={['top']}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.empty}>
           <Text style={[styles.emptyTitle, { color: t.fgMuted }]}>No repo loaded</Text>
         </View>
@@ -145,10 +154,11 @@ export default function GitScreen() {
     );
   }
 
-  const canDraft = !!apiKey && changes.length > 0 && !drafting;
+  // Don't require a key here — tapping draft prompts for one if it's missing.
+  const canDraft = changes.length > 0 && !drafting;
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <KeyboardAvoidingView
         style={styles.flex1}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -232,7 +242,7 @@ export default function GitScreen() {
           <SectionLabel
             action={canDraft ? (commitMsg.trim() ? '↻ regenerate' : '✦ draft with Claude') : undefined}
             onActionPress={canDraft ? onDraftCommit : undefined}
-            hint={!apiKey ? 'add API key to draft' : drafting ? 'drafting…' : undefined}
+            hint={drafting ? 'drafting…' : !apiKey ? 'will ask for a key' : undefined}
           >
             Commit message
           </SectionLabel>

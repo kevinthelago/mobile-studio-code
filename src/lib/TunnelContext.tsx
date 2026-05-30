@@ -1,9 +1,9 @@
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
-import { TunnelClient, TunnelCallbacks } from './tunnel';
+import { TunnelClient, TunnelCallbacks, tunnelLog } from './tunnel';
 import { PaneState, TunnelConnectionState } from './types';
-import { KEYS, getSecret, setSecret } from './storage';
+import { KEYS, getSecret, setSecret, deleteSecret } from './storage';
 
 export type TunnelValue = {
   connectionState: TunnelConnectionState;
@@ -12,8 +12,16 @@ export type TunnelValue = {
   /** Pane IDs ordered: awaiting_input (most recent first), then by last activity */
   orderedPaneIds: string[];
 
-  connect: (url: string, token: string) => Promise<void>;
+  /** True when desktop pairing credentials are saved (paired), regardless of
+   *  whether the socket is currently live. Drives the "Unpair" affordance. */
+  hasPairing: boolean;
+
+  connect: (url: string, token: string, fingerprint?: string) => Promise<void>;
+  /** Transient close — stays paired; auto-connects again on next launch. */
   disconnect: () => void;
+  /** Permanent: forgets the desktop (deletes saved tunnel creds) and closes the
+   *  socket. Returns to standalone. Does NOT touch repo/GitHub/Anthropic state. */
+  unpair: () => Promise<void>;
   focusPane: (paneId: string) => void;
   sendInput: (paneId: string, data: string) => void;
   sendResize: (paneId: string, cols: number, rows: number) => void;
@@ -35,6 +43,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const [connectionState, setConnectionState] = useState<TunnelConnectionState>('disconnected');
   const [panes, setPanes] = useState<Record<string, PaneState>>({});
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
+  const [hasPairing, setHasPairing] = useState(false);
   const fcmTokenRef = useRef<string | undefined>(undefined);
   const clientRef = useRef<TunnelClient | null>(null);
 
@@ -52,27 +61,56 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
 
     // Auto-connect if credentials were saved from a previous pairing
     (async () => {
-      const [url, token, fcm] = await Promise.all([
+      const [url, token, fingerprint, fcm] = await Promise.all([
         getSecret(KEYS.TUNNEL_URL),
         getSecret(KEYS.TUNNEL_TOKEN),
+        getSecret(KEYS.TUNNEL_FINGERPRINT),
         getSecret(KEYS.FCM_TOKEN),
       ]);
       if (fcm) fcmTokenRef.current = fcm;
-      if (url && token) client.connect(url, token, fcm ?? undefined);
+      if (url && token) {
+        tunnelLog('auto-connect from saved pairing', { hasFingerprint: !!fingerprint });
+        setHasPairing(true);
+        client.connect(url, token, fcm ?? undefined, fingerprint ?? undefined);
+      } else {
+        tunnelLog('no saved pairing — standalone');
+      }
     })();
 
     return () => { client.disconnect(); };
   }, []);
 
-  const connect = useCallback(async (url: string, token: string) => {
+  const connect = useCallback(async (url: string, token: string, fingerprint?: string) => {
+    tunnelLog('pairing', { url, hasFingerprint: !!fingerprint });
     await Promise.all([
       setSecret(KEYS.TUNNEL_URL, url),
       setSecret(KEYS.TUNNEL_TOKEN, token),
+      // Persist the pinned cert fingerprint (or clear a stale one) so reconnects
+      // and next-launch auto-connect can re-verify the desktop's self-signed cert.
+      fingerprint
+        ? setSecret(KEYS.TUNNEL_FINGERPRINT, fingerprint)
+        : deleteSecret(KEYS.TUNNEL_FINGERPRINT),
     ]);
-    clientRef.current?.connect(url, token, fcmTokenRef.current);
+    setHasPairing(true);
+    clientRef.current?.connect(url, token, fcmTokenRef.current, fingerprint);
   }, []);
 
   const disconnect = useCallback(() => {
+    clientRef.current?.disconnect();
+  }, []);
+
+  const unpair = useCallback(async () => {
+    // Forget the desktop: clear ONLY the two tunnel secrets, then close the
+    // socket. Repo manifest, downloaded files, tasks, GitHub PAT, and the
+    // Anthropic key are intentionally left untouched — unpair returns to
+    // standalone with local repo state intact (issue #16).
+    await Promise.all([
+      deleteSecret(KEYS.TUNNEL_URL),
+      deleteSecret(KEYS.TUNNEL_TOKEN),
+      deleteSecret(KEYS.TUNNEL_FINGERPRINT),
+    ]);
+    tunnelLog('unpaired — cleared saved pairing, returning to standalone');
+    setHasPairing(false);
     clientRef.current?.disconnect();
   }, []);
 
@@ -121,8 +159,10 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     panes,
     activePaneId,
     orderedPaneIds,
+    hasPairing,
     connect,
     disconnect,
+    unpair,
     focusPane,
     sendInput,
     sendResize,

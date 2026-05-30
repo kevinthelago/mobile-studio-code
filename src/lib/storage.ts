@@ -8,6 +8,7 @@ export const KEYS = {
   BRANCH: 'repo_branch',
   TUNNEL_URL: 'tunnel_url',
   TUNNEL_TOKEN: 'tunnel_token',
+  TUNNEL_FINGERPRINT: 'tunnel_fingerprint',
   FCM_TOKEN: 'fcm_token',
 } as const;
 

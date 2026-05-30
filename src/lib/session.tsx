@@ -19,7 +19,10 @@ import { runAgent, AgentEvent } from './agent';
 import { pullRepo, pushModifiedFiles, PushFailure } from './github';
 import { pushError } from './errorBus';
 
-type Stage = 'loading' | 'setup' | 'repo' | 'ready';
+// No blocking onboarding: the app loads straight into the tabs. Credentials
+// (GitHub PAT, Anthropic key) and repo selection are requested just-in-time and
+// managed from Settings. Stage is only 'loading' (restoring secrets) → 'ready'.
+type Stage = 'loading' | 'ready';
 
 type SessionValue = {
   stage: Stage;
@@ -30,7 +33,11 @@ type SessionValue = {
   modifiedCount: number;
 
   // Auth + repo actions
-  saveAuth: (pat: string, apiKey: string, ghUser: string) => Promise<void>;
+  // apiKey is optional: it's only needed for the on-device (standalone) agent.
+  // In tunnel mode the paired desktop holds credentials, so the phone can run
+  // with a GitHub PAT alone.
+  saveAuth: (pat: string, apiKey: string | null, ghUser: string) => Promise<void>;
+  saveApiKey: (apiKey: string | null) => Promise<void>;
   resetAuth: () => Promise<void>;
   selectRepo: (manifest: Manifest) => Promise<void>;
   clearRepo: () => Promise<void>;
@@ -106,10 +113,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const activeTaskRef = useRef<Task | null>(null);
   const taskIndexRef = useRef<TaskIndex | null>(null);
   const cancelRef = useRef<CancelSignal>({ cancelled: false });
+  // Mirror the API key into a ref so the agent gate reads the latest value even
+  // when a key is added just-in-time (the prompt modal saves the key, then the
+  // caller immediately invokes send() before a re-render propagates state).
+  const apiKeyRef = useRef<string | null>(null);
 
   useEffect(() => { manifestRef.current = manifest; }, [manifest]);
   useEffect(() => { activeTaskRef.current = activeTask; }, [activeTask]);
   useEffect(() => { taskIndexRef.current = taskIndex; }, [taskIndex]);
+  useEffect(() => { apiKeyRef.current = apiKey; }, [apiKey]);
 
   // Bootstrap on mount: load secrets, manifest, task index.
   useEffect(() => {
@@ -126,21 +138,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setApiKey(k);
       setGhUser(u);
 
-      if (!p || !k) {
-        setStage('setup');
-        return;
-      }
+      // Only the GitHub PAT is required to leave setup. The Anthropic key is
+      // optional — without it the app runs in tunnel mode (paired desktop) and
+      // the on-device agent stays disabled until a key is added.
+      apiKeyRef.current = k;
       if (r) {
         const m = await readManifest(r);
         if (cancelled) return;
         if (m) {
           setManifest(m);
           manifestRef.current = m;
-          setStage('ready');
-          return;
         }
       }
-      setStage('repo');
+      setStage('ready');
     })();
     return () => { cancelled = true; };
   }, []);
@@ -231,15 +241,34 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // ── Auth ─────────────────────────────────────────────────────────────────
 
   const saveAuth = useCallback(async (
-    newPat: string, newKey: string, newUser: string,
+    newPat: string, newKey: string | null, newUser: string,
   ) => {
     await setSecret(KEYS.GITHUB_PAT, newPat);
-    await setSecret(KEYS.ANTHROPIC_KEY, newKey);
+    // The key is optional — clear any stored value when omitted so state and
+    // secure storage stay in sync (e.g. when re-running setup to remove a key).
+    if (newKey) {
+      await setSecret(KEYS.ANTHROPIC_KEY, newKey);
+    } else {
+      await deleteSecret(KEYS.ANTHROPIC_KEY);
+    }
     await setSecret(KEYS.GITHUB_USER, newUser);
     setPat(newPat);
+    apiKeyRef.current = newKey;
     setApiKey(newKey);
     setGhUser(newUser);
-    setStage((s) => (s === 'setup' ? 'repo' : s));
+  }, []);
+
+  // Persist (or clear) just the Anthropic key, without touching GitHub auth.
+  // Used by the just-in-time key prompt so a user who skipped it at setup can
+  // add it the moment the on-device agent is invoked.
+  const saveApiKey = useCallback(async (newKey: string | null) => {
+    if (newKey) {
+      await setSecret(KEYS.ANTHROPIC_KEY, newKey);
+    } else {
+      await deleteSecret(KEYS.ANTHROPIC_KEY);
+    }
+    apiKeyRef.current = newKey;
+    setApiKey(newKey);
   }, []);
 
   const resetAuth = useCallback(async () => {
@@ -251,11 +280,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       deleteSecret(KEYS.BRANCH),
     ]);
     setPat(null);
+    apiKeyRef.current = null;
     setApiKey(null);
     setGhUser(null);
     setManifest(null);
     manifestRef.current = null;
-    setStage('setup');
+    // Stay in the app after signing out — credentials are requested again
+    // just-in-time when a GitHub/AI action needs them.
+    setStage('ready');
   }, []);
 
   // ── Repo ─────────────────────────────────────────────────────────────────
@@ -268,7 +300,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setCurrentPath(null);
     setCurrentContentState(null);
     setOriginalContent(null);
-    setStage('ready');
   }, []);
 
   const clearRepo = useCallback(async () => {
@@ -279,7 +310,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setCurrentPath(null);
     setCurrentContentState(null);
     setOriginalContent(null);
-    setStage('repo');
   }, []);
 
   const refreshManifest = useCallback(async () => {
@@ -548,7 +578,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   ) => {
     const m = manifestRef.current;
     const t = activeTaskRef.current;
-    if (!m || !apiKey || !t) return;
+    const key = apiKeyRef.current;
+    if (!m || !key || !t) return;
     cancelRef.current = { cancelled: false };
     setChatBusy(true);
     // Tracks whether we've already emitted a chat note for the current
@@ -574,7 +605,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
     try {
       const finalHistory = await runAgent({
-        apiKey,
+        apiKey: key,
         pat,
         initialHistory: fromHistory,
         manifest: m,
@@ -621,7 +652,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // durable before the user can navigate away or kick off a new turn.
       flushPendingTaskWrite();
     }
-  }, [apiKey, pat, handleAgentEvent, updateActiveTask, flushPendingTaskWrite]);
+  }, [pat, handleAgentEvent, updateActiveTask, flushPendingTaskWrite]);
 
   const send = useCallback(async (text: string, images?: AttachedImage[]) => {
     const trimmed = text.trim();
@@ -665,6 +696,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       history: newHistory,
       updatedAt: Date.now(),
     }));
+
+    // Standalone (on-device) agent requires an Anthropic key. Callers should
+    // prompt for one (requestApiKey) before sending, but as a safety net — if
+    // send() is reached without a key — post an actionable note rather than
+    // silently doing nothing. The typed message stays in history for later.
+    if (!apiKeyRef.current) {
+      updateActiveTask((task) => ({
+        ...task,
+        turns: [...task.turns, {
+          kind: 'note',
+          text: 'No Anthropic API key set — the on-device agent is disabled. Add a key to run it here, or pair a desktop from the Run tab to work in tunnel mode.',
+        }],
+        updatedAt: Date.now(),
+      }));
+      return;
+    }
     await runWithCheckpoint(newHistory, false);
   }, [chatBusy, runWithCheckpoint, updateActiveTask]);
 
@@ -689,6 +736,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     modifiedCount,
 
     saveAuth,
+    saveApiKey,
     resetAuth,
     selectRepo,
     clearRepo,

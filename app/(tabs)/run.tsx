@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform,
   Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +8,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
 import { useTunnel } from '../../src/lib/TunnelContext';
-import { PaneState, PaneStatus, TunnelConnectionState } from '../../src/lib/types';
+import { PaneState, PaneStatus, QrPairingPayload, TunnelConnectionState } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
 import { stripAnsi, lastLines } from '../../src/lib/ansi';
@@ -38,13 +38,17 @@ function relativeTime(ts: number | null): string {
 }
 
 /** Parse QR payload. Accepts JSON {url, token} or bare "url|token" strings. */
-function parseQrPayload(data: string): { url: string; token: string } | null {
+function parseQrPayload(data: string): QrPairingPayload | null {
   try {
-    const obj = JSON.parse(data) as { url?: string; token?: string };
-    if (obj.url && obj.token) return { url: obj.url, token: obj.token };
+    const obj = JSON.parse(data) as Partial<QrPairingPayload>;
+    if (obj.url && obj.token) {
+      return { url: obj.url, token: obj.token, fingerprint: obj.fingerprint };
+    }
   } catch {
+    // Bar-delimited fallback: `url|token` or `url|token|fingerprint`.
     const parts = data.split('|');
     if (parts.length === 2) return { url: parts[0], token: parts[1] };
+    if (parts.length === 3) return { url: parts[0], token: parts[1], fingerprint: parts[2] };
   }
   return null;
 }
@@ -53,11 +57,18 @@ function parseQrPayload(data: string): { url: string; token: string } | null {
 
 function ConnectingView({ state }: { state: TunnelConnectionState }) {
   const t = useTheme();
+  const { disconnect } = useTunnel();
   const label = state === 'authenticating' ? 'Authenticating…' : 'Connecting…';
   return (
     <View style={styles.centered}>
       <ActivityIndicator color={t.accent} size="large" />
       <Text style={[styles.connectingText, { color: t.fgMuted }]}>{label}</Text>
+      {/* Always offer an escape — the socket may retry indefinitely (e.g. an
+          unreachable host or untrusted cert), and without this the user is
+          stranded on the spinner. Cancel stops retrying → back to pairing. */}
+      <Pressable onPress={disconnect} hitSlop={8} style={styles.cancelConnect}>
+        <Text style={[styles.disconnectText, { color: t.fgMuted }]}>Cancel</Text>
+      </Pressable>
     </View>
   );
 }
@@ -84,7 +95,7 @@ function PairingView() {
     }
     scannedRef.current = true;
     setScanning(false);
-    connect(parsed.url, parsed.token);
+    connect(parsed.url, parsed.token, parsed.fingerprint);
   }, [connect]);
 
   const handleScanPress = useCallback(async () => {
@@ -293,16 +304,35 @@ function SessionCard({ pane, onPress }: { pane: PaneState; onPress: () => void }
 function PaneGridView() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { panes, orderedPaneIds, focusPane, disconnect } = useTunnel();
+  const { panes, orderedPaneIds, focusPane, disconnect, unpair } = useTunnel();
   const ordered = orderedPaneIds.map((id) => panes[id]).filter(Boolean) as PaneState[];
+
+  const confirmUnpair = () => {
+    Alert.alert(
+      'Forget this desktop?',
+      'Unpairing returns the app to standalone and clears the saved connection. '
+        + 'Your repo, files, tasks, and keys stay on this device.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Unpair', style: 'destructive', onPress: () => { unpair(); } },
+      ],
+    );
+  };
 
   return (
     <View style={[styles.grid, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 8 }]}>
       <View style={styles.gridHeader}>
         <Text style={[styles.gridTitle, { color: t.fg }]}>Sessions</Text>
-        <Pressable onPress={disconnect} hitSlop={8}>
-          <Text style={[styles.disconnectText, { color: t.fgMuted }]}>Disconnect</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          {/* Disconnect = transient (auto-reconnects next launch). */}
+          <Pressable onPress={disconnect} hitSlop={8}>
+            <Text style={[styles.disconnectText, { color: t.fgMuted }]}>Disconnect</Text>
+          </Pressable>
+          {/* Unpair = permanent forget, behind a destructive confirm. */}
+          <Pressable onPress={confirmUnpair} hitSlop={8}>
+            <Text style={[styles.disconnectText, { color: '#f87171' }]}>Unpair</Text>
+          </Pressable>
+        </View>
       </View>
 
       {ordered.length === 0 ? (
@@ -463,6 +493,7 @@ export default function SessionsScreen() {
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   connectingText: { marginTop: 16, fontSize: 14 },
+  cancelConnect: { marginTop: 24, paddingVertical: 8, paddingHorizontal: 16 },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 22 },
 
   // Pairing
@@ -528,6 +559,7 @@ const styles = StyleSheet.create({
   },
   gridTitle: { fontSize: 20, fontWeight: '700' },
   disconnectText: { fontSize: 13 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 18 },
   cardList: { paddingHorizontal: 16, gap: 10 },
 
   // Session card

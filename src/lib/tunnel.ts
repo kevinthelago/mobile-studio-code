@@ -2,6 +2,7 @@ import {
   PaneState, PaneStreamingState, TunnelClientMessage,
   TunnelConnectionState, TunnelServerMessage,
 } from './types';
+import { PinnedWebSocket } from '../../modules/tls-websocket';
 
 export type TunnelCallbacks = {
   onConnectionStateChange: (state: TunnelConnectionState) => void;
@@ -14,11 +15,21 @@ const RECONNECT_MAX_MS = 30_000;
 /** Maximum PTY output chars buffered per pane before oldest chars are dropped */
 const OUTPUT_BUFFER_MAX = 50_000;
 
+// Tagged tunnel logger. Helps debug pairing / reconnect / cert-pinning.
+// Currently ON in all builds while we debug the tunnel; set to `__DEV__` once
+// it's stable so release builds stay quiet. The auth token is never logged.
+const TUNNEL_DEBUG = true;
+export function tunnelLog(...args: unknown[]): void {
+  if (TUNNEL_DEBUG) console.log('[tunnel]', ...args);
+}
+
 export class TunnelClient {
   private ws: WebSocket | null = null;
   private url = '';
   private token = '';
   private fcmToken: string | undefined;
+  /** Pinned SHA-256 of the desktop's self-signed TLS cert (see openSocket). */
+  private fingerprint: string | undefined;
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
@@ -32,16 +43,23 @@ export class TunnelClient {
     this.cb = callbacks;
   }
 
-  connect(url: string, token: string, fcmToken?: string) {
+  connect(url: string, token: string, fcmToken?: string, fingerprint?: string) {
     this.url = url;
     this.token = token;
     this.fcmToken = fcmToken;
+    this.fingerprint = fingerprint;
     this.destroyed = false;
     this.reconnectAttempt = 0;
+    tunnelLog('connect requested', {
+      url,
+      pinned: !!fingerprint && url.startsWith('wss'),
+      hasFcm: !!fcmToken,
+    });
     this.openSocket();
   }
 
   disconnect() {
+    tunnelLog('disconnect requested');
     this.destroyed = true;
     this.clearReconnectTimer();
     this.ws?.close();
@@ -83,14 +101,27 @@ export class TunnelClient {
     if (this.destroyed) return;
     this.setConnectionState('connecting');
     try {
-      this.ws = new WebSocket(this.url);
-    } catch {
+      // RN's built-in WebSocket can't trust a self-signed TLS cert. When the
+      // desktop serves `wss://` with a self-signed cert we have a pinned
+      // fingerprint for, route through the native TlsWebSocket module, which
+      // validates the cert's SHA-256 against `this.fingerprint`. Plain `ws://`
+      // (or `wss://` with a CA-trusted cert and no pin) uses the JS WebSocket.
+      const pin = this.fingerprint && this.url.startsWith('wss')
+        ? this.fingerprint
+        : undefined;
+      tunnelLog('opening socket', { transport: pin ? 'pinned-wss' : 'plain' });
+      this.ws = (pin
+        ? new PinnedWebSocket(this.url, pin)
+        : new WebSocket(this.url)) as unknown as WebSocket;
+    } catch (e) {
+      tunnelLog('socket construction failed', e);
       this.scheduleReconnect();
       return;
     }
 
     this.ws.onopen = () => {
       if (this.destroyed) return;
+      tunnelLog('socket open → sending auth');
       this.setConnectionState('authenticating');
       this.reconnectAttempt = 0;
       this.send({ type: 'auth', token: this.token, fcmToken: this.fcmToken });
@@ -101,15 +132,19 @@ export class TunnelClient {
       try {
         const msg = JSON.parse(e.data as string) as TunnelServerMessage;
         this.handleMessage(msg);
-      } catch { /* malformed frame — ignore */ }
+      } catch {
+        tunnelLog('dropped malformed frame');
+      }
     };
 
-    this.ws.onerror = () => {
-      // onclose always fires after onerror; reconnect logic lives there
+    this.ws.onerror = (e) => {
+      // onclose always fires after onerror; reconnect logic lives there.
+      tunnelLog('socket error', (e as unknown as { message?: string })?.message ?? '');
     };
 
     this.ws.onclose = () => {
       if (this.destroyed) return;
+      tunnelLog('socket closed');
       this.ws = null;
       this.setConnectionState('disconnected');
       this.scheduleReconnect();
@@ -119,6 +154,7 @@ export class TunnelClient {
   private handleMessage(msg: TunnelServerMessage) {
     switch (msg.type) {
       case 'auth_ok': {
+        tunnelLog('auth accepted');
         this.setConnectionState('connected');
         // Re-assert streaming state for the active pane after reconnect
         if (this.activePaneId) {
@@ -149,6 +185,7 @@ export class TunnelClient {
           if (!live.has(id)) delete next[id];
         }
         this.panes = next;
+        tunnelLog('pane_list', { count: msg.panes.length });
         this.emitPanes();
         break;
       }
@@ -224,6 +261,7 @@ export class TunnelClient {
   }
 
   private setConnectionState(state: TunnelConnectionState) {
+    if (this.connectionState !== state) tunnelLog('state →', state);
     this.connectionState = state;
     this.cb.onConnectionStateChange(state);
   }
@@ -235,6 +273,7 @@ export class TunnelClient {
   private scheduleReconnect() {
     this.clearReconnectTimer();
     const delay = Math.min(RECONNECT_BASE_MS * 2 ** this.reconnectAttempt, RECONNECT_MAX_MS);
+    tunnelLog('reconnect scheduled', { inMs: delay, attempt: this.reconnectAttempt + 1 });
     this.reconnectAttempt += 1;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
