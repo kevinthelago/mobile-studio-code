@@ -13,6 +13,12 @@ export async function initFcm(): Promise<string | null> {
     status === messaging.AuthorizationStatus.AUTHORIZED ||
     status === messaging.AuthorizationStatus.PROVISIONAL;
   if (!granted) return null;
+  // iOS requires the device to be registered for remote messages (APNs) before
+  // a token can be fetched — calling getToken() first throws
+  // [messaging/unregistered]. On Android this is a no-op.
+  if (!messaging().isDeviceRegisteredForRemoteMessages) {
+    await messaging().registerDeviceForRemoteMessages();
+  }
   return messaging().getToken();
 }
 
