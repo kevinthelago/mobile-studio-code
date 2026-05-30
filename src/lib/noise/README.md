@@ -41,10 +41,20 @@ Assert that `snow`, fed the same fixed keys/ephemerals, produces **identical
 `ciphertext`** for each message and correctly **decrypts ours**. Any mismatch is
 an interop bug to resolve before the mobile transport/session is built.
 
-**Coordination points to confirm with the desktop:**
-1. **Prologue** — empty (`""`) here. If snow mixes a prologue (protocol id, room,
-   version), it must match exactly; update the vector.
-2. **Transport message framing** — each app message is one Noise transport
-   message (ciphertext above) sent as a **binary** WebSocket frame. No extra
-   length prefix unless the relay requires one — confirm.
-3. **Associated data** — none on transport messages here (`encrypt(ad=∅, …)`).
+**Coordination points (confirmed against the desktop `tunnel.rs` / relay, #16):**
+1. **Prologue** — empty (`""`). The desktop builds the same `Noise_IK_…` with no
+   prologue; the relay never mixes into the handshake.
+2. **Transport message framing** — each app message is one Noise transport message
+   sent as a **binary** WebSocket frame, **raw ciphertext, no length prefix** (the
+   relay is a blind byte pipe and preserves frame boundaries). The desktop side does
+   `serde_json::to_vec(msg)` → `write_message` → `Message::Binary`.
+3. **Associated data** — none on transport messages (`encrypt(ad=∅, …)`).
+4. **Relay envelope** — there is none on the wire: the room is in the
+   `…/connect?room=<room>&role=guest|host` upgrade URL, and the DO forwards each
+   frame verbatim to the other peer. The mobile is always `role=guest`.
+5. **Auth** — the QR `psk` is the app-level token in the first in-session frame
+   (`auth { token: psk }`), not a Noise PSK modifier.
+
+The transport that uses all of the above lives in `../noiseSession.ts` (framing) and
+`../tunnel.ts` (`TunnelClient`); `npm run test:tunnel` exercises the handshake + framing
+round-trip in-process.

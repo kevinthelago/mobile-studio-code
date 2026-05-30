@@ -8,6 +8,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
 import { useTunnel } from '../../src/lib/TunnelContext';
+import { parseTunnelPairing } from '../../src/lib/tunnelPairing';
 import { PaneState, PaneStatus, TunnelConnectionState } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
@@ -37,18 +38,6 @@ function relativeTime(ts: number | null): string {
   return `${Math.floor(m / 60)}h ago`;
 }
 
-/** Parse QR payload. Accepts JSON {url, token} or bare "url|token" strings. */
-function parseQrPayload(data: string): { url: string; token: string } | null {
-  try {
-    const obj = JSON.parse(data) as { url?: string; token?: string };
-    if (obj.url && obj.token) return { url: obj.url, token: obj.token };
-  } catch {
-    const parts = data.split('|');
-    if (parts.length === 2) return { url: parts[0], token: parts[1] };
-  }
-  return null;
-}
-
 // ── Sub-screens ───────────────────────────────────────────────────────────────
 
 function ConnectingView({ state }: { state: TunnelConnectionState }) {
@@ -75,23 +64,22 @@ function PairingView() {
   const { connect, connectionState } = useTunnel();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
-  const [manualUrl, setManualUrl] = useState('');
-  const [manualToken, setManualToken] = useState('');
+  const [manualJson, setManualJson] = useState('');
   const [showManual, setShowManual] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scannedRef = useRef(false);
 
   const handleQrScanned = useCallback(({ data }: { data: string }) => {
     if (scannedRef.current) return;
-    const parsed = parseQrPayload(data);
-    if (!parsed) {
-      setError('Unrecognised QR code format.');
+    const pairing = parseTunnelPairing(data);
+    if (!pairing) {
+      setError('Unrecognised QR code — expected a base-studio-code pairing code.');
       setScanning(false);
       return;
     }
     scannedRef.current = true;
     setScanning(false);
-    connect(parsed.url, parsed.token);
+    connect(pairing);
   }, [connect]);
 
   const handleScanPress = useCallback(async () => {
@@ -109,14 +97,13 @@ function PairingView() {
 
   const handleManualConnect = useCallback(() => {
     setError(null);
-    const url = manualUrl.trim();
-    const token = manualToken.trim();
-    if (!url || !token) {
-      setError('Both URL and token are required.');
+    const pairing = parseTunnelPairing(manualJson.trim());
+    if (!pairing) {
+      setError('Paste the full pairing code (JSON) shown under the QR.');
       return;
     }
-    connect(url, token);
-  }, [manualUrl, manualToken, connect]);
+    connect(pairing);
+  }, [manualJson, connect]);
 
   if (scanning) {
     return (
@@ -190,37 +177,25 @@ function PairingView() {
 
         <Pressable onPress={() => setShowManual((v) => !v)} style={styles.manualToggle}>
           <Text style={[styles.manualToggleText, { color: t.fgMuted }]}>
-            {showManual ? 'Hide manual entry' : 'Enter URL and token manually'}
+            {showManual ? 'Hide manual entry' : 'Paste pairing code instead'}
           </Text>
         </Pressable>
 
         {showManual && (
           <View style={styles.manualForm}>
             <TextInput
-              value={manualUrl}
-              onChangeText={setManualUrl}
-              placeholder="ws://192.168.1.x:8765"
+              value={manualJson}
+              onChangeText={setManualJson}
+              placeholder='{"relayUrl":"wss://…","room":"…","hostPubKey":"…","psk":"…"}'
               placeholderTextColor={t.fgDim}
               style={[styles.manualInput, {
                 color: t.fg, borderColor: t.borderColor,
                 fontFamily: t.fontMono, backgroundColor: t.surface,
+                height: 88, textAlignVertical: 'top',
               }]}
               autoCapitalize="none"
               autoCorrect={false}
-              keyboardType="url"
-            />
-            <TextInput
-              value={manualToken}
-              onChangeText={setManualToken}
-              placeholder="Pairing token"
-              placeholderTextColor={t.fgDim}
-              style={[styles.manualInput, {
-                color: t.fg, borderColor: t.borderColor,
-                fontFamily: t.fontMono, backgroundColor: t.surface,
-              }]}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
+              multiline
             />
             <Pressable
               onPress={handleManualConnect}

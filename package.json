@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test:noise": "node --experimental-strip-types scripts/noise-selftest.ts",
     "test:noise:interop": "node --experimental-strip-types scripts/noise-interop.ts",
-    "test:noise:vectors": "node --experimental-strip-types scripts/noise-vectors.ts"
+    "test:noise:vectors": "node --experimental-strip-types scripts/noise-vectors.ts",
+    "test:tunnel": "node --experimental-strip-types scripts/tunnel-selftest.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",

@@ -2,7 +2,8 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
 import { TunnelClient, TunnelCallbacks, tunnelLog } from './tunnel';
-import { PaneState, TunnelConnectionState } from './types';
+import { PaneState, TunnelConnectionState, TunnelPairing } from './types';
+import { parseTunnelPairing } from './tunnelPairing';
 import { KEYS, getSecret, setSecret, deleteSecret } from './storage';
 
 export type TunnelValue = {
@@ -16,7 +17,7 @@ export type TunnelValue = {
    *  whether the socket is currently live. Drives the "Unpair" affordance. */
   hasPairing: boolean;
 
-  connect: (url: string, token: string) => Promise<void>;
+  connect: (pairing: TunnelPairing) => Promise<void>;
   /** Transient close — stays paired; auto-connects again on next launch. */
   disconnect: () => void;
   /** Permanent: forgets the desktop (deletes saved tunnel creds) and closes the
@@ -59,18 +60,18 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     const client = new TunnelClient(callbacks);
     clientRef.current = client;
 
-    // Auto-connect if credentials were saved from a previous pairing
+    // Auto-connect if a pairing was saved from a previous QR scan
     (async () => {
-      const [url, token, fcm] = await Promise.all([
-        getSecret(KEYS.TUNNEL_URL),
-        getSecret(KEYS.TUNNEL_TOKEN),
+      const [savedPairing, fcm] = await Promise.all([
+        getSecret(KEYS.TUNNEL_PAIRING),
         getSecret(KEYS.FCM_TOKEN),
       ]);
       if (fcm) fcmTokenRef.current = fcm;
-      if (url && token) {
+      const pairing = savedPairing ? parseTunnelPairing(savedPairing) : null;
+      if (pairing) {
         tunnelLog('auto-connect from saved pairing');
         setHasPairing(true);
-        client.connect(url, token, fcm ?? undefined);
+        client.connect(pairing, fcm ?? undefined);
       } else {
         tunnelLog('no saved pairing — standalone');
       }
@@ -79,14 +80,11 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     return () => { client.disconnect(); };
   }, []);
 
-  const connect = useCallback(async (url: string, token: string) => {
-    tunnelLog('pairing', { url });
-    await Promise.all([
-      setSecret(KEYS.TUNNEL_URL, url),
-      setSecret(KEYS.TUNNEL_TOKEN, token),
-    ]);
+  const connect = useCallback(async (pairing: TunnelPairing) => {
+    tunnelLog('pairing', { relay: pairing.relayUrl, room: pairing.room });
+    await setSecret(KEYS.TUNNEL_PAIRING, JSON.stringify(pairing));
     setHasPairing(true);
-    clientRef.current?.connect(url, token, fcmTokenRef.current);
+    clientRef.current?.connect(pairing, fcmTokenRef.current);
   }, []);
 
   const disconnect = useCallback(() => {
@@ -99,7 +97,8 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     // Anthropic key are intentionally left untouched — unpair returns to
     // standalone with local repo state intact (issue #16).
     await Promise.all([
-      deleteSecret(KEYS.TUNNEL_URL),
+      deleteSecret(KEYS.TUNNEL_PAIRING),
+      deleteSecret(KEYS.TUNNEL_URL),   // legacy LAN creds, if any linger
       deleteSecret(KEYS.TUNNEL_TOKEN),
     ]);
     tunnelLog('unpaired — cleared saved pairing, returning to standalone');
