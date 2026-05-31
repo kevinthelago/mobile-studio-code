@@ -2,6 +2,11 @@
 
 A mobile IDE built with Expo and React Native — write, edit, and ship code from your iOS device.
 
+**Standalone-first:** with a GitHub PAT and an Anthropic API key, MSC is a complete IDE on
+its own — it talks directly to GitHub (REST) and Claude, with no desktop or server required.
+Pairing with a desktop Studio Code session over the encrypted tunnel is an **optional**
+add-on (the Run and Plan tabs) that degrades gracefully to standalone when no desktop is present.
+
 ---
 
 ## Status
@@ -43,8 +48,8 @@ Open Issue  →  Create Branch  →  Open PR  →  Merge  →  Issue Closes
 | Step | Convention |
 |------|-----------|
 | New task | Open a GitHub Issue (use a template below) |
-| Start work | Create branch `issue-{number}/short-slug` |
-| Open PR | Fill in PR template — include `Closes #N` |
+| Start work | Branch from `develop` as `{issue-number}-{short-description}` (e.g. `14-sha-null-push-test`) |
+| Open PR | Target `develop`, fill in the PR template — include `Closes #N` |
 | Merge | Issue auto-closes, EAS Update publishes |
 
 ### Issue Templates
