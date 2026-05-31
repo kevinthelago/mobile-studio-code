@@ -13,6 +13,7 @@
     "build:prod": "eas build --platform ios --profile production",
     "submit": "eas submit --platform ios --profile production",
     "typecheck": "tsc --noEmit",
+    "test": "jest",
     "test:noise": "node --experimental-strip-types scripts/noise-selftest.ts",
     "test:noise:interop": "node --experimental-strip-types scripts/noise-interop.ts",
     "test:noise:vectors": "node --experimental-strip-types scripts/noise-vectors.ts",
@@ -53,9 +54,12 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",
+    "@types/jest": "^29.5.14",
     "@types/react": "~19.1.0",
     "babel-preset-expo": "~54.0.0",
     "eas-cli": "^16.0.0",
+    "jest": "^29.7.0",
+    "jest-expo": "~54.0.0",
     "typescript": "~5.9.0"
   },
   "private": true
