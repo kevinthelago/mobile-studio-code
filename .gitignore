@@ -35,6 +35,8 @@ expo-env.d.ts
 .env
 .env.local
 
-# Firebase server-side credentials — never commit
-# GoogleService-Info.plist is client config (bundle-ID-restricted), safe to commit
-google-services.json
+# Firebase server-side credentials (Admin SDK service-account keys) — never commit
+*-firebase-adminsdk-*.json
+# Client configs are package/bundle-ID-restricted and safe to commit (like iOS):
+# GoogleService-Info.plist (iOS) and google-services.json (Android) are tracked so
+# EAS managed builds can copy them. See docs/firebase-android-setup.md.
