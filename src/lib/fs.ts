@@ -76,6 +76,14 @@ export async function readText(absPath: string): Promise<string> {
   return FileSystem.readAsStringAsync(absPath);
 }
 
+// Idempotent local delete. Used by the agent's delete_file tool to remove a
+// file from the working copy; the remote deletion (if the file was tracked) is
+// handled separately via the GitHub Contents API. `idempotent` means deleting a
+// path that's already gone is a no-op rather than an error.
+export async function deleteLocalFile(absPath: string): Promise<void> {
+  await FileSystem.deleteAsync(absPath, { idempotent: true });
+}
+
 export async function exists(absPath: string): Promise<boolean> {
   const info = await FileSystem.getInfoAsync(absPath);
   return info.exists;

@@ -4,15 +4,15 @@ import {
 } from './types';
 import { anthropicChat } from './anthropic';
 import {
-  repoDir, listDir, readText, writeText, isDirectory, isMscMetaFile,
-  writeManifest, loadProjectInstructions, ProjectInstructions,
+  repoDir, listDir, readText, writeText, deleteLocalFile, isDirectory,
+  isMscMetaFile, writeManifest, loadProjectInstructions, ProjectInstructions,
 } from './fs';
 import {
   evictStaleToolResults, maybeCompactHistory, repairOrphanToolUses,
   truncateToolResultContent,
 } from './contextOptimizer';
 import {
-  commentOnIssue, getIssue, getIssueComments, getRemoteFile,
+  commentOnIssue, deleteRemoteFile, getIssue, getIssueComments, getRemoteFile,
   pullRepo, pushModifiedFiles,
 } from './github';
 
@@ -183,6 +183,18 @@ const FILE_TOOL_DEFS: ToolDefinition[] = [
         content: { type: 'string', description: 'Full file contents' },
       },
       required: ['path', 'content'],
+    },
+  },
+  {
+    name: 'delete_file',
+    description:
+      'Delete a file from the repository. Removes the local copy and — if the file already exists on the remote — deletes it on GitHub immediately on the current branch. This is unlike write_file (which is local until the next push_changes): a delete commits right away. A file created locally but never pushed is just removed locally. Path is relative to repo root.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Path relative to repo root' },
+      },
+      required: ['path'],
     },
   },
   {
@@ -438,6 +450,44 @@ export async function runTool(
       }
       return {
         result: `Wrote ${rel} (${content.length} chars).`,
+        manifestChanged: true,
+      };
+    }
+    case 'delete_file': {
+      const rel = (input.path as string).replace(/^\/+/, '');
+      const entry = ctx.manifest.files[rel];
+
+      // Always remove the local copy (idempotent — a path that's already gone
+      // is a no-op). Mirrors the user's intent even for untracked files.
+      await deleteLocalFile(repoDir(ctx.manifest.repo) + rel);
+
+      // New / untracked file (never pushed → no recorded remote sha): there's
+      // nothing to delete on the remote. Drop any manifest entry and finish.
+      // This is the "sha-missing / new-file" graceful path.
+      if (!entry || entry.sha === null) {
+        const tracked = !!entry;
+        if (tracked) delete ctx.manifest.files[rel];
+        return {
+          result: tracked
+            ? `Deleted ${rel} locally. It was never pushed, so no remote delete was needed.`
+            : `Deleted ${rel} locally. It wasn't tracked in the manifest, so nothing to delete on the remote.`,
+          manifestChanged: tracked,
+        };
+      }
+
+      // Tracked file with a known remote sha: delete it on GitHub now, using
+      // the tracked sha as the parent. A 404 (already gone upstream) is treated
+      // as success; a stale-sha collision surfaces as a sha_mismatch error.
+      if (!ctx.pat) throw new Error('delete_file: no GitHub token configured');
+      const { alreadyAbsent } = await deleteRemoteFile(
+        ctx.pat, ctx.manifest.repo, ctx.manifest.branch, rel, entry.sha,
+        `msc: delete ${rel}`,
+      );
+      delete ctx.manifest.files[rel];
+      return {
+        result: alreadyAbsent
+          ? `Deleted ${rel} locally. It was already gone on ${ctx.manifest.repo}@${ctx.manifest.branch}; manifest entry dropped.`
+          : `Deleted ${rel} locally and on ${ctx.manifest.repo}@${ctx.manifest.branch}.`,
         manifestChanged: true,
       };
     }

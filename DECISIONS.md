@@ -4,3 +4,5 @@
 
 - ci.yml only triggered on main; PR #44 targets develop so the M-jest CI gate ran no checks. Fixed trigger to pull_request -> [develop, main], dropped push trigger (PR-only CI convention). Committed f92f59a on mobile-core; awaiting push approval.
 
+- M-delete-file (#55): delete_file does an IMMEDIATE remote Contents-API DELETE (not deferred to push_changes like write_file). Deferring would need a 'deleted' flag on FileEntry in types.ts, which #55's owned paths exclude (agent.ts/github.ts/fs.ts only) — so the tool acts now using the manifest's tracked sha, then drops the entry. sha:null/untracked = local-only delete; 404 upstream = idempotent success.
+

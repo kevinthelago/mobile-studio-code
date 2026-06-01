@@ -574,6 +574,45 @@ export async function commentOnIssue(
   }
 }
 
+// Delete a single file on the remote branch via the Contents API
+// (DELETE /repos/{repo}/contents/{path}), committing the removal directly.
+//
+// Why the Contents API and not the Git Data tree pipeline pushModifiedFiles
+// uses: a delete is a single, self-contained, immediate operation — the agent's
+// delete_file tool acts now rather than deferring to the next bulk push, so a
+// one-shot commit is the right tool. GitHub requires the blob `sha` of the file
+// as it currently exists on the branch HEAD; we pass the manifest's tracked sha.
+//
+// Idempotent on 404: if the path is already gone on the remote (deleted
+// upstream, or the manifest sha is stale), we treat the delete as a no-op
+// success — the caller still drops its manifest entry. A stale-sha collision
+// where the file *does* still exist surfaces as a 409 → sha_mismatch so the
+// caller can pull and retry.
+export async function deleteRemoteFile(
+  pat: string,
+  repo: string,
+  branch: string,
+  path: string,
+  sha: string,
+  message: string,
+): Promise<{ alreadyAbsent: boolean }> {
+  const url =
+    `https://api.github.com/repos/${repo}/contents/${encodeRepoPath(path)}`;
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: GH_HEADERS_POST(pat),
+    body: JSON.stringify({ message, sha, branch }),
+  });
+  if (res.status === 404) return { alreadyAbsent: true };
+  if (!res.ok) {
+    const text = await res.text();
+    // Reuse the push-side classifier so delete errors carry the same actionable
+    // messages (auth / branch_protected / sha_mismatch) the agent already knows.
+    throw new Error(classifyTreesError(res.status, text, path, url).message);
+  }
+  return { alreadyAbsent: false };
+}
+
 // Push every locally-modified file to GitHub in a single atomic commit using
 // the Git Data API (git/refs, git/commits, git/trees, git/blobs).
 //
