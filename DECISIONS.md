@@ -1,0 +1,2 @@
+- Plan tab built in src/screens/plan/: tunnel protocol carries no planning state yet (only PTY panes), so the 5 sub-screens render a ready-to-wire presentation layer seeded with the design's fixtures (planData.ts). Real wiring: connection gating via useTunnel().connectionState, and PlanPairing's paste-code -> connect(); scan routes to the Run tab to reuse its camera scanner rather than duplicate it.
+

@@ -1,5 +1,7 @@
 import React from 'react';
-import { Pressable, PressableProps, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable, PressableProps, StyleProp, StyleSheet, Text, View, ViewStyle,
+} from 'react-native';
 import { useTheme } from '../../theme';
 
 // Port of the design's `.msc-btn` — the redesign's textual button. Three
@@ -21,6 +23,8 @@ export interface BtnProps extends Omit<PressableProps, 'children' | 'style'> {
   icon?: React.ReactNode;
   /** Button label (or any node, e.g. a glyph). */
   children?: React.ReactNode;
+  /** Optional layout style merged onto the Pressable (e.g. `flex: 1`). */
+  style?: StyleProp<ViewStyle>;
 }
 
 export function Btn({
@@ -29,6 +33,7 @@ export function Btn({
   icon,
   children,
   disabled,
+  style,
   ...rest
 }: BtnProps) {
   const t = useTheme();
@@ -60,6 +65,7 @@ export function Btn({
           borderColor: border,
           opacity: disabled ? 0.45 : pressed ? 0.7 : 1,
         },
+        style,
       ]}
     >
       {icon != null && <View style={styles.icon}>{icon}</View>}

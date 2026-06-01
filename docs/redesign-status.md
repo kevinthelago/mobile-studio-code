@@ -91,12 +91,25 @@ design has landed.
       — this app tracks neither line diffs nor a staging area (see CLAUDE.md
       known issues), so they'd be fake controls.
 
-### Plan sub-screens (depends on the tunnel exposing planning state)
-- [ ] `PlanProjectsScreen` — project list, host vs. other-host grouping
-- [ ] `PlanBoardScreen` — kanban with horizontal column pager
-- [ ] `PlanIssueScreen` — issue + AI subtask breakdown
-- [ ] `PlanScopingScreen` — live planning session with @planner
-- [ ] `PlanPairingScreen` — wired to existing `useTunnel().connect`
+### Plan sub-screens ✅
+All five live under `src/screens/plan/`, hosted by `app/(tabs)/plan.tsx` via
+`PlanRoot` — a small in-tab stack navigator gated on `useTunnel()`. The tunnel
+protocol does not yet carry planning state (it only streams PTY panes — see
+`src/lib/types.ts`), so the data-bearing screens render a faithful,
+ready-to-wire presentation layer seeded with the design's fixtures
+(`planData.ts`). Connection gating and pairing are real.
+- [x] `PlanProjects` — project list, on-host vs. other-host grouping, filter,
+      "plan a new project" CTA, drafting → scoping / active → board navigation
+- [x] `PlanBoard` — horizontal column pager + In-progress card list (→ issue)
+- [x] `PlanIssue` — labels/assignees, description, Claude subtask breakdown,
+      activity feed, comment composer (KeyboardAvoidingView)
+- [x] `PlanScoping` — @planner chat (markdown-lite bold), live progress strip,
+      draft-milestone preview, publish/save actions, answer composer
+- [x] `PlanPairing` — tunnel-offline state wired to `useTunnel().connect`
+      (paste pairing code) + routes to Run for the QR scanner (single camera impl)
+- Shared primitives in `planShared.tsx` (PersonAvatar, AvatarStack, LabelChip,
+      ProgressBar, ClaudeBadge, StatusDot); design oklch hues approximated as hex.
+      Added an optional `style` prop to `Btn` for flex layout in composers.
 
 ### SessionStrip + session-switcher overlay
 - [ ] Align SessionStrip styling with the redesign chips (status dots, awaiting
