@@ -1,6 +1,6 @@
-import React, { useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Platform, Pressable, ScrollView, StyleSheet, Text, View,
+  Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,14 +8,33 @@ import { useRouter } from 'expo-router';
 import { useTunnel } from '../../lib/TunnelContext';
 import { PaneState, PaneStatus } from '../../lib/types';
 import { useTheme } from '../../theme';
+import { hexAlpha } from '../../lib/color';
+import { SessionSwitcher } from './SessionSwitcher';
 
-function dotColor(status: PaneStatus): string {
+function dotColor(status: PaneStatus, t: ReturnType<typeof useTheme>): string {
   switch (status) {
-    case 'running': return '#4ade80';
-    case 'awaiting_input': return '#fbbf24';
-    case 'error': return '#f87171';
-    default: return 'rgba(255,255,255,0.28)';
+    case 'running': return t.success;
+    case 'awaiting_input': return t.warn;
+    case 'error': return t.danger;
+    default: return t.fgDim;
   }
+}
+
+// Pulsing connection dot — port of the design's `.tunnel-dot` keyframe.
+function TunnelDot() {
+  const t = useTheme();
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.4, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 1000, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return <Animated.View style={[styles.tunnelDot, { backgroundColor: t.success, opacity: pulse }]} />;
 }
 
 function Chip({
@@ -33,22 +52,20 @@ function Chip({
       style={({ pressed }) => [
         styles.chip,
         {
-          backgroundColor: active
-            ? `${t.accent}28`
-            : t.glass ? 'rgba(255,255,255,0.07)' : t.surface,
-          borderColor: waiting ? '#fbbf24' : active ? t.accent : t.borderColor,
+          backgroundColor: active ? hexAlpha(t.accent, 0.16) : t.elev,
+          borderColor: waiting ? t.warn : active ? t.accentDim : t.borderColor,
           opacity: pressed ? 0.75 : 1,
         },
       ]}
     >
-      <View style={[styles.dot, { backgroundColor: dotColor(status) }]} />
+      <View style={[styles.dot, { backgroundColor: dotColor(status, t) }]} />
       <Text
-        style={[styles.chipLabel, { color: active ? t.accent : t.fg, fontFamily: t.fontMono }]}
+        style={[styles.chipLabel, { color: active ? t.accent : t.fgMuted, fontFamily: t.fontMono }]}
         numberOfLines={1}
       >
         {name}
       </Text>
-      {waiting && <View style={styles.alertPip} />}
+      {waiting && <View style={[styles.alertPip, { backgroundColor: t.warn }]} />}
     </Pressable>
   );
 }
@@ -56,13 +73,16 @@ function Chip({
 /**
  * Persistent horizontal strip of session chips pinned below the status bar on
  * every tab. Renders as an absolute overlay so it does not affect existing
- * tab-screen layouts. Hidden when the tunnel is disconnected or has no panes.
+ * tab-screen layouts. The chips bar appears once the tunnel is connected with
+ * panes; the ▦ button is always available and opens the session switcher (the
+ * hub for focusing sessions and reaching Settings).
  */
 export function SessionStrip() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { connectionState, panes, activePaneId, orderedPaneIds, focusPane } = useTunnel();
+  const [switcherOpen, setSwitcherOpen] = useState(false);
 
   const handleChipPress = (paneId: string) => {
     focusPane(paneId);
@@ -70,14 +90,9 @@ export function SessionStrip() {
   };
 
   const STRIP_H = 40;
-  // The chips bar only appears once a tunnel is connected with panes. The ▦
-  // settings button is always available (it's the only entry to Settings, and
-  // is where you pair/add credentials) — pinned top-right so it never overlaps
-  // a screen's own header actions, which sit in the lower title row.
   const showChips = connectionState === 'connected' && orderedPaneIds.length > 0;
 
   return (
-    // absoluteFill overlay — box-none so taps fall through to content beneath
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {showChips && (
         <View
@@ -91,11 +106,9 @@ export function SessionStrip() {
               style={StyleSheet.absoluteFill}
             />
           ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: t.surface }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: t.surfaceSolid }]} />
           )}
-          {/* subtle top highlight to lift the strip off content */}
           <View style={[styles.topHighlight, { backgroundColor: t.borderColor }]} />
-          {/* bottom hairline border */}
           <View style={[styles.bottomBorder, { backgroundColor: t.borderColor }]} />
 
           <ScrollView
@@ -104,6 +117,15 @@ export function SessionStrip() {
             contentContainerStyle={styles.scrollContent}
             style={styles.scroll}
           >
+            {/* Tunnel-connected indicator (design's .msc-strip-tunnel) */}
+            <View style={[styles.tunnelChip, {
+              backgroundColor: hexAlpha(t.success, 0.12),
+              borderColor: hexAlpha(t.success, 0.35),
+            }]}>
+              <TunnelDot />
+              <Text style={[styles.tunnelArrow, { color: t.success }]}>⇋</Text>
+            </View>
+
             {orderedPaneIds.map((id) => {
               const pane = panes[id];
               if (!pane) return null;
@@ -120,16 +142,19 @@ export function SessionStrip() {
         </View>
       )}
 
+      {/* ▦ — opens the session switcher (which also hosts the Settings entry) */}
       <Pressable
-        onPress={() => router.navigate('/settings' as never)}
+        onPress={() => setSwitcherOpen(true)}
         hitSlop={10}
         style={[styles.gearBtn, { top: insets.top + 4 }]}
         pointerEvents="auto"
         accessibilityRole="button"
-        accessibilityLabel="Settings"
+        accessibilityLabel="Sessions and settings"
       >
         <Text style={[styles.gearGlyph, { color: t.fgMuted, fontFamily: t.fontMono }]}>▦</Text>
       </Pressable>
+
+      <SessionSwitcher open={switcherOpen} onClose={() => setSwitcherOpen(false)} />
     </View>
   );
 }
@@ -154,6 +179,14 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
 
+  tunnelChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 7, paddingVertical: 3,
+    borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
+  },
+  tunnelDot: { width: 6, height: 6, borderRadius: 3 },
+  tunnelArrow: { fontSize: 11, lineHeight: 13 },
+
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 9, paddingVertical: 4,
@@ -163,7 +196,6 @@ const styles = StyleSheet.create({
   chipLabel: { fontSize: 11, fontWeight: '500', maxWidth: 100 },
   alertPip: {
     width: 5, height: 5, borderRadius: 3,
-    backgroundColor: '#fbbf24',
   },
   gearBtn: {
     position: 'absolute', right: 10,

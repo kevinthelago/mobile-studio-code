@@ -1,2 +1,4 @@
 - Plan tab built in src/screens/plan/: tunnel protocol carries no planning state yet (only PTY panes), so the 5 sub-screens render a ready-to-wire presentation layer seeded with the design's fixtures (planData.ts). Real wiring: connection gating via useTunnel().connectionState, and PlanPairing's paste-code -> connect(); scan routes to the Run tab to reuse its camera scanner rather than duplicate it.
 
+- SessionStrip ▦ button now opens the new SessionSwitcher overlay (redesign hub) instead of navigating straight to Settings; Settings stays reachable via the switcher header (▦ settings). Chips restyled to theme tokens + tunnel-connected indicator added. NAV CHANGE worth director awareness: Settings is now one tap deeper (was the ▦ direct target). Dropped the desktop-only '+ new session' from the switcher header since sessions can't be created from mobile.
+
