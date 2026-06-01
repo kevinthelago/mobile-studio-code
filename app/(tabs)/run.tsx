@@ -1,16 +1,22 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform,
   Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Path } from 'react-native-svg';
-import { useTheme } from '../../src/theme';
+import { Theme, useTheme } from '../../src/theme';
 import { useTunnel } from '../../src/lib/TunnelContext';
+import { parseTunnelPairing } from '../../src/lib/tunnelPairing';
 import { PaneState, PaneStatus, TunnelConnectionState } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
+import { PageHeader } from '../../src/components/ui/PageHeader';
+import { Card } from '../../src/components/ui/Card';
+import { Tag } from '../../src/components/ui/Tag';
+import { Btn } from '../../src/components/ui/Btn';
+import { hexAlpha } from '../../src/lib/color';
 import { stripAnsi, lastLines } from '../../src/lib/ansi';
 
 const TAB_BAR_HEIGHT = 60;
@@ -18,14 +24,20 @@ const TERMINAL_LINE_LIMIT = 200;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function statusColor(status: PaneStatus, accent: string): string {
+function statusColor(status: PaneStatus, t: Theme): string {
   switch (status) {
-    case 'running': return '#4ade80';
-    case 'idle': return 'rgba(255,255,255,0.3)';
-    case 'awaiting_input': return '#fbbf24';
-    case 'error': return '#f87171';
-    default: return accent;
+    case 'running': return t.success;
+    case 'idle': return t.fgDim;
+    case 'awaiting_input': return t.warn;
+    case 'error': return t.danger;
+    default: return t.accent;
   }
+}
+
+/** Project label derived from a pane's cwd (its last path segment). */
+function projectOf(pane: PaneState): string {
+  const parts = (pane.descriptor.cwd || '').split(/[\\/]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : '';
 }
 
 function relativeTime(ts: number | null): string {
@@ -37,27 +49,22 @@ function relativeTime(ts: number | null): string {
   return `${Math.floor(m / 60)}h ago`;
 }
 
-/** Parse QR payload. Accepts JSON {url, token} or bare "url|token" strings. */
-function parseQrPayload(data: string): { url: string; token: string } | null {
-  try {
-    const obj = JSON.parse(data) as { url?: string; token?: string };
-    if (obj.url && obj.token) return { url: obj.url, token: obj.token };
-  } catch {
-    const parts = data.split('|');
-    if (parts.length === 2) return { url: parts[0], token: parts[1] };
-  }
-  return null;
-}
-
 // ── Sub-screens ───────────────────────────────────────────────────────────────
 
 function ConnectingView({ state }: { state: TunnelConnectionState }) {
   const t = useTheme();
+  const { disconnect } = useTunnel();
   const label = state === 'authenticating' ? 'Authenticating…' : 'Connecting…';
   return (
     <View style={styles.centered}>
       <ActivityIndicator color={t.accent} size="large" />
       <Text style={[styles.connectingText, { color: t.fgMuted }]}>{label}</Text>
+      {/* Always offer an escape — the socket may retry indefinitely (e.g. an
+          unreachable host or untrusted cert), and without this the user is
+          stranded on the spinner. Cancel stops retrying → back to pairing. */}
+      <Pressable onPress={disconnect} hitSlop={8} style={styles.cancelConnect}>
+        <Text style={[styles.disconnectText, { color: t.fgMuted }]}>Cancel</Text>
+      </Pressable>
     </View>
   );
 }
@@ -68,23 +75,22 @@ function PairingView() {
   const { connect, connectionState } = useTunnel();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
-  const [manualUrl, setManualUrl] = useState('');
-  const [manualToken, setManualToken] = useState('');
+  const [manualJson, setManualJson] = useState('');
   const [showManual, setShowManual] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scannedRef = useRef(false);
 
   const handleQrScanned = useCallback(({ data }: { data: string }) => {
     if (scannedRef.current) return;
-    const parsed = parseQrPayload(data);
-    if (!parsed) {
-      setError('Unrecognised QR code format.');
+    const pairing = parseTunnelPairing(data);
+    if (!pairing) {
+      setError('Unrecognised QR code — expected a base-studio-code pairing code.');
       setScanning(false);
       return;
     }
     scannedRef.current = true;
     setScanning(false);
-    connect(parsed.url, parsed.token);
+    connect(pairing);
   }, [connect]);
 
   const handleScanPress = useCallback(async () => {
@@ -102,14 +108,13 @@ function PairingView() {
 
   const handleManualConnect = useCallback(() => {
     setError(null);
-    const url = manualUrl.trim();
-    const token = manualToken.trim();
-    if (!url || !token) {
-      setError('Both URL and token are required.');
+    const pairing = parseTunnelPairing(manualJson.trim());
+    if (!pairing) {
+      setError('Paste the full pairing code (JSON) shown under the QR.');
       return;
     }
-    connect(url, token);
-  }, [manualUrl, manualToken, connect]);
+    connect(pairing);
+  }, [manualJson, connect]);
 
   if (scanning) {
     return (
@@ -183,37 +188,25 @@ function PairingView() {
 
         <Pressable onPress={() => setShowManual((v) => !v)} style={styles.manualToggle}>
           <Text style={[styles.manualToggleText, { color: t.fgMuted }]}>
-            {showManual ? 'Hide manual entry' : 'Enter URL and token manually'}
+            {showManual ? 'Hide manual entry' : 'Paste pairing code instead'}
           </Text>
         </Pressable>
 
         {showManual && (
           <View style={styles.manualForm}>
             <TextInput
-              value={manualUrl}
-              onChangeText={setManualUrl}
-              placeholder="ws://192.168.1.x:8765"
+              value={manualJson}
+              onChangeText={setManualJson}
+              placeholder='{"relayUrl":"wss://…","room":"…","hostPubKey":"…","psk":"…"}'
               placeholderTextColor={t.fgDim}
               style={[styles.manualInput, {
                 color: t.fg, borderColor: t.borderColor,
                 fontFamily: t.fontMono, backgroundColor: t.surface,
+                height: 88, textAlignVertical: 'top',
               }]}
               autoCapitalize="none"
               autoCorrect={false}
-              keyboardType="url"
-            />
-            <TextInput
-              value={manualToken}
-              onChangeText={setManualToken}
-              placeholder="Pairing token"
-              placeholderTextColor={t.fgDim}
-              style={[styles.manualInput, {
-                color: t.fg, borderColor: t.borderColor,
-                fontFamily: t.fontMono, backgroundColor: t.surface,
-              }]}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
+              multiline
             />
             <Pressable
               onPress={handleManualConnect}
@@ -234,58 +227,52 @@ function PairingView() {
 function SessionCard({ pane, onPress }: { pane: PaneState; onPress: () => void }) {
   const t = useTheme();
   const status = pane.sessionState?.status ?? pane.descriptor.status;
-  const dotColor = statusColor(status, t.accent);
-  const taskText = pane.sessionState?.currentTask ?? pane.descriptor.cwd;
+  const dotColor = statusColor(status, t);
+  const waiting = pane.hasUserRequest;
+  const taskText = pane.sessionState?.currentTask ?? '';
+  const project = projectOf(pane);
   const lastLine = pane.outputBuffer
     ? stripAnsi(pane.outputBuffer).split('\n').filter(Boolean).at(-1) ?? ''
     : '';
   const preview = pane.sessionState?.prompt ?? lastLine;
 
   return (
-    <Pressable onPress={onPress}>
-      <Surface style={[
-        styles.card,
-        pane.hasUserRequest && { borderColor: '#fbbf24' },
-      ]}>
-        <View style={[styles.statusDot, { backgroundColor: dotColor }]} />
-
-        <View style={styles.cardBody}>
-          <View style={styles.cardRow}>
-            <Text style={[styles.cardTitle, { color: t.fg, fontFamily: t.fontMono }]} numberOfLines={1}>
-              {pane.descriptor.name || pane.descriptor.id}
-            </Text>
-            {pane.hasUserRequest && (
-              <View style={styles.requestBadge}>
-                <Text style={styles.requestBadgeText}>input needed</Text>
-              </View>
-            )}
-          </View>
-
-          {taskText ? (
-            <Text style={[styles.cardTask, { color: t.fgMuted }]} numberOfLines={1}>
-              {taskText}
-            </Text>
-          ) : null}
-
-          {preview ? (
-            <Text style={[styles.cardPreview, {
-              color: pane.hasUserRequest ? '#fbbf24' : t.fgDim,
-              fontFamily: t.fontMono,
-            }]} numberOfLines={2}>
-              {preview}
-            </Text>
-          ) : null}
-        </View>
-
-        <View style={styles.cardMeta}>
-          <Text style={[styles.cardTime, { color: t.fgDim }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+      <Card
+        style={[styles.card, waiting && styles.cardWaiting]}
+        borderColor={waiting ? t.warn : t.borderColor}
+      >
+        <View style={styles.cardRow}>
+          <View style={[styles.statusDot, { backgroundColor: dotColor }]} />
+          <Text style={[styles.cardTitle, { color: t.fg, fontFamily: t.fontMono }]} numberOfLines={1}>
+            {pane.descriptor.name || pane.descriptor.id}
+          </Text>
+          {project ? <Tag fontSize={9}>{project}</Tag> : null}
+          <View style={styles.flex1} />
+          <Text style={[styles.cardTime, { color: t.fgDim, fontFamily: t.fontMono }]}>
             {relativeTime(pane.lastActivityAt)}
           </Text>
-          <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-            <Path d="M5 3l4 4-4 4" stroke={t.fgDim} strokeWidth={1.4} strokeLinecap="round" />
-          </Svg>
         </View>
-      </Surface>
+
+        {taskText ? (
+          <Text style={[styles.cardTask, { color: t.fgMuted }]} numberOfLines={2}>
+            {taskText}
+          </Text>
+        ) : null}
+
+        {preview ? (
+          <View style={[styles.previewBox, {
+            backgroundColor: waiting ? hexAlpha(t.warn, 0.12) : t.elev,
+            borderColor: waiting ? hexAlpha(t.warn, 0.30) : t.borderColor,
+          }]}>
+            <Text style={[styles.previewText, {
+              color: waiting ? t.warn : t.fgMuted, fontFamily: t.fontMono,
+            }]} numberOfLines={2}>
+              {waiting ? '? ' : ''}{preview}
+            </Text>
+          </View>
+        ) : null}
+      </Card>
     </Pressable>
   );
 }
@@ -293,36 +280,76 @@ function SessionCard({ pane, onPress }: { pane: PaneState; onPress: () => void }
 function PaneGridView() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { panes, orderedPaneIds, focusPane, disconnect } = useTunnel();
+  const { panes, orderedPaneIds, focusPane, disconnect, unpair } = useTunnel();
   const ordered = orderedPaneIds.map((id) => panes[id]).filter(Boolean) as PaneState[];
 
+  let running = 0, awaiting = 0, idle = 0;
+  for (const p of ordered) {
+    const s = p.sessionState?.status ?? p.descriptor.status;
+    if (p.hasUserRequest || s === 'awaiting_input') awaiting += 1;
+    else if (s === 'idle') idle += 1;
+    else running += 1;
+  }
+
+  const confirmUnpair = () => {
+    Alert.alert(
+      'Forget this desktop?',
+      'Unpairing returns the app to standalone and clears the saved connection. '
+        + 'Your repo, files, tasks, and keys stay on this device.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Unpair', style: 'destructive', onPress: () => { unpair(); } },
+      ],
+    );
+  };
+
   return (
-    <View style={[styles.grid, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 8 }]}>
-      <View style={styles.gridHeader}>
-        <Text style={[styles.gridTitle, { color: t.fg }]}>Sessions</Text>
-        <Pressable onPress={disconnect} hitSlop={8}>
-          <Text style={[styles.disconnectText, { color: t.fgMuted }]}>Disconnect</Text>
-        </Pressable>
-      </View>
+    <SafeAreaView style={[styles.gridSafe, { backgroundColor: t.bg }]} edges={['top']}>
+      <PageHeader
+        crumbs={['base-studio-code', 'tunnel']}
+        title="Sessions"
+        meta={
+          <>
+            {ordered.length} active
+            {awaiting > 0 && <Text style={{ color: t.warn }}>{` · ${awaiting} awaiting input`}</Text>}
+          </>
+        }
+        right={<Btn variant="ghost" size="sm" onPress={disconnect}>disconnect</Btn>}
+      />
 
       {ordered.length === 0 ? (
         <View style={styles.centered}>
           <Text style={[styles.emptyText, { color: t.fgDim }]}>
             No active sessions.{'\n'}Start a Claude session in base-studio-code.
           </Text>
+          <Btn variant="ghost" size="sm" onPress={confirmUnpair} style={styles.unpairBtn}>
+            <Text style={{ color: t.danger }}>unpair this desktop</Text>
+          </Btn>
         </View>
       ) : (
         <FlatList
           data={ordered}
           keyExtractor={(p) => p.descriptor.id}
+          ListHeaderComponent={
+            <View style={styles.tagRow}>
+              <Tag variant="amber">all · {ordered.length}</Tag>
+              <Tag>running · {running}</Tag>
+              {awaiting > 0 && <Tag variant="warn">awaiting · {awaiting}</Tag>}
+              <Tag>idle · {idle}</Tag>
+              <View style={styles.flex1} />
+              <Pressable onPress={confirmUnpair} hitSlop={8}>
+                <Text style={[styles.unpairText, { color: t.danger, fontFamily: t.fontMono }]}>unpair</Text>
+              </Pressable>
+            </View>
+          }
           renderItem={({ item }) => (
             <SessionCard pane={item} onPress={() => focusPane(item.descriptor.id)} />
           )}
-          contentContainerStyle={styles.cardList}
+          contentContainerStyle={[styles.cardList, { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 8 }]}
           showsVerticalScrollIndicator={false}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -367,7 +394,7 @@ function TerminalView({ paneId }: { paneId: string }) {
   }
 
   const status = pane.sessionState?.status ?? pane.descriptor.status;
-  const dotColor = statusColor(status, t.accent);
+  const dotColor = statusColor(status, t);
 
   return (
     <KeyboardAvoidingView
@@ -461,9 +488,12 @@ export default function SessionsScreen() {
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  flex1: { flex: 1 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
   connectingText: { marginTop: 16, fontSize: 14 },
+  cancelConnect: { marginTop: 24, paddingVertical: 8, paddingHorizontal: 16 },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 22 },
+  unpairBtn: { marginTop: 4 },
 
   // Pairing
   pairing: { flex: 1, paddingHorizontal: 20 },
@@ -521,33 +551,28 @@ const styles = StyleSheet.create({
   cancelScanText: { fontSize: 14, fontWeight: '600' },
 
   // Pane grid
-  grid: { flex: 1 },
-  gridHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingBottom: 12,
-  },
-  gridTitle: { fontSize: 20, fontWeight: '700' },
+  gridSafe: { flex: 1 },
   disconnectText: { fontSize: 13 },
-  cardList: { paddingHorizontal: 16, gap: 10 },
+  tagRow: {
+    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6,
+    paddingTop: 10, paddingBottom: 4,
+  },
+  unpairText: { fontSize: 10.5 },
+  cardList: { paddingHorizontal: 12, gap: 8 },
 
   // Session card
-  card: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, gap: 12,
-  },
+  card: { padding: 12, borderRadius: 8 },
+  cardWaiting: { borderLeftWidth: 2 },
   statusDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
-  cardBody: { flex: 1, minWidth: 0, gap: 3 },
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cardTitle: { fontSize: 13, fontWeight: '600', flexShrink: 1 },
-  requestBadge: {
-    backgroundColor: 'rgba(251,191,36,0.2)',
-    borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+  cardTitle: { fontSize: 12.5, fontWeight: '500', flexShrink: 1 },
+  cardTask: { fontSize: 12, marginTop: 7, lineHeight: 17 },
+  previewBox: {
+    marginTop: 7, paddingHorizontal: 8, paddingVertical: 6,
+    borderRadius: 5, borderWidth: StyleSheet.hairlineWidth,
   },
-  requestBadgeText: { fontSize: 10, color: '#fbbf24', fontWeight: '600' },
-  cardTask: { fontSize: 12 },
-  cardPreview: { fontSize: 11, marginTop: 2 },
-  cardMeta: { alignItems: 'flex-end', gap: 4, flexShrink: 0 },
-  cardTime: { fontSize: 10.5 },
+  previewText: { fontSize: 10.5, lineHeight: 16 },
+  cardTime: { fontSize: 9.5 },
 
   // Terminal
   termRoot: { flex: 1, backgroundColor: 'transparent' },

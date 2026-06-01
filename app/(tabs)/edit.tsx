@@ -9,6 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme';
 import { useSession } from '../../src/lib/session';
+import { useApiKeyPrompt } from '../../src/lib/ApiKeyContext';
 import { detectLang, tokenizeFile } from '../../src/lib/syntax';
 import { AttachedImage, ChatTurn } from '../../src/lib/types';
 import { IconBtn } from '../../src/components/ui/IconBtn';
@@ -186,8 +187,9 @@ export default function EditScreen() {
   const insets = useSafeAreaInsets();
   const {
     currentPath, currentContent, setCurrentContent, saveCurrentFile,
-    isCurrentDirty, turns, send, chatBusy,
+    isCurrentDirty, turns, send, chatBusy, apiKey,
   } = useSession();
+  const { requestApiKey } = useApiKeyPrompt();
   const [input, setInput] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -221,6 +223,15 @@ export default function EditScreen() {
   async function handleSend() {
     const trimmed = input.trim();
     if ((!trimmed && pendingImages.length === 0) || chatBusy) return;
+
+    // The on-device agent needs an Anthropic key. Prompt just-in-time if it's
+    // missing — before clearing the input, so cancelling doesn't lose the
+    // message the user typed.
+    if (!apiKey) {
+      const key = await requestApiKey();
+      if (!key) return;
+    }
+
     const imgs = pendingImages.length > 0 ? pendingImages : undefined;
     setInput('');
     setPendingImages([]);
@@ -261,7 +272,7 @@ export default function EditScreen() {
 
   if (!currentPath || currentContent === null) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]} edges={['top']}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.empty}>
           <Text style={[styles.emptyTitle, { color: t.fg }]}>No file open</Text>
           <Text style={[styles.emptySub, { color: t.fgMuted }]}>
@@ -284,7 +295,7 @@ export default function EditScreen() {
   const lang = detectLang(currentPath);
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: t.bg }]} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <KeyboardAvoidingView
         style={styles.flex1}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

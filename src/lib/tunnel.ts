@@ -1,7 +1,10 @@
 import {
   PaneState, PaneStreamingState, TunnelClientMessage,
-  TunnelConnectionState, TunnelServerMessage,
+  TunnelConnectionState, TunnelPairing, TunnelServerMessage,
 } from './types';
+import { createInitiator, generateKeypair, type Split } from './noise/noise';
+import { rng } from './noise/random';
+import { base64ToBytes, openFrame, sealFrame, toBytes } from './noiseSession';
 
 export type TunnelCallbacks = {
   onConnectionStateChange: (state: TunnelConnectionState) => void;
@@ -14,14 +17,28 @@ const RECONNECT_MAX_MS = 30_000;
 /** Maximum PTY output chars buffered per pane before oldest chars are dropped */
 const OUTPUT_BUFFER_MAX = 50_000;
 
+// Tagged tunnel logger. Helps debug pairing / reconnect / cert-pinning.
+// Currently ON in all builds while we debug the tunnel; set to `__DEV__` once
+// it's stable so release builds stay quiet. The auth token is never logged.
+const TUNNEL_DEBUG = true;
+export function tunnelLog(...args: unknown[]): void {
+  if (TUNNEL_DEBUG) console.log('[tunnel]', ...args);
+}
+
 export class TunnelClient {
   private ws: WebSocket | null = null;
-  private url = '';
-  private token = '';
+  private pairing: TunnelPairing | null = null;
+  /** Desktop's Noise static public key (decoded from the QR's base64 hostPubKey). */
+  private remoteStatic: Uint8Array | null = null;
   private fcmToken: string | undefined;
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
+
+  // Per-socket Noise state — reset on every (re)connect, since each relay session is a
+  // fresh handshake. `tx` is null until the handshake completes; sends are gated on it.
+  private initiator: ReturnType<typeof createInitiator> | null = null;
+  private tx: Split | null = null;
 
   private connectionState: TunnelConnectionState = 'disconnected';
   private panes: Record<string, PaneState> = {};
@@ -32,16 +49,25 @@ export class TunnelClient {
     this.cb = callbacks;
   }
 
-  connect(url: string, token: string, fcmToken?: string) {
-    this.url = url;
-    this.token = token;
+  /** Pair + connect to the desktop through the relay described by the QR payload. */
+  connect(pairing: TunnelPairing, fcmToken?: string) {
+    this.pairing = pairing;
+    this.remoteStatic = base64ToBytes(pairing.hostPubKey);
     this.fcmToken = fcmToken;
     this.destroyed = false;
     this.reconnectAttempt = 0;
+    tunnelLog('connect requested', { relay: pairing.relayUrl, room: pairing.room, hasFcm: !!fcmToken });
     this.openSocket();
   }
 
+  /** `wss://relay…/connect?room=<room>&role=guest` — the mobile is always a guest. */
+  private relayConnectUrl(): string {
+    const base = this.pairing!.relayUrl.replace(/\/+$/, '');
+    return `${base}/connect?room=${encodeURIComponent(this.pairing!.room)}&role=guest`;
+  }
+
   disconnect() {
+    tunnelLog('disconnect requested');
     this.destroyed = true;
     this.clearReconnectTimer();
     this.ws?.close();
@@ -80,45 +106,86 @@ export class TunnelClient {
   getPanes() { return this.panes; }
 
   private openSocket() {
-    if (this.destroyed) return;
+    if (this.destroyed || !this.pairing || !this.remoteStatic) return;
     this.setConnectionState('connecting');
+    // Fresh Noise session per socket.
+    this.initiator = null;
+    this.tx = null;
+    const url = this.relayConnectUrl();
     try {
-      this.ws = new WebSocket(this.url);
-    } catch {
+      tunnelLog('opening socket', { url });
+      this.ws = new WebSocket(url);
+    } catch (e) {
+      tunnelLog('socket construction failed', e);
       this.scheduleReconnect();
       return;
     }
+    // Frames are raw Noise ciphertext; receive them as ArrayBuffers, not blobs.
+    this.ws.binaryType = 'arraybuffer';
 
     this.ws.onopen = () => {
-      if (this.destroyed) return;
+      if (this.destroyed || !this.ws) return;
+      tunnelLog('socket open → Noise handshake (msg1)');
       this.setConnectionState('authenticating');
       this.reconnectAttempt = 0;
-      this.send({ type: 'auth', token: this.token, fcmToken: this.fcmToken });
+      // Begin the Noise IK handshake: send msg1 (e, es, s, ss) as a binary frame.
+      // The desktop (responder) answers with msg2; auth follows inside the session.
+      try {
+        this.initiator = createInitiator(generateKeypair(rng), this.remoteStatic!, rng);
+        this.ws.send(this.initiator.writeMessage1());
+      } catch (e) {
+        tunnelLog('handshake init failed', e);
+        this.ws.close();
+      }
     };
 
     this.ws.onmessage = (e) => {
       if (this.destroyed) return;
-      try {
-        const msg = JSON.parse(e.data as string) as TunnelServerMessage;
-        this.handleMessage(msg);
-      } catch { /* malformed frame — ignore */ }
+      const data = e.data as ArrayBuffer | string;
+      if (typeof data === 'string') return; // relay only ferries binary frames
+      this.onBinary(toBytes(data));
     };
 
-    this.ws.onerror = () => {
-      // onclose always fires after onerror; reconnect logic lives there
+    this.ws.onerror = (e) => {
+      // onclose always fires after onerror; reconnect logic lives there.
+      tunnelLog('socket error', (e as unknown as { message?: string })?.message ?? '');
     };
 
     this.ws.onclose = () => {
       if (this.destroyed) return;
+      tunnelLog('socket closed');
       this.ws = null;
+      this.initiator = null;
+      this.tx = null;
       this.setConnectionState('disconnected');
       this.scheduleReconnect();
     };
   }
 
+  /** A binary frame: either Noise msg2 (completing the handshake) or, once the
+   *  session is up, an encrypted application message. A crypto/parse failure tears
+   *  the socket down so a clean reconnect re-handshakes. */
+  private onBinary(frame: Uint8Array) {
+    try {
+      if (!this.tx) {
+        if (!this.initiator) return;
+        // msg2 (e, ee, se) → transport ciphers. Then authenticate inside the session.
+        tunnelLog('handshake msg2 → transport up, sending auth');
+        this.tx = this.initiator.readMessage2(frame).transport;
+        this.send({ type: 'auth', token: this.pairing!.psk, fcmToken: this.fcmToken });
+        return;
+      }
+      this.handleMessage(openFrame<TunnelServerMessage>(this.tx.recv, frame));
+    } catch (e) {
+      tunnelLog('session frame error — dropping socket', e);
+      this.ws?.close();
+    }
+  }
+
   private handleMessage(msg: TunnelServerMessage) {
     switch (msg.type) {
       case 'auth_ok': {
+        tunnelLog('auth accepted');
         this.setConnectionState('connected');
         // Re-assert streaming state for the active pane after reconnect
         if (this.activePaneId) {
@@ -149,6 +216,7 @@ export class TunnelClient {
           if (!live.has(id)) delete next[id];
         }
         this.panes = next;
+        tunnelLog('pane_list', { count: msg.panes.length });
         this.emitPanes();
         break;
       }
@@ -218,12 +286,19 @@ export class TunnelClient {
   }
 
   private send(msg: TunnelClientMessage) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(msg));
+    // Gated on the Noise session being established — every app frame is encrypted.
+    if (this.ws?.readyState === WebSocket.OPEN && this.tx) {
+      try {
+        this.ws.send(sealFrame(this.tx.send, msg));
+      } catch (e) {
+        tunnelLog('send failed — dropping socket', e);
+        this.ws.close();
+      }
     }
   }
 
   private setConnectionState(state: TunnelConnectionState) {
+    if (this.connectionState !== state) tunnelLog('state →', state);
     this.connectionState = state;
     this.cb.onConnectionStateChange(state);
   }
@@ -235,6 +310,7 @@ export class TunnelClient {
   private scheduleReconnect() {
     this.clearReconnectTimer();
     const delay = Math.min(RECONNECT_BASE_MS * 2 ** this.reconnectAttempt, RECONNECT_MAX_MS);
+    tunnelLog('reconnect scheduled', { inMs: delay, attempt: this.reconnectAttempt + 1 });
     this.reconnectAttempt += 1;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;

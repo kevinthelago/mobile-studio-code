@@ -3,6 +3,24 @@ import {
   type ReactElement, type ReactNode,
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import * as Font from 'expo-font';
+import { JetBrainsMono_400Regular } from '@expo-google-fonts/jetbrains-mono/400Regular';
+
+// The redesign's monospace vocabulary is JetBrains Mono (the design's
+// `--msc-mono`). Every theme's `fontMono` points at this family. Loading is
+// gated on the main tab surface (app/(tabs)/_layout.tsx) so the redesign never
+// flashes a fallback; this best-effort module-level load also covers the
+// pre-tabs onboarding screens. iOS synthesizes the heavier weights (500/600/700
+// used across the UI) from the regular face — close enough for mono chrome.
+export const MONO_FAMILY = 'JetBrains Mono';
+
+// Fire-and-forget: register the family as early as theme.ts is imported. Guarded
+// because it touches the native font module (no-op / harmless if unavailable).
+try {
+  void Font.loadAsync({ [MONO_FAMILY]: JetBrainsMono_400Regular }).catch(() => {});
+} catch {
+  /* non-RN context (e.g. a node script importing this module) */
+}
 
 export interface CodePalette {
   kw: string;
@@ -66,7 +84,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     surfaceSolid: '#13161e',
     borderColor: 'rgba(255,255,255,0.10)',
     radius: 24,
-    fontMono: 'Menlo',
+    fontMono: MONO_FAMILY,
     code: {
       kw: '#c084fc', fn: '#67d3ff', st: '#f0a37e', nm: '#ffd479',
       cm: 'rgba(160,170,200,0.55)', ty: '#7ee2c4', op: '#cdd2e0',
@@ -97,7 +115,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     surfaceSolid: '#13100d',
     borderColor: '#2a241f',
     radius: 18,
-    fontMono: 'Menlo',
+    fontMono: MONO_FAMILY,
     code: {
       kw: '#e0a3ff', fn: '#9bd9ff', st: '#ffb088', nm: '#ffd479',
       cm: '#5a5550', ty: '#a8e6c4', op: '#a8a095',
@@ -128,7 +146,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     surfaceSolid: '#0d0f15',
     borderColor: '#1f2430',
     radius: 4,
-    fontMono: 'Menlo',
+    fontMono: MONO_FAMILY,
     code: {
       kw: '#7dd3fc', fn: '#a3e635', st: '#fbbf77', nm: '#fcd34d',
       cm: '#525866', ty: '#86efac', op: '#9ca3af',
@@ -158,7 +176,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     surfaceSolid: '#fbf8f1',
     borderColor: '#e6dfd0',
     radius: 6,
-    fontMono: 'Menlo',
+    fontMono: MONO_FAMILY,
     code: {
       kw: '#9b3d2e', fn: '#5a4a2a', st: '#7a6a3a', nm: '#b67d3a',
       cm: '#a8a095', ty: '#5a6a4a', op: '#5a4a3a',
@@ -188,7 +206,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     surfaceSolid: '#f6f8fa',
     borderColor: '#d0d7de',
     radius: 6,
-    fontMono: 'Menlo',
+    fontMono: MONO_FAMILY,
     code: {
       kw: '#0550ae', fn: '#5d3eb2', st: '#0a7d4a', nm: '#b35b00',
       cm: '#6a737d', ty: '#0a7d4a', op: '#24292f',

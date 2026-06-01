@@ -31,6 +31,7 @@
 <script type="text/babel" src="msc-redesign/screen-edit-run-git.jsx"></script>
 <script type="text/babel" src="msc-redesign/screen-session-switcher.jsx"></script>
 <script type="text/babel" src="msc-redesign/screen-plan.jsx"></script>
+<script type="text/babel" src="msc-redesign/screen-settings.jsx"></script>
 
 <script type="text/babel">
 
@@ -164,10 +165,48 @@ function App() {
           · Reuses dawn-theme tokens; adds no
             new colors. Label / avatar palette
             matches desktop verbatim.
-          · When the tunnel is down, Plan
-            falls into a Pairing screen instead
-            of being hidden — reachable from
-            any tab via the strip's status chip.
+        </DCPostIt>
+      </DCSection>
+
+      <DCSection
+        id="settings"
+        title="D · Settings"
+        subtitle="Reached from the session strip's ▦ overflow — not a 7th bottom tab. Grouped iOS-style list using base-studio-code's mono labels and token palette. The Tunnel &amp; host block leads, since the whole app hangs off that connection; Appearance opens a theme picker mapped 1:1 to the desktop's useTheme() so settings stay portable across devices."
+      >
+        <DCArtboard id="msc-settings" label="Settings — grouped list" width={430} height={1180}>
+          <Phone><SettingsScreen/></Phone>
+        </DCArtboard>
+
+        <DCArtboard id="msc-settings-theme" label="Settings · Theme picker (useTheme)" width={430} height={920}>
+          <Phone><SettingsThemeScreen/></Phone>
+        </DCArtboard>
+
+        <DCPostIt top={20} left={20} rotate={-2} width={290}>
+          Settings is NOT a bottom tab — it lives
+          behind the strip's ▦ overflow, so the
+          six tabs stay about the working
+          surface. Same pattern as the desktop,
+          where Settings is a rail-bottom gear,
+          not a primary nav item.
+
+          Tunnel &amp; host is the first block
+          on purpose: it's the one thing a
+          mobile user actually needs to manage.
+        </DCPostIt>
+
+        <DCPostIt top={20} left={340} rotate={2} width={280}>
+          Backwards-compat:
+
+          · Every toggle / row maps to an
+            existing MSC setting key — no new
+            persisted state except the tunnel
+            block.
+          · Theme picker reuses the 5 dawn /
+            glass / terminal / paper / basic
+            themes verbatim via useTheme().
+          · "Follow desktop theme" is the only
+            net-new switch — off by default so
+            existing installs don't change.
         </DCPostIt>
       </DCSection>
     </DesignCanvas>

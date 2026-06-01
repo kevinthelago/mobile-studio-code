@@ -8,6 +8,8 @@ export const KEYS = {
   BRANCH: 'repo_branch',
   TUNNEL_URL: 'tunnel_url',
   TUNNEL_TOKEN: 'tunnel_token',
+  /** JSON-serialized {@link TunnelPairing} from the QR (relayUrl/room/hostPubKey/psk). */
+  TUNNEL_PAIRING: 'tunnel_pairing',
   FCM_TOKEN: 'fcm_token',
 } as const;
 

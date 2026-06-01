@@ -186,6 +186,24 @@ export type TunnelConnectionState =
   | 'connected'
   | 'error';
 
+/**
+ * Pairing payload from the desktop's QR (Settings → Mobile Tunnel). The mobile
+ * client dials the relay and runs Noise IK with the desktop using these.
+ * Source of truth; the desktop (base-studio-code) conforms to this shape.
+ */
+export interface TunnelPairing {
+  /** Relay WebSocket base URL, e.g. wss://msc-tunnel-relay.<acct>.workers.dev */
+  relayUrl: string;
+  /** Room id the desktop allocated on the relay. */
+  room: string;
+  /** Desktop's Noise static public key (X25519), base64. */
+  hostPubKey: string;
+  /** Pairing secret, hex. Sent as the `auth` token after the Noise handshake. */
+  psk: string;
+  /** Optional direct-LAN WebSocket URL (ws://host:port) for the LAN transport. */
+  lanUrl?: string;
+}
+
 export type ToolDefinition = {
   name: string;
   description: string;
