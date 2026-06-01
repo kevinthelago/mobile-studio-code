@@ -574,6 +574,121 @@ export async function commentOnIssue(
   }
 }
 
+// Delete a single file on the remote branch via the Contents API
+// (DELETE /repos/{repo}/contents/{path}), committing the removal directly.
+//
+// Why the Contents API and not the Git Data tree pipeline pushModifiedFiles
+// uses: a delete is a single, self-contained, immediate operation — the agent's
+// delete_file tool acts now rather than deferring to the next bulk push, so a
+// one-shot commit is the right tool. GitHub requires the blob `sha` of the file
+// as it currently exists on the branch HEAD; we pass the manifest's tracked sha.
+//
+// Idempotent on 404: if the path is already gone on the remote (deleted
+// upstream, or the manifest sha is stale), we treat the delete as a no-op
+// success — the caller still drops its manifest entry. A stale-sha collision
+// where the file *does* still exist surfaces as a 409 → sha_mismatch so the
+// caller can pull and retry.
+export async function deleteRemoteFile(
+  pat: string,
+  repo: string,
+  branch: string,
+  path: string,
+  sha: string,
+  message: string,
+): Promise<{ alreadyAbsent: boolean }> {
+  const url =
+    `https://api.github.com/repos/${repo}/contents/${encodeRepoPath(path)}`;
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: GH_HEADERS_POST(pat),
+    body: JSON.stringify({ message, sha, branch }),
+  });
+  if (res.status === 404) return { alreadyAbsent: true };
+  if (!res.ok) {
+    const text = await res.text();
+    // Reuse the push-side classifier so delete errors carry the same actionable
+    // messages (auth / branch_protected / sha_mismatch) the agent already knows.
+    throw new Error(classifyTreesError(res.status, text, path, url).message);
+  }
+  return { alreadyAbsent: false };
+}
+
+// ── Branches ────────────────────────────────────────────────────────────────
+
+// List the repo's branches (names only), most-recently-listed first as GitHub
+// returns them. Pages through `/repos/{repo}/branches` (100 per page) so repos
+// with many branches don't silently truncate — the app's branch switcher needs
+// the full set. The default branch isn't flagged here; the caller knows the
+// current branch from the manifest.
+export async function listBranches(
+  pat: string,
+  repo: string,
+): Promise<string[]> {
+  const names: string[] = [];
+  for (let page = 1; ; page++) {
+    const res = await fetch(
+      `https://api.github.com/repos/${repo}/branches?per_page=100&page=${page}`,
+      { headers: GH_HEADERS_GET(pat) },
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(
+        classifyTreesError(res.status, text, '*',
+          `https://api.github.com/repos/${repo}/branches`).message,
+      );
+    }
+    const batch = (await res.json()) as { name: string }[];
+    for (const b of batch) names.push(b.name);
+    // A short page means we've reached the end; stop before an empty fetch.
+    if (batch.length < 100) break;
+  }
+  return names;
+}
+
+// Create a new branch `newBranch` pointing at the HEAD of `fromBranch`, via the
+// Git Data refs API: read the source ref's commit sha, then POST a new ref
+// `refs/heads/{newBranch}` at that sha. This is the no-native-git equivalent of
+// `git branch newBranch fromBranch` — it does NOT switch; the caller re-syncs
+// the working copy by downloading the new branch's tree.
+//
+// A 422 from the POST means the ref already exists; surfaced as a typed
+// `branch_exists` error so the UI can tell the user to pick another name rather
+// than showing a raw 422.
+export async function createBranch(
+  pat: string,
+  repo: string,
+  newBranch: string,
+  fromBranch: string,
+): Promise<{ branch: string; sha: string }> {
+  const refUrl =
+    `https://api.github.com/repos/${repo}/git/ref/heads/${encodeBranchName(fromBranch)}`;
+  const refRes = await fetch(refUrl, { headers: GH_HEADERS_GET(pat) });
+  if (!refRes.ok) {
+    const text = await refRes.text();
+    throw new Error(classifyTreesError(refRes.status, text, '*', refUrl).message);
+  }
+  const ref = (await refRes.json()) as { object: { sha: string } };
+  const sha = ref.object.sha;
+
+  const createUrl = `https://api.github.com/repos/${repo}/git/refs`;
+  const res = await fetch(createUrl, {
+    method: 'POST',
+    headers: GH_HEADERS_POST(pat),
+    body: JSON.stringify({ ref: `refs/heads/${newBranch}`, sha }),
+  });
+  if (res.status === 422) {
+    throw new Error(
+      `A branch named "${newBranch}" already exists on ${repo}. ` +
+      `Pick a different name or switch to the existing branch.`,
+    );
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(classifyTreesError(res.status, text, '*', createUrl).message);
+  }
+  return { branch: newBranch, sha };
+}
+
 // Push every locally-modified file to GitHub in a single atomic commit using
 // the Git Data API (git/refs, git/commits, git/trees, git/blobs).
 //
