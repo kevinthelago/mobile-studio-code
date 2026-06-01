@@ -2,3 +2,5 @@
 
 - SessionStrip ▦ button now opens the new SessionSwitcher overlay (redesign hub) instead of navigating straight to Settings; Settings stays reachable via the switcher header (▦ settings). Chips restyled to theme tokens + tunnel-connected indicator added. NAV CHANGE worth director awareness: Settings is now one tap deeper (was the ▦ direct target). Dropped the desktop-only '+ new session' from the switcher header since sessions can't be created from mobile.
 
+- M-font: loaded JetBrains Mono via @expo-google-fonts/jetbrains-mono (avoids vendoring a binary .ttf into assets/fonts/). PINNED expo-font to ~14.0.12 — npm default-installed 56.x which mismatches Expo SDK 54 (bundledNativeModules wants ~14.0.12); see the SDK-54-deps memory. theme.fontMono -> 'JetBrains Mono' for all 5 themes; load gated in app/(tabs)/_layout.tsx + best-effort module-init load in theme.ts for onboarding. iOS synthesizes 500/600/700 from the regular face. NOTE for mobile-core: consider hoisting the font load to the root app/_layout.tsx so onboarding (setup/repo) is gated too; touched shared package.json additively.
+
