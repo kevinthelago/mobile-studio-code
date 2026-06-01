@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,10 +22,17 @@ export default function GitScreen() {
   const {
     apiKey, manifest, modifiedCount, openFile, activeTask,
     pull, push, pulling, pushing,
+    listBranches, switchBranch, createBranch, switchingBranch,
   } = useSession();
   const [commitMsg, setCommitMsg] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [issueRefMode, setIssueRefMode] = useState<IssueRefMode>('refs');
+
+  const [branchSheetOpen, setBranchSheetOpen] = useState(false);
+  const [branches, setBranches] = useState<string[] | null>(null);
+  const [branchesError, setBranchesError] = useState<string | null>(null);
+  const [newBranch, setNewBranch] = useState('');
+  const [creatingBranch, setCreatingBranch] = useState(false);
 
   const linkedIssue = activeTask?.linkedIssue ?? null;
 
@@ -130,6 +137,61 @@ export default function GitScreen() {
     }
   }
 
+  function openBranchSheet() {
+    setBranchSheetOpen(true);
+    setBranchesError(null);
+    setBranches(null);
+    listBranches()
+      .then((names) => setBranches(names))
+      .catch((e) =>
+        setBranchesError(e instanceof Error ? e.message : 'Failed to load branches'),
+      );
+  }
+
+  // Switch the working copy to `branch`. A dirty tree would be clobbered by the
+  // re-sync, so confirm a discard first (session.switchBranch also refuses
+  // without `discardLocal` as a backstop).
+  async function onSelectBranch(branch: string) {
+    if (branch === manifest?.branch) { setBranchSheetOpen(false); return; }
+    const doSwitch = async (discardLocal: boolean) => {
+      try {
+        await switchBranch(branch, { discardLocal });
+        setBranchSheetOpen(false);
+      } catch (e) {
+        Alert.alert('Switch failed', e instanceof Error ? e.message : 'Unknown error');
+      }
+    };
+    if (modifiedCount > 0) {
+      Alert.alert(
+        'Discard local changes?',
+        `You have ${modifiedCount} modified file${modifiedCount === 1 ? '' : 's'} that ` +
+        `haven't been pushed. Switching to "${branch}" will overwrite them with that ` +
+        `branch's files.\n\nPush first to keep them.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Discard & switch', style: 'destructive', onPress: () => doSwitch(true) },
+        ],
+      );
+    } else {
+      await doSwitch(false);
+    }
+  }
+
+  async function onCreateBranch() {
+    const name = newBranch.trim();
+    if (!name || creatingBranch) return;
+    setCreatingBranch(true);
+    try {
+      await createBranch(name, { switchTo: true });
+      setNewBranch('');
+      setBranchSheetOpen(false);
+    } catch (e) {
+      Alert.alert('Create failed', e instanceof Error ? e.message : 'Unknown error');
+    } finally {
+      setCreatingBranch(false);
+    }
+  }
+
   if (!manifest) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -177,7 +239,12 @@ export default function GitScreen() {
         <View style={styles.container}>
           <View style={styles.header}>
             <Text style={[styles.eyebrow, { color: t.fgDim }]}>Branch</Text>
-            <View style={styles.branchRow}>
+            <Pressable
+              style={styles.branchRow}
+              onPress={openBranchSheet}
+              disabled={switchingBranch}
+              hitSlop={8}
+            >
               <Svg width={18} height={18} viewBox="0 0 18 18" fill="none">
                 <Circle cx={5} cy={4} r={2} stroke={t.accent} strokeWidth={1.8} />
                 <Circle cx={5} cy={14} r={2} stroke={t.accent} strokeWidth={1.8} />
@@ -190,7 +257,12 @@ export default function GitScreen() {
               >
                 {manifest.branch}
               </Text>
-            </View>
+              {switchingBranch ? (
+                <ActivityIndicator size="small" color={t.fgMuted} />
+              ) : (
+                <Text style={[styles.branchChevron, { color: t.fgDim }]}>⌄</Text>
+              )}
+            </Pressable>
             <Text style={[styles.upstreamText, { color: t.fgMuted, fontFamily: t.fontMono }]}>
               {manifest.repo}{modifiedCount > 0 ? ` · ${modifiedCount} modified` : ' · clean'}
             </Text>
@@ -347,6 +419,99 @@ export default function GitScreen() {
             </Surface>
           </View>
         </View>
+
+        <Modal
+          visible={branchSheetOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setBranchSheetOpen(false)}
+        >
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setBranchSheetOpen(false)}
+          >
+            <Pressable style={styles.branchSheetWrap} onPress={() => {}}>
+              <Surface style={styles.branchSheet} radius={20}>
+                <View style={styles.sheetHeader}>
+                  <Text style={[styles.sheetTitle, { color: t.fg }]}>Switch branch</Text>
+                  <Pressable onPress={() => setBranchSheetOpen(false)} hitSlop={10}>
+                    <Text style={[styles.sheetClose, { color: t.fgMuted }]}>Done</Text>
+                  </Pressable>
+                </View>
+
+                <View style={[styles.newBranchRow, { borderColor: t.borderColor }]}>
+                  <TextInput
+                    value={newBranch}
+                    onChangeText={setNewBranch}
+                    placeholder="New branch name…"
+                    placeholderTextColor={t.fgDim}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!creatingBranch}
+                    style={[styles.newBranchInput, { color: t.fg, fontFamily: t.fontMono }]}
+                  />
+                  <Pressable
+                    style={[styles.newBranchBtn, {
+                      backgroundColor: t.accent,
+                      opacity: newBranch.trim() && !creatingBranch ? 1 : 0.4,
+                    }]}
+                    onPress={onCreateBranch}
+                    disabled={!newBranch.trim() || creatingBranch}
+                  >
+                    {creatingBranch ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.newBranchBtnText}>Create</Text>
+                    )}
+                  </Pressable>
+                </View>
+
+                <ScrollView style={styles.branchList} showsVerticalScrollIndicator={false}>
+                  {branches === null && !branchesError && (
+                    <View style={styles.branchLoading}>
+                      <ActivityIndicator size="small" color={t.fgMuted} />
+                    </View>
+                  )}
+                  {branchesError && (
+                    <Text style={[styles.branchErrorText, { color: t.fgMuted }]}>
+                      {branchesError}
+                    </Text>
+                  )}
+                  {branches?.map((b) => {
+                    const current = b === manifest.branch;
+                    return (
+                      <TouchableOpacity
+                        key={b}
+                        activeOpacity={0.7}
+                        onPress={() => onSelectBranch(b)}
+                        style={[styles.branchItem, { borderTopColor: t.borderColor }]}
+                      >
+                        <Text
+                          style={[styles.branchItemText, {
+                            color: current ? t.accent : t.fg, fontFamily: t.fontMono,
+                          }]}
+                          numberOfLines={1}
+                        >
+                          {b}
+                        </Text>
+                        {current && (
+                          <Text style={[styles.branchCurrentTag, { color: t.accent }]}>
+                            current
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                  {branches?.length === 0 && (
+                    <Text style={[styles.branchErrorText, { color: t.fgMuted }]}>
+                      No branches found.
+                    </Text>
+                  )}
+                </ScrollView>
+              </Surface>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -365,6 +530,7 @@ const styles = StyleSheet.create({
   },
   branchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   branchName: { fontSize: 22, fontWeight: '700', letterSpacing: -0.4, flexShrink: 1 },
+  branchChevron: { fontSize: 18, fontWeight: '700', marginTop: -4 },
   upstreamText: { fontSize: 12, marginTop: 4 },
 
   actionRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginTop: 12 },
@@ -421,4 +587,40 @@ const styles = StyleSheet.create({
     minWidth: 110, alignItems: 'center',
   },
   commitBtnText: { fontSize: 12.5, fontWeight: '600', color: '#fff' },
+
+  modalBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  branchSheetWrap: { padding: 12, paddingBottom: 32 },
+  branchSheet: { padding: 16, maxHeight: 460 },
+  sheetHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sheetTitle: { fontSize: 16, fontWeight: '700' },
+  sheetClose: { fontSize: 13, fontWeight: '600' },
+  newBranchRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: StyleSheet.hairlineWidth, borderRadius: 12,
+    paddingLeft: 12, paddingRight: 6, paddingVertical: 5, marginBottom: 12,
+  },
+  newBranchInput: { flex: 1, fontSize: 13.5, paddingVertical: 6 },
+  newBranchBtn: {
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 9,
+    minWidth: 72, alignItems: 'center',
+  },
+  newBranchBtnText: { fontSize: 12.5, fontWeight: '600', color: '#fff' },
+  branchList: { flexGrow: 0 },
+  branchLoading: { paddingVertical: 24, alignItems: 'center' },
+  branchErrorText: { fontSize: 12.5, padding: 16, lineHeight: 18 },
+  branchItem: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 13, paddingHorizontal: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  branchItemText: { fontSize: 14, flexShrink: 1 },
+  branchCurrentTag: {
+    fontSize: 10.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8,
+  },
 });

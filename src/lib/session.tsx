@@ -16,10 +16,22 @@ import {
   bootstrapTasks, makeTask, patchIndexEntry, removeFromIndex, setActive,
 } from './tasks';
 import { runAgent, AgentEvent } from './agent';
-import { pullRepo, pushModifiedFiles, PushFailure } from './github';
+import {
+  pullRepo, pushModifiedFiles, PushFailure,
+  downloadRepo, listBranches as ghListBranches, createBranch as ghCreateBranch,
+} from './github';
 import { pushError } from './errorBus';
 
 type Stage = 'loading' | 'setup' | 'repo' | 'ready';
+
+// Thrown by switchBranch when the working copy has unpushed local edits and the
+// caller didn't pass `discardLocal`. A branch switch re-downloads the target
+// branch's tree over the working copy, which would silently clobber those
+// edits — so we refuse and let the UI surface the choice (push first, or
+// discard & switch). The message marker lets the UI branch on intent without a
+// custom error class (types.ts is out of this stream's scope).
+export const DIRTY_TREE_SWITCH_ERROR =
+  'dirty-tree: local changes would be lost on branch switch';
 
 type SessionValue = {
   stage: Stage;
@@ -52,6 +64,12 @@ type SessionValue = {
     updated: number; added: number; unchanged: number; conflicts: string[];
   }>;
   push: (message: string) => Promise<{ pushed: number; failures: PushFailure[] }>;
+
+  // Branches
+  switchingBranch: boolean;
+  listBranches: () => Promise<string[]>;
+  createBranch: (name: string, opts?: { switchTo?: boolean }) => Promise<void>;
+  switchBranch: (branch: string, opts?: { discardLocal?: boolean }) => Promise<void>;
 
   // Tasks
   taskSummaries: TaskSummary[];
@@ -94,6 +112,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const [pulling, setPulling] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [switchingBranch, setSwitchingBranch] = useState(false);
 
   const [taskIndex, setTaskIndex] = useState<TaskIndex | null>(null);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
@@ -358,6 +377,61 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setPushing(false);
     }
   }, [manifest, pat]);
+
+  // ── Branches ─────────────────────────────────────────────────────────────
+
+  const listBranches = useCallback(async (): Promise<string[]> => {
+    if (!manifest || !pat) return [];
+    return ghListBranches(pat, manifest.repo);
+  }, [manifest, pat]);
+
+  // Re-sync the working copy to `branch` by downloading its tree and rebuilding
+  // the manifest (the no-native-git equivalent of a checkout). Guards local
+  // edits: with unpushed `modified` files and no `discardLocal`, throws
+  // DIRTY_TREE_SWITCH_ERROR so the UI can offer push-first or discard. Closes
+  // the open file (it may not exist / may differ on the new branch) and
+  // persists the branch so the next launch reopens it.
+  const switchBranch = useCallback(async (
+    branch: string,
+    opts?: { discardLocal?: boolean },
+  ): Promise<void> => {
+    if (!manifest || !pat) throw new Error('No repo loaded');
+    if (branch === manifest.branch) return;
+    const dirty = Object.values(manifest.files).some((f) => f.modified);
+    if (dirty && !opts?.discardLocal) throw new Error(DIRTY_TREE_SWITCH_ERROR);
+
+    setSwitchingBranch(true);
+    try {
+      const next = await downloadRepo(pat, manifest.repo, branch);
+      await setSecret(KEYS.BRANCH, branch);
+      setManifest(next);
+      manifestRef.current = next;
+      // The open file is from the old branch's tree — drop it so the editor
+      // doesn't show stale content for a path that may not exist here.
+      setCurrentPath(null);
+      setCurrentContentState(null);
+      setOriginalContent(null);
+    } finally {
+      setSwitchingBranch(false);
+    }
+  }, [manifest, pat]);
+
+  // Create `name` off the current branch's HEAD on the remote, then optionally
+  // switch the working copy to it. Creation alone leaves the working copy on the
+  // current branch (the new branch is identical to it at HEAD anyway).
+  const createBranch = useCallback(async (
+    name: string,
+    opts?: { switchTo?: boolean },
+  ): Promise<void> => {
+    if (!manifest || !pat) throw new Error('No repo loaded');
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Branch name is required');
+    await ghCreateBranch(pat, manifest.repo, trimmed, manifest.branch);
+    if (opts?.switchTo) {
+      // Fresh branch at the same HEAD → no local edits are lost; force-sync.
+      await switchBranch(trimmed, { discardLocal: true });
+    }
+  }, [manifest, pat, switchBranch]);
 
   // ── Task management ──────────────────────────────────────────────────────
 
@@ -706,6 +780,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     pushing,
     pull,
     push,
+
+    switchingBranch,
+    listBranches,
+    createBranch,
+    switchBranch,
 
     taskSummaries: taskIndex?.tasks ?? [],
     activeTask,
