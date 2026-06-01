@@ -4,3 +4,5 @@
 
 - M-font: loaded JetBrains Mono via @expo-google-fonts/jetbrains-mono (avoids vendoring a binary .ttf into assets/fonts/). PINNED expo-font to ~14.0.12 — npm default-installed 56.x which mismatches Expo SDK 54 (bundledNativeModules wants ~14.0.12); see the SDK-54-deps memory. theme.fontMono -> 'JetBrains Mono' for all 5 themes; load gated in app/(tabs)/_layout.tsx + best-effort module-init load in theme.ts for onboarding. iOS synthesizes 500/600/700 from the regular face. NOTE for mobile-core: consider hoisting the font load to the root app/_layout.tsx so onboarding (setup/repo) is gated too; touched shared package.json additively.
 
+- #12 CLAUDE.md rewrite: documented the two-mode (standalone + Noise-relay tunnel) architecture, corrected the obsolete 'mobile WS client -> desktop WS server' framing to the blind-Cloudflare-relay + Noise IK model, added Tunnel & multi-session section + tunnel data-flow, 6-tab/Plan nav, refreshed the folder tree (tunnel libs, plan screens, new ui primitives), and removed the stale 'Run tab is a placeholder'. PROJECT_PLAN.md still has the old WS-server line (line ~62) — left for planner/director, flagged in redesign-status notes.
+
