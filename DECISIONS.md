@@ -6,3 +6,5 @@
 
 - #12 CLAUDE.md rewrite: documented the two-mode (standalone + Noise-relay tunnel) architecture, corrected the obsolete 'mobile WS client -> desktop WS server' framing to the blind-Cloudflare-relay + Noise IK model, added Tunnel & multi-session section + tunnel data-flow, 6-tab/Plan nav, refreshed the folder tree (tunnel libs, plan screens, new ui primitives), and removed the stale 'Run tab is a placeholder'. PROJECT_PLAN.md still has the old WS-server line (line ~62) — left for planner/director, flagged in redesign-status notes.
 
+- PR #57 (mobile-redesign -> feature/msc-redesign) is stacked on PR #38 (tunnel Noise client); merge #38 first, then #57 reduces to the 5 redesign commits. tsc clean.
+
