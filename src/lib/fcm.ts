@@ -3,6 +3,7 @@ import {
   getMessaging,
   getToken,
   requestPermission,
+  registerDeviceForRemoteMessages,
   onTokenRefresh,
   onMessage,
   getInitialNotification,
@@ -33,11 +34,11 @@ export async function initFcm(): Promise<string | null> {
       status === AuthorizationStatus.AUTHORIZED ||
       status === AuthorizationStatus.PROVISIONAL;
     if (!granted) return null;
-    // Auto-registration for remote messages is enabled by default, so we don't
-    // call registerDeviceForRemoteMessages() (it warns that it's unnecessary).
-    // getToken throws if the build lacks the `aps-environment` entitlement
-    // (e.g. a dev build without push configured) — caught below so push stays
-    // optional.
+    // Auto-registration is disabled in firebase.json, so register explicitly
+    // before fetching a token (getToken throws `messaging/unregistered`
+    // otherwise). Still throws without the `aps-environment` entitlement — all
+    // caught below so push stays optional.
+    await registerDeviceForRemoteMessages(m);
     return await getToken(m);
   } catch (e) {
     console.warn('FCM init failed (continuing without push):', e);
