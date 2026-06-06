@@ -4,6 +4,11 @@ import { View } from 'react-native';
 import { BottomTabBar } from '../../src/components/ui/BottomTabBar';
 import { SessionStrip } from '../../src/components/ui/SessionStrip';
 
+// Land on the Run (tunneling/sessions) tab when entering the app, while keeping
+// Files first in the tab bar. The tab-bar order still follows the Tabs.Screen
+// declaration order below.
+export const unstable_settings = { initialRouteName: 'run' };
+
 // Native scene background is painted by the ThemedFrame in app/_layout.tsx;
 // the installed expo-router doesn't accept sceneContainerStyle here so we
 // don't try to set it again at the tab navigator level.

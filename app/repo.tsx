@@ -128,7 +128,7 @@ export default function RepoScreen() {
             </Text>
           </View>
 
-          <Pressable onPress={() => router.push('/(planner)')}>
+          <Pressable onPress={() => router.push('/(planner)/planner')}>
             <Surface style={styles.plannerEntry} radius={18}>
               <View style={[styles.plannerIcon, { backgroundColor: t.glass ? 'rgba(192,132,252,0.18)' : 'rgba(192,132,252,0.12)' }]}>
                 <Svg width={18} height={18} viewBox="0 0 18 18" fill="none">

@@ -6,7 +6,7 @@ import { Stack } from 'expo-router';
 export default function PlannerLayout() {
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
-      <Stack.Screen name="index" />
+      <Stack.Screen name="planner" />
     </Stack>
   );
 }
