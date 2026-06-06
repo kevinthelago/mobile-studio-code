@@ -5,6 +5,8 @@ import { isProviderImplemented } from './registry';
 export * from './types';
 export * from './registry';
 export * from './storage';
+export * from './canonical';
+export * from './openaiFormat';
 export { AnthropicProvider } from './anthropic';
 
 /**

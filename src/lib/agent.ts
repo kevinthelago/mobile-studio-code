@@ -2,7 +2,9 @@ import {
   ChatMessage, LinkedIssue, Manifest, ToolDefinition, ToolResultBlock,
   RetryStatus, CancelSignal,
 } from './types';
-import { LLMProvider } from './providers';
+import {
+  LLMProvider, getToolUses, toolResultBlock, toolResultsMessage,
+} from './providers';
 import {
   repoDir, listDir, readText, writeText, isDirectory, isMscMetaFile,
   writeManifest, loadProjectInstructions, ProjectInstructions,
@@ -705,7 +707,8 @@ export async function runAgent(args: RunAgentArgs): Promise<ChatMessage[]> {
     // emitted complete tool_use blocks before running out of room (in
     // which case we run them and let the next iteration continue).
     // end_turn / stop_sequence → completion.
-    const hasToolUse = response.content.some((b) => b.type === 'tool_use');
+    const toolUses = getToolUses(response);
+    const hasToolUse = toolUses.length > 0;
     const shouldRunTools =
       response.stop_reason === 'tool_use' ||
       (response.stop_reason === 'max_tokens' && hasToolUse);
@@ -741,8 +744,7 @@ export async function runAgent(args: RunAgentArgs): Promise<ChatMessage[]> {
     const toolResults: ToolResultBlock[] = [];
     let manifestDirty = false;
 
-    for (const block of response.content) {
-      if (block.type !== 'tool_use') continue;
+    for (const block of toolUses) {
       args.onEvent({ kind: 'tool_call', name: block.name, input: block.input });
       try {
         const { result, manifestChanged } = await runTool(
@@ -755,11 +757,7 @@ export async function runAgent(args: RunAgentArgs): Promise<ChatMessage[]> {
         // huge file can't blow up the context. The UI still shows the
         // full result via onEvent below.
         const capped = truncateToolResultContent(result);
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: capped,
-        });
+        toolResults.push(toolResultBlock(block.id, capped));
         args.onEvent({
           kind: 'tool_result',
           name: block.name,
@@ -768,12 +766,7 @@ export async function runAgent(args: RunAgentArgs): Promise<ChatMessage[]> {
         });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'tool error';
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: msg,
-          is_error: true,
-        });
+        toolResults.push(toolResultBlock(block.id, msg, true));
         args.onEvent({
           kind: 'tool_result',
           name: block.name,
@@ -788,7 +781,7 @@ export async function runAgent(args: RunAgentArgs): Promise<ChatMessage[]> {
       args.onManifestUpdate({ ...args.manifest });
     }
 
-    messages.push({ role: 'user', content: toolResults });
+    messages.push(toolResultsMessage(toolResults));
   }
 
   // Hit the iteration cap. Instead of throwing (which the user just sees as
