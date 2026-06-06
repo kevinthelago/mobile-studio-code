@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SessionProvider, useSession } from '../src/lib/session';
 import { TunnelProvider, useTunnel } from '../src/lib/TunnelContext';
@@ -10,21 +10,11 @@ import {
   initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
 } from '../src/lib/fcm';
 
+// Holds the UI on a spinner until secrets + any saved manifest have loaded,
+// then renders the app. Navigation isn't gated — the app boots into the tabs
+// (Run screen) and the repo picker / planner are reached on demand.
 function StageGate({ children }: { children: React.ReactNode }) {
   const { stage } = useSession();
-  const segments = useSegments() as string[];
-  const router = useRouter();
-
-  useEffect(() => {
-    if (stage === 'loading') return;
-    const inTabs = segments[0] === '(tabs)';
-    const onRepo = segments[0] === 'repo';
-    const onPlanner = segments[0] === '(planner)';
-
-    if (stage === 'repo' && !onRepo && !onPlanner) router.replace('/repo');
-    else if (stage === 'ready' && !inTabs && !onRepo && !onPlanner) router.replace('/(tabs)');
-  }, [stage, segments, router]);
-
   const t = useTheme();
   if (stage === 'loading') {
     return (

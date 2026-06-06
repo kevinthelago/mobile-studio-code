@@ -20,7 +20,10 @@ import { resolveActiveProvider } from './providers';
 import { pullRepo, pushModifiedFiles, PushFailure } from './github';
 import { pushError } from './errorBus';
 
-type Stage = 'loading' | 'repo' | 'ready';
+// Repo selection is no longer a launch gate — the app boots straight into the
+// tabs whether or not a repo is cloned, and the user picks a repo on demand
+// from the Git tab. So there are only two stages.
+type Stage = 'loading' | 'ready';
 
 type SessionValue = {
   stage: Stage;
@@ -134,21 +137,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setApiKey(k);
       setGhUser(u);
 
-      // Onboarding has been removed: credentials are no longer gated behind a
-      // setup stage. Boot straight into the repo picker (or the app if a repo
-      // is already cloned). Agent/GitHub calls will surface their own errors
-      // if credentials are absent.
+      // Boot straight into the tabs. If a repo was previously cloned, load its
+      // manifest; otherwise the repo-dependent tabs show their empty states and
+      // the user picks a repo from the Git tab on demand.
       if (r) {
         const m = await readManifest(r);
         if (cancelled) return;
         if (m) {
           setManifest(m);
           manifestRef.current = m;
-          setStage('ready');
-          return;
         }
       }
-      setStage('repo');
+      setStage('ready');
     })();
     return () => { cancelled = true; };
   }, []);
@@ -247,7 +247,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setPat(newPat);
     setApiKey(newKey);
     setGhUser(newUser);
-    setStage((s) => (s === 'ready' ? s : 'repo'));
   }, []);
 
   // Draft a commit message with whichever model is active (standalone mode),
@@ -285,7 +284,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setGhUser(null);
     setManifest(null);
     manifestRef.current = null;
-    setStage('repo');
   }, []);
 
   // ── Repo ─────────────────────────────────────────────────────────────────
@@ -298,7 +296,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setCurrentPath(null);
     setCurrentContentState(null);
     setOriginalContent(null);
-    setStage('ready');
   }, []);
 
   const clearRepo = useCallback(async () => {
@@ -309,7 +306,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setCurrentPath(null);
     setCurrentContentState(null);
     setOriginalContent(null);
-    setStage('repo');
   }, []);
 
   const refreshManifest = useCallback(async () => {

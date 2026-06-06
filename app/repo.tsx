@@ -107,17 +107,15 @@ export default function RepoScreen() {
           {/* Sheet grabber — this screen slides up over the app */}
           <View style={[styles.grabber, { backgroundColor: t.borderColor }]} />
 
-          {manifest && (
-            <Pressable
-              onPress={() => router.replace('/(tabs)')}
-              hitSlop={12}
-              style={styles.backLink}
-            >
-              <Text style={[styles.backLinkText, { color: t.accent }]}>
-                ← Back to {manifest.repo}
-              </Text>
-            </Pressable>
-          )}
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+            hitSlop={12}
+            style={styles.backLink}
+          >
+            <Text style={[styles.backLinkText, { color: t.accent }]}>
+              ← {manifest ? `Back to ${manifest.repo}` : 'Back'}
+            </Text>
+          </Pressable>
 
           <View style={styles.heroBlock}>
             <Text style={[styles.eyebrow, { color: t.fgDim }]}>Repository</Text>

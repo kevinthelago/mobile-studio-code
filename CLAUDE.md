@@ -179,12 +179,17 @@ Errors should be actionable, not technical.
 ## Key Data Flows
 
 ### Session stages
-`loading` → `repo` (no repo selected) → `ready` (app usable)
+`loading` → `ready` (app usable)
 
-Navigation is enforced by `StageGate` in `app/_layout.tsx`. There is no
-onboarding screen — credentials (`saveAuth`) are persisted via `storage.ts`
-but are not gated behind a stage. `agent.ts` / `github.ts` calls surface their
-own errors if a PAT or Anthropic key is missing.
+`StageGate` in `app/_layout.tsx` only holds a spinner until secrets + any saved
+manifest load; it does not gate navigation. The app boots into the tabs and
+lands on the **Run** tab (`unstable_settings.initialRouteName` in
+`app/(tabs)/_layout.tsx`). Repo selection is **not** a launch gate — the user
+opens the repo picker (`/repo`) on demand from the **Git** tab (its "Switch"
+action, or the "Pick a repo" button in the no-repo empty state). The repo
+picker also hosts GitHub PAT entry and a "Plan a project" entry into the
+planner (`/(planner)/planner`). There is no onboarding screen — credentials
+are persisted via `storage.ts` and surfaced errors if missing.
 
 ### Agent loop (per message send)
 1. User sends message via chat UI in `edit.tsx` (the main chat interface)

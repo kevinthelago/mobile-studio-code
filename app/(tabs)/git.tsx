@@ -12,6 +12,7 @@ import { getRemoteFile } from '../../src/lib/github';
 import { repoDir, readText } from '../../src/lib/fs';
 import { lineDiffStat, DiffStat } from '../../src/lib/diff';
 import { Surface } from '../../src/components/ui/Surface';
+import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { ClaudeAvatar } from '../../src/components/ui/ClaudeAvatar';
 
 type ChangeRow = { path: string; state: 'M' | 'A' };
@@ -163,8 +164,20 @@ export default function GitScreen() {
   if (!manifest) {
     return (
       <SafeAreaView style={styles.safe}>
-        <View style={styles.empty}>
-          <Text style={[styles.emptyTitle, { color: t.fgMuted }]}>No repo loaded</Text>
+        <View style={styles.emptyState}>
+          <Svg width={40} height={40} viewBox="0 0 18 18" fill="none">
+            <Circle cx={5} cy={4} r={2} stroke={t.fgMuted} strokeWidth={1.6} />
+            <Circle cx={5} cy={14} r={2} stroke={t.fgMuted} strokeWidth={1.6} />
+            <Circle cx={13} cy={9} r={2} stroke={t.fgMuted} strokeWidth={1.6} />
+            <Path d="M5 6v6M7 4h4a2 2 0 012 2v1" stroke={t.fgMuted} strokeWidth={1.6} />
+          </Svg>
+          <Text style={[styles.emptyTitle, { color: t.fg }]}>No repository</Text>
+          <Text style={[styles.emptySub, { color: t.fgMuted }]}>
+            Pick a GitHub repo to browse, edit, and commit it from your phone.
+          </Text>
+          <View style={styles.emptyBtn}>
+            <PrimaryButton label="Pick a repo" onPress={() => router.push('/repo')} />
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -402,7 +415,10 @@ const styles = StyleSheet.create({
   flex1: { flex: 1 },
   container: { flex: 1, paddingBottom: 110 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { fontSize: 14 },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36, gap: 10 },
+  emptyTitle: { fontSize: 18, fontWeight: '700' },
+  emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  emptyBtn: { alignSelf: 'stretch', marginTop: 8 },
 
   header: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 },
   eyebrow: {
