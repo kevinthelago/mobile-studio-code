@@ -31,6 +31,7 @@ type SessionValue = {
 
   // Auth + repo actions
   saveAuth: (pat: string, apiKey: string, ghUser: string) => Promise<void>;
+  saveGithubPat: (pat: string, ghUser: string) => Promise<void>;
   resetAuth: () => Promise<void>;
   selectRepo: (manifest: Manifest) => Promise<void>;
   clearRepo: () => Promise<void>;
@@ -240,6 +241,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setApiKey(newKey);
     setGhUser(newUser);
     setStage((s) => (s === 'ready' ? s : 'repo'));
+  }, []);
+
+  // Persist only the GitHub credential, leaving the LLM key untouched. Used by
+  // the repo picker now that onboarding (which collected both at once) is gone.
+  const saveGithubPat = useCallback(async (
+    newPat: string, newUser: string,
+  ) => {
+    await setSecret(KEYS.GITHUB_PAT, newPat);
+    await setSecret(KEYS.GITHUB_USER, newUser);
+    setPat(newPat);
+    setGhUser(newUser);
   }, []);
 
   const resetAuth = useCallback(async () => {
@@ -689,6 +701,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     modifiedCount,
 
     saveAuth,
+    saveGithubPat,
     resetAuth,
     selectRepo,
     clearRepo,
