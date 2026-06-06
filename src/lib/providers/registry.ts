@@ -98,5 +98,6 @@ export function defaultModelFor(id: LLMProviderId): string {
 
 /** Whether a concrete adapter exists for this provider yet. */
 export function isProviderImplemented(id: LLMProviderId): boolean {
-  return id === 'anthropic';
+  // Google (Gemini) lands in M1d; everything else is wired.
+  return id !== 'google';
 }

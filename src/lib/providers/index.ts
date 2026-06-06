@@ -1,6 +1,6 @@
 import { AnthropicProvider } from './anthropic';
+import { OpenAICompatibleProvider } from './openaiCompatible';
 import { LLMProvider, ProviderConfig } from './types';
-import { isProviderImplemented } from './registry';
 
 export * from './types';
 export * from './registry';
@@ -8,6 +8,9 @@ export * from './storage';
 export * from './canonical';
 export * from './openaiFormat';
 export { AnthropicProvider } from './anthropic';
+export { OpenAICompatibleProvider } from './openaiCompatible';
+
+const DEFAULT_OLLAMA_ENDPOINT = 'http://localhost:11434';
 
 /**
  * Build a provider from a resolved config. Anthropic is the only backend with a
@@ -19,10 +22,33 @@ export function createProvider(config: ProviderConfig): LLMProvider {
   switch (config.id) {
     case 'anthropic':
       return new AnthropicProvider(config.apiKey, config.model);
+    case 'openai':
+      return new OpenAICompatibleProvider({
+        id: 'openai',
+        model: config.model,
+        chatUrl: 'https://api.openai.com/v1/chat/completions',
+        apiKey: config.apiKey,
+      });
+    case 'xai':
+      return new OpenAICompatibleProvider({
+        id: 'xai',
+        model: config.model,
+        chatUrl: 'https://api.x.ai/v1/chat/completions',
+        apiKey: config.apiKey,
+      });
+    case 'local': {
+      const base = (config.endpoint || DEFAULT_OLLAMA_ENDPOINT).replace(/\/+$/, '');
+      return new OpenAICompatibleProvider({
+        id: 'local',
+        model: config.model,
+        chatUrl: `${base}/v1/chat/completions`,
+        // Ollama is keyless by default; pass a token through if one was set.
+        apiKey: config.apiKey || undefined,
+      });
+    }
+    case 'google':
+      throw new Error('The Google (Gemini) adapter lands in M1d.');
     default:
-      if (!isProviderImplemented(config.id)) {
-        throw new Error(`Provider "${config.id}" isn't supported yet.`);
-      }
-      throw new Error(`No adapter wired for provider "${config.id}".`);
+      throw new Error(`Unknown provider "${config.id}".`);
   }
 }

@@ -43,7 +43,7 @@ export type OpenAIChatBody = {
   tools?: { type: 'function'; function: { name: string; description: string; parameters: object } }[];
 };
 
-type OpenAIChatResponse = {
+export type OpenAIChatResponse = {
   id?: string;
   choices?: {
     message?: { content?: string | null; tool_calls?: OpenAIToolCall[] };
