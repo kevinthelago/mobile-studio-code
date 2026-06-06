@@ -158,6 +158,9 @@ export default function FilesScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.emptyState}>
           <Text style={[styles.emptyTitle, { color: t.fgMuted }]}>No repo loaded</Text>
+          <Text style={[styles.emptyHint, { color: t.fgDim }]}>
+            Open the Git tab to pick a repository.
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -322,8 +325,9 @@ export default function FilesScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: 'transparent' },
   container: { flex: 1 },
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 32 },
   emptyTitle: { fontSize: 14 },
+  emptyHint: { fontSize: 12.5, textAlign: 'center' },
 
   header: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 },
   eyebrow: {
