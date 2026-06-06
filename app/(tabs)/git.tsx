@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
@@ -8,6 +8,9 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/theme';
 import { useSession } from '../../src/lib/session';
+import { getRemoteFile } from '../../src/lib/github';
+import { repoDir, readText } from '../../src/lib/fs';
+import { lineDiffStat, DiffStat } from '../../src/lib/diff';
 import { Surface } from '../../src/components/ui/Surface';
 import { ClaudeAvatar } from '../../src/components/ui/ClaudeAvatar';
 
@@ -19,12 +22,14 @@ export default function GitScreen() {
   const t = useTheme();
   const router = useRouter();
   const {
-    manifest, modifiedCount, openFile, activeTask,
+    pat, manifest, modifiedCount, openFile, activeTask,
     pull, push, pulling, pushing, draftCommitMessage,
   } = useSession();
   const [commitMsg, setCommitMsg] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [issueRefMode, setIssueRefMode] = useState<IssueRefMode>('refs');
+  // Per-file diff stats (+adds/−dels), computed lazily against the remote blob.
+  const [stats, setStats] = useState<Record<string, DiffStat>>({});
 
   const linkedIssue = activeTask?.linkedIssue ?? null;
 
@@ -46,6 +51,32 @@ export default function GitScreen() {
       }))
       .sort((a, b) => a.path.localeCompare(b.path));
   }, [manifest]);
+
+  // Compute +adds/−dels per changed file: diff the local working copy against
+  // the remote blob (added files have no remote, so they're all adds). Runs
+  // sequentially, capped, and degrades silently on any fetch/read failure.
+  useEffect(() => {
+    if (!manifest || !pat) return;
+    let cancelled = false;
+    const { repo, branch } = manifest;
+    (async () => {
+      for (const c of changes.slice(0, 25)) {
+        if (cancelled) return;
+        try {
+          const after = await readText(repoDir(repo) + c.path);
+          const before = c.state === 'M'
+            ? (await getRemoteFile(pat, repo, branch, c.path)).content
+            : '';
+          if (cancelled) return;
+          const st = lineDiffStat(before, after);
+          setStats((s) => ({ ...s, [c.path]: st }));
+        } catch {
+          // unreadable / binary / deleted upstream — leave stats absent
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [manifest, pat, changes]);
 
   async function onPull() {
     try {
@@ -143,6 +174,7 @@ export default function GitScreen() {
     const isAdd = row.state === 'A';
     const badgeBg = isAdd ? 'rgba(126,226,196,0.18)' : 'rgba(255,212,121,0.18)';
     const badgeFg = isAdd ? t.code.ty : t.code.nm;
+    const st = stats[row.path];
     return (
       <TouchableOpacity
         activeOpacity={0.7}
@@ -163,6 +195,20 @@ export default function GitScreen() {
         >
           {row.path}
         </Text>
+        {st && (st.adds > 0 || st.dels > 0) && (
+          <View style={styles.statRow}>
+            {st.adds > 0 && (
+              <Text style={[styles.statText, { color: t.code.ty, fontFamily: t.fontMono }]}>
+                +{st.adds}
+              </Text>
+            )}
+            {st.dels > 0 && (
+              <Text style={[styles.statText, { color: t.code.pa, fontFamily: t.fontMono }]}>
+                −{st.dels}
+              </Text>
+            )}
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
@@ -397,6 +443,8 @@ const styles = StyleSheet.create({
   },
   stateText: { fontSize: 10, fontWeight: '700' },
   filePath: { flex: 1, fontSize: 13 },
+  statRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  statText: { fontSize: 11 },
 
   commitWrap: { marginHorizontal: 12, marginTop: 10, marginBottom: 110 },
   commitCard: { padding: 12 },
