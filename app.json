@@ -21,9 +21,14 @@
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Choose screenshots or images to send to Claude.",
         "NSCameraUsageDescription": "Scan a QR code to pair with base-studio-code.",
+        "NSLocalNetworkUsageDescription": "Connect to base-studio-code running on your local network to mirror its console sessions.",
         "ITSAppUsesNonExemptEncryption": false,
         "UIUserInterfaceStyle": "Dark",
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": ["remote-notification"],
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        }
       },
       "entitlements": {
         "aps-environment": "development"
