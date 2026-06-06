@@ -11,6 +11,7 @@ import { useTunnel } from '../../src/lib/TunnelContext';
 import { PaneState, PaneStatus, TunnelConnectionState } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
+import { ProvidersScreen } from '../../src/components/ProvidersScreen';
 import { stripAnsi, lastLines } from '../../src/lib/ansi';
 
 const TAB_BAR_HEIGHT = 60;
@@ -62,7 +63,7 @@ function ConnectingView({ state }: { state: TunnelConnectionState }) {
   );
 }
 
-function PairingView() {
+function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { connect, connectionState } = useTunnel();
@@ -227,6 +228,29 @@ function PairingView() {
           </View>
         )}
       </Surface>
+
+      {/* Run standalone — pick a cloud or local model instead of the desktop */}
+      <View style={styles.standaloneDivider}>
+        <View style={[styles.dividerLine, { backgroundColor: t.borderColor }]} />
+        <Text style={[styles.dividerLabel, { color: t.fgDim }]}>OR RUN STANDALONE</Text>
+        <View style={[styles.dividerLine, { backgroundColor: t.borderColor }]} />
+      </View>
+      <Pressable onPress={onConnectModel}>
+        <Surface style={styles.standaloneCard} radius={16}>
+          <View style={[styles.standaloneIcon, { backgroundColor: t.glass ? 'rgba(192,132,252,0.18)' : 'rgba(192,132,252,0.12)' }]}>
+            <Svg width={17} height={17} viewBox="0 0 18 18" fill="none">
+              <Path d="M5 13a3.2 3.2 0 010-6.4 4.3 4.3 0 018.2 1A3.1 3.1 0 0114.5 13H5z" stroke="#c084fc" strokeWidth={1.5} />
+            </Svg>
+          </View>
+          <View style={styles.standaloneText}>
+            <Text style={[styles.standaloneTitle, { color: t.fg }]}>Connect a cloud model</Text>
+            <Text style={[styles.standaloneSub, { color: t.fgMuted }]}>Anthropic · OpenAI · Google · local</Text>
+          </View>
+          <Svg width={11} height={11} viewBox="0 0 11 11" fill="none">
+            <Path d="M3.5 2l4 3.5-4 3.5" stroke={t.fgMuted} strokeWidth={1.6} strokeLinecap="round" />
+          </Svg>
+        </Surface>
+      </Pressable>
     </View>
   );
 }
@@ -445,9 +469,13 @@ function TerminalView({ paneId }: { paneId: string }) {
 
 export default function SessionsScreen() {
   const { connectionState, activePaneId } = useTunnel();
+  const [showProviders, setShowProviders] = useState(false);
 
   if (connectionState === 'disconnected' || connectionState === 'error') {
-    return <PairingView />;
+    if (showProviders) {
+      return <ProvidersScreen onBack={() => setShowProviders(false)} />;
+    }
+    return <PairingView onConnectModel={() => setShowProviders(true)} />;
   }
   if (connectionState === 'connecting' || connectionState === 'authenticating') {
     return <ConnectingView state={connectionState} />;
@@ -501,6 +529,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 8,
   },
   manualConnectText: { fontSize: 13.5, fontWeight: '600' },
+
+  // Run-standalone entry
+  standaloneDivider: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginTop: 18, marginBottom: 12, paddingHorizontal: 2,
+  },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  dividerLabel: { fontSize: 10.5, letterSpacing: 1.4, fontWeight: '600' },
+  standaloneCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 11, padding: 14,
+  },
+  standaloneIcon: {
+    width: 34, height: 34, borderRadius: 9,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  standaloneText: { flex: 1, minWidth: 0 },
+  standaloneTitle: { fontSize: 14, fontWeight: '600' },
+  standaloneSub: { fontSize: 11.5, marginTop: 1 },
 
   // Camera
   cameraWrap: { flex: 1, backgroundColor: '#000' },
