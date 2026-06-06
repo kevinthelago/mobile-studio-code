@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mobile Studio Code — design</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; font-family: -apple-system, system-ui; }
+  .app-frame {
+    width: 390px; height: 844px; border-radius: 48px; overflow: hidden;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.12);
+    position: relative;
+  }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="code-content.jsx"></script>
+<script type="text/babel" src="session-data.jsx"></script>
+<script type="text/babel" src="themes.jsx"></script>
+<script type="text/babel" src="shell.jsx"></script>
+<script type="text/babel" src="page-files.jsx"></script>
+<script type="text/babel" src="page-find.jsx"></script>
+<script type="text/babel" src="page-edit.jsx"></script>
+<script type="text/babel" src="page-terminal.jsx"></script>
+<script type="text/babel" src="page-git.jsx"></script>
+<script type="text/babel" src="page-repo.jsx"></script>
+
+<script type="text/babel">
+  const PAGES = { files: FilesPage, find: FindPage, edit: EditPage, terminal: RunPage, git: GitPage };
+
+  // A live phone frame pinned to one tab. Optionally shows the global Session Strip.
+  function TabFrame({ page: defaultPage, themeId, withStrip = false, runState, editEmpty }) {
+    const [page, setPage] = React.useState(defaultPage);
+    const [focusedId, setFocusedId] = React.useState('s1');
+    const PageComp = PAGES[page];
+    const sessions = withStrip ? SESSIONS : null;
+    const onFocusSession = (id) => { setFocusedId(id); setPage('terminal'); };
+    return (
+      <ThemeCtx.Provider value={THEMES[themeId]}>
+        <Shell page={page} onPage={setPage} sessions={sessions} focusedId={focusedId} onFocusSession={onFocusSession}>
+          {page === 'terminal'
+            ? <RunPage state={runState || 'pairing'} focusedId={focusedId} onFocusSession={setFocusedId} />
+            : page === 'edit'
+              ? <EditPage empty={editEmpty} />
+              : <PageComp />}
+        </Shell>
+      </ThemeCtx.Provider>
+    );
+  }
+
+  // Repo picker as a slide-up sheet (boot screen / Git ▸ Switch).
+  function RepoFrame({ themeId, onTheme }) {
+    return (
+      <ThemeCtx.Provider value={THEMES[themeId]}>
+        <Shell page="git" onPage={() => {}}>
+          <GitPage />
+          <RepoPicker themeId={themeId} onTheme={onTheme} />
+        </Shell>
+      </ThemeCtx.Provider>
+    );
+  }
+
+  function Root() {
+    const [themeId, setThemeId] = React.useState('glass');
+
+    return (
+      <DesignCanvas>
+        {/* PRIORITY — tunneling */}
+        <DCSection id="tunnel" title="Tunneling — Run tab" subtitle="Pair with the base-studio-code desktop to mirror its Claude sessions — or skip the desktop and run standalone on a cloud/local model.">
+          <DCArtboard id="pair" label="Run · Pair" width={390} height={844} style={{ background: 'transparent', borderRadius: 48 }}>
+            <TabFrame page="terminal" themeId={themeId} runState="pairing" />
+          </DCArtboard>
+          <DCArtboard id="scan" label="Run · Scan QR" width={390} height={844} style={{ background: 'transparent', borderRadius: 48 }}>
+            <TabFrame page="terminal" themeId={themeId} runState="scan" />
+          </DCArtboard>
+          <DCArtboard id="providers" label="Run · Cloud models" width={390} height={844} style={{ background: 'transparent', borderRadius: 48 }}>
+            <TabFrame page="terminal" themeId={themeId} runState="providers" />
+          </DCArtboard>
+          <DCArtboard id="connecting" label="Run · Connecting" width={390} height={844} style={{ background: 'transparent', borderRadius: 48 }}>
+            <TabFrame page="terminal" themeId={themeId} runState="connecting" />
+          </DCArtboard>
+          <DCArtboard id="grid" label="Run · Session grid" width={390} height={844} style={{ background: 'transparent', borderRadius: 48 }}>
+            <TabFrame page="terminal" themeId={themeId} runState="grid" withStrip />
+          </DCArtboard>
+          <DCArtboard id="term" label="Run · Terminal view" width={390} height={844} style={{ background: 'transparent', borderRadius: 48 }}>
+            <TabFrame page="terminal" themeId={themeId} runState="terminal" withStrip />
+          </DCArtboard>
+        </DCSection>
+
+        {/* Core tabs, with the global Session Strip active to show it's cross-tab */}
+        <DCSection id="tabs" title="Core tabs" subtitle="Files · Find · Edit · Git — shown with the global Session Strip (tap a chip to jump to that Claude session).">
+          <DCArtboard id="files" label="Files" width={390} height={844} style={{ background: 'transparent', borderRadius: 48 }}>
+            <TabFrame page="files" themeId={themeId} withStrip />
+          </DCArtboard>
+          <DCArtboard id="find" label="Find" width={390} height={844} style={{ background: 'transparent', borderRadius: 48 }}>
+            <TabFrame page="find" themeId={themeId} withStrip />
+          </DCArtboard>
+          <DCArtboard id="edit" label="Edit · Claude chat" width={390} height={844} style={{ background: 'transparent', borderRadius: 48 }}>
+            <TabFrame page="edit" themeId={themeId} withStrip />
+          </DCArtboard>
+          <DCArtboard id="git" label="Git" width={390} height={844} style={{ background: 'transparent', borderRadius: 48 }}>
+            <TabFrame page="git" themeId={themeId} withStrip />
+          </DCArtboard>
+        </DCSection>
+
+        {/* Flows & states */}
+        <DCSection id="states" title="Flows & states" subtitle="Boot/Switch repo picker, and the Edit empty state.">
+          <DCArtboard id="repo" label="Repo picker" width={390} height={844} style={{ background: 'transparent', borderRadius: 48 }}>
+            <RepoFrame themeId={themeId} onTheme={setThemeId} />
+          </DCArtboard>
+          <DCArtboard id="edit-empty" label="Edit · empty" width={390} height={844} style={{ background: 'transparent', borderRadius: 48 }}>
+            <TabFrame page="edit" themeId={themeId} editEmpty />
+          </DCArtboard>
+        </DCSection>
+
+        <ThemeFloating themeId={themeId} onTheme={setThemeId} />
+      </DesignCanvas>
+    );
+  }
+
+  function ThemeFloating({ themeId, onTheme }) {
+    return ReactDOM.createPortal(
+      <div style={{
+        position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
+        zIndex: 200, padding: '10px 14px',
+        background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(20px)',
+        borderRadius: 18, boxShadow: '0 6px 24px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.06)',
+        display: 'flex', alignItems: 'center', gap: 12, fontFamily: '-apple-system, system-ui',
+      }}>
+        <span style={{ fontSize: 11, color: '#7a736b', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 600 }}>Theme</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {Object.entries(THEMES).map(([id, t]) => (
+            <button key={id} onClick={() => onTheme(id)} style={{
+              padding: '6px 10px', borderRadius: 12, cursor: 'pointer',
+              border: '1px solid ' + (id === themeId ? '#29261b' : 'rgba(0,0,0,0.08)'),
+              background: id === themeId ? '#29261b' : '#fff',
+              color: id === themeId ? '#fff' : '#29261b',
+              font: '500 12px/1 -apple-system, system-ui',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <span style={{ width: 10, height: 10, borderRadius: 5, background: t.bg, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.2)' }} />
+              <span style={{ width: 10, height: 10, borderRadius: 5, background: t.accent }} />
+              {t.name}
+            </button>
+          ))}
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+</script>
+</body>
+</html>
