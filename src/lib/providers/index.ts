@@ -2,6 +2,9 @@ import { AnthropicProvider } from './anthropic';
 import { OpenAICompatibleProvider } from './openaiCompatible';
 import { GoogleProvider } from './google';
 import { LLMProvider, ProviderConfig } from './types';
+import {
+  getSelectedProvider, getSelectedModel, getProviderKey, getLocalEndpoint,
+} from './storage';
 
 export * from './types';
 export * from './registry';
@@ -54,4 +57,23 @@ export function createProvider(config: ProviderConfig): LLMProvider {
     default:
       throw new Error(`Unknown provider "${config.id}".`);
   }
+}
+
+/**
+ * Resolve the user's currently-selected provider into a ready `LLMProvider`,
+ * reading the selection + credential from storage. Returns null when the
+ * selected provider has no usable credential (key, or endpoint for local), so
+ * callers can prompt the user to configure one. Defaults to Anthropic.
+ */
+export async function resolveActiveProvider(): Promise<LLMProvider | null> {
+  const id = await getSelectedProvider();
+  const model = await getSelectedModel();
+  if (id === 'local') {
+    const endpoint = (await getLocalEndpoint()) ?? undefined;
+    if (!endpoint) return null;
+    return createProvider({ id, apiKey: '', model, endpoint });
+  }
+  const apiKey = await getProviderKey(id);
+  if (!apiKey) return null;
+  return createProvider({ id, apiKey, model });
 }
