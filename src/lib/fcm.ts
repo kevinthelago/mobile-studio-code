@@ -3,8 +3,6 @@ import {
   getMessaging,
   getToken,
   requestPermission,
-  registerDeviceForRemoteMessages,
-  isDeviceRegisteredForRemoteMessages,
   onTokenRefresh,
   onMessage,
   getInitialNotification,
@@ -35,11 +33,11 @@ export async function initFcm(): Promise<string | null> {
       status === AuthorizationStatus.AUTHORIZED ||
       status === AuthorizationStatus.PROVISIONAL;
     if (!granted) return null;
-    // iOS must register with APNs before a token can be fetched; calling
-    // getToken first throws `messaging/unregistered`.
-    if (!isDeviceRegisteredForRemoteMessages(m)) {
-      await registerDeviceForRemoteMessages(m);
-    }
+    // Auto-registration for remote messages is enabled by default, so we don't
+    // call registerDeviceForRemoteMessages() (it warns that it's unnecessary).
+    // getToken throws if the build lacks the `aps-environment` entitlement
+    // (e.g. a dev build without push configured) — caught below so push stays
+    // optional.
     return await getToken(m);
   } catch (e) {
     console.warn('FCM init failed (continuing without push):', e);
