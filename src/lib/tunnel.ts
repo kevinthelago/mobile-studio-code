@@ -1,5 +1,4 @@
-import { decode as b64decode } from '@stablelib/base64';
-import { encode as utf8Encode, decode as utf8Decode } from '@stablelib/utf8';
+import { utf8ToBytes } from '@noble/hashes/utils.js';
 import {
   PaneState, PaneStreamingState, PairingPayload, TunnelClientMessage,
   TunnelConnectionState, TunnelServerMessage,
@@ -19,6 +18,43 @@ const OUTPUT_BUFFER_MAX = 50_000;
 function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
   return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
 }
+
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+/** Decode standard (padded, +/) base64 → bytes. hostPubKey arrives this way. */
+function b64decode(s: string): Uint8Array {
+  const clean = s.replace(/[^A-Za-z0-9+/]/g, '');
+  const out = new Uint8Array((clean.length * 6) >> 3);
+  let bits = 0, val = 0, oi = 0;
+  for (const ch of clean) {
+    val = (val << 6) | B64.indexOf(ch);
+    bits += 6;
+    if (bits >= 8) { bits -= 8; out[oi++] = (val >> bits) & 0xff; }
+  }
+  return out.subarray(0, oi);
+}
+
+/** Decode a UTF-8 byte array to a JS string (handles multi-byte sequences). */
+function utf8Decode(bytes: Uint8Array): string {
+  let out = '';
+  let i = 0;
+  while (i < bytes.length) {
+    const b = bytes[i++];
+    if (b < 0x80) {
+      out += String.fromCharCode(b);
+    } else if (b < 0xe0) {
+      out += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i++] & 0x3f));
+    } else if (b < 0xf0) {
+      out += String.fromCharCode(((b & 0x0f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f));
+    } else {
+      const cp = ((b & 0x07) << 18) | ((bytes[i++] & 0x3f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f);
+      const c = cp - 0x10000;
+      out += String.fromCharCode(0xd800 + (c >> 10), 0xdc00 + (c & 0x3ff));
+    }
+  }
+  return out;
+}
+
+const utf8Encode = utf8ToBytes;
 
 export class TunnelClient {
   private ws: WebSocket | null = null;

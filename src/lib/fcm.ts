@@ -34,14 +34,23 @@ export async function initFcm(): Promise<string | null> {
       status === AuthorizationStatus.AUTHORIZED ||
       status === AuthorizationStatus.PROVISIONAL;
     if (!granted) return null;
-    // Auto-registration is disabled in firebase.json, so register explicitly
-    // before fetching a token (getToken throws `messaging/unregistered`
-    // otherwise). Still throws without the `aps-environment` entitlement — all
-    // caught below so push stays optional.
-    await registerDeviceForRemoteMessages(m);
-    return await getToken(m);
+    try {
+      return await getToken(m);
+    } catch (e) {
+      // Only register if the device isn't registered yet. This avoids the
+      // "registerDeviceForRemoteMessages is not required" warning that fires
+      // when auto-registration is enabled, while still handling the case where
+      // it's disabled (getToken throws `messaging/unregistered`).
+      if (String((e as Error)?.message ?? e).includes('unregistered')) {
+        await registerDeviceForRemoteMessages(m);
+        return await getToken(m);
+      }
+      throw e;
+    }
   } catch (e) {
-    console.warn('FCM init failed (continuing without push):', e);
+    // Push is optional: a build without the aps-environment entitlement (e.g. a
+    // dev build with push not yet provisioned) fails here — degrade quietly.
+    console.warn('Push unavailable (continuing without it):', (e as Error)?.message ?? e);
     return null;
   }
 }

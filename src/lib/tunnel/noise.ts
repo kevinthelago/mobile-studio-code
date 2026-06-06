@@ -1,12 +1,12 @@
-import * as x25519 from '@stablelib/x25519';
-import { ChaCha20Poly1305 } from '@stablelib/chacha20poly1305';
-import { BLAKE2s } from '@stablelib/blake2s';
-import { hmac } from '@stablelib/hmac';
-import { encode as utf8Encode } from '@stablelib/utf8';
+import { x25519 } from '@noble/curves/ed25519.js';
+import { chacha20poly1305 } from '@noble/ciphers/chacha.js';
+import { blake2s } from '@noble/hashes/blake2.js';
+import { hmac } from '@noble/hashes/hmac.js';
+import { utf8ToBytes } from '@noble/hashes/utils.js';
 
 // Noise_IK_25519_ChaChaPoly_BLAKE2s — hand-written to match base-studio-code's
 // tunnel. The mobile is the IK *initiator*; it pins the desktop's static public
-// key (from the pairing QR's hostPubKey). Pure JS via @stablelib so it runs in
+// key (from the pairing QR's hostPubKey). Pure JS via @noble so it runs in
 // Expo-managed RN with no native crypto module. Both roles are implemented so
 // the handshake can be loopback-tested.
 
@@ -18,17 +18,13 @@ const TAGLEN = 16;
 
 export type KeyPair = { publicKey: Uint8Array; secretKey: Uint8Array };
 
-// CSPRNG for @stablelib key generation. expo-crypto is required lazily (it's a
-// native module that drags in react-native) so off-device tests can override
-// the RNG before the first call without loading it.
+// CSPRNG for key generation. expo-crypto is required lazily (it's a native
+// module that drags in react-native) so off-device tests can override the RNG
+// before the first call without loading it.
 let randomBytesFn: (length: number) => Uint8Array = (length) => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const Crypto = require('expo-crypto') as { getRandomBytes(n: number): Uint8Array };
   return Crypto.getRandomBytes(length);
-};
-const prng = {
-  isAvailable: true,
-  randomBytes: (length: number) => randomBytesFn(length),
 };
 
 /** Test-only: swap the CSPRNG (e.g. for Node's crypto under tsx). */
@@ -37,17 +33,12 @@ export function __setRandomBytesForTest(fn: (n: number) => Uint8Array) {
 }
 
 function generateKeyPair(): KeyPair {
-  return x25519.generateKeyPair(prng);
+  const secretKey = randomBytesFn(32);
+  return { secretKey, publicKey: x25519.getPublicKey(secretKey) };
 }
 
 function dh(local: KeyPair, remotePub: Uint8Array): Uint8Array {
-  return x25519.sharedKey(local.secretKey, remotePub);
-}
-
-function blake2s(data: Uint8Array): Uint8Array {
-  const h = new BLAKE2s();
-  h.update(data);
-  return h.digest();
+  return x25519.getSharedSecret(local.secretKey, remotePub);
 }
 
 function concat(...arrs: Uint8Array[]): Uint8Array {
@@ -58,13 +49,13 @@ function concat(...arrs: Uint8Array[]): Uint8Array {
   return out;
 }
 
-// Noise HKDF (RFC-style, HMAC-BLAKE2s), returning `numOutputs` 32-byte values.
+// Noise HKDF (HMAC-BLAKE2s), returning `numOutputs` 32-byte values.
 function hkdf(ck: Uint8Array, ikm: Uint8Array, numOutputs: 2 | 3): Uint8Array[] {
-  const tempKey = hmac(BLAKE2s, ck, ikm);
-  const o1 = hmac(BLAKE2s, tempKey, Uint8Array.of(0x01));
-  const o2 = hmac(BLAKE2s, tempKey, concat(o1, Uint8Array.of(0x02)));
+  const tempKey = hmac(blake2s, ck, ikm);
+  const o1 = hmac(blake2s, tempKey, Uint8Array.of(0x01));
+  const o2 = hmac(blake2s, tempKey, concat(o1, Uint8Array.of(0x02)));
   if (numOutputs === 2) return [o1, o2];
-  const o3 = hmac(BLAKE2s, tempKey, concat(o2, Uint8Array.of(0x03)));
+  const o3 = hmac(blake2s, tempKey, concat(o2, Uint8Array.of(0x03)));
   return [o1, o2, o3];
 }
 
@@ -78,28 +69,26 @@ function nonceBytes(n: number): Uint8Array {
 
 export class CipherState {
   private k: Uint8Array | null = null;
-  private aead: ChaCha20Poly1305 | null = null;
   private n = 0;
 
   initializeKey(k: Uint8Array | null) {
     this.k = k;
-    this.aead = k ? new ChaCha20Poly1305(k) : null;
     this.n = 0;
   }
 
   hasKey() { return this.k !== null; }
 
   encryptWithAd(ad: Uint8Array, plaintext: Uint8Array): Uint8Array {
-    if (!this.aead) return plaintext;
-    const ct = this.aead.seal(nonceBytes(this.n), plaintext, ad);
+    if (!this.k) return plaintext;
+    const ct = chacha20poly1305(this.k, nonceBytes(this.n), ad).encrypt(plaintext);
     this.n += 1;
     return ct;
   }
 
   decryptWithAd(ad: Uint8Array, ciphertext: Uint8Array): Uint8Array {
-    if (!this.aead) return ciphertext;
-    const pt = this.aead.open(nonceBytes(this.n), ciphertext, ad);
-    if (!pt) throw new Error('Noise: AEAD decryption failed');
+    if (!this.k) return ciphertext;
+    // @noble throws on a bad auth tag.
+    const pt = chacha20poly1305(this.k, nonceBytes(this.n), ad).decrypt(ciphertext);
     this.n += 1;
     return pt;
   }
@@ -111,7 +100,7 @@ class SymmetricState {
   cs = new CipherState();
 
   constructor(protocolName: string) {
-    const pn = utf8Encode(protocolName);
+    const pn = utf8ToBytes(protocolName);
     if (pn.length <= HASHLEN) {
       this.h = new Uint8Array(HASHLEN);
       this.h.set(pn);
@@ -184,12 +173,12 @@ export class HandshakeState {
     this.ss.mixHash(this.e.publicKey);
 
     if (this.initiator) {
-      this.ss.mixKey(dh(this.e, this.rs!));            // es
-      parts.push(this.ss.encryptAndHash(this.s.publicKey)); // s
-      this.ss.mixKey(dh(this.s, this.rs!));            // ss
+      this.ss.mixKey(dh(this.e, this.rs!));                  // es
+      parts.push(this.ss.encryptAndHash(this.s.publicKey));  // s
+      this.ss.mixKey(dh(this.s, this.rs!));                  // ss
     } else {
-      this.ss.mixKey(dh(this.e, this.re!));            // ee
-      this.ss.mixKey(dh(this.e, this.rs!));            // se (rs here = initiator static)
+      this.ss.mixKey(dh(this.e, this.re!));                  // ee
+      this.ss.mixKey(dh(this.e, this.rs!));                  // se (rs = initiator static)
     }
 
     parts.push(this.ss.encryptAndHash(payload));
@@ -203,13 +192,13 @@ export class HandshakeState {
     this.ss.mixHash(this.re);
 
     if (this.initiator) {
-      this.ss.mixKey(dh(this.e!, this.re));            // ee
-      this.ss.mixKey(dh(this.s, this.re));             // se
+      this.ss.mixKey(dh(this.e!, this.re));                 // ee
+      this.ss.mixKey(dh(this.s, this.re));                  // se
     } else {
-      this.ss.mixKey(dh(this.s, this.re));             // es
+      this.ss.mixKey(dh(this.s, this.re));                  // es
       const encStatic = message.slice(i, i + DHLEN + TAGLEN); i += DHLEN + TAGLEN;
-      this.rs = this.ss.decryptAndHash(encStatic);     // s
-      this.ss.mixKey(dh(this.s, this.rs));             // ss
+      this.rs = this.ss.decryptAndHash(encStatic);          // s
+      this.ss.mixKey(dh(this.s, this.rs));                  // ss
     }
 
     return this.ss.decryptAndHash(message.slice(i));
