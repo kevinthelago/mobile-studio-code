@@ -96,8 +96,7 @@ export function defaultModelFor(id: LLMProviderId): string {
   return (p.models.find((m) => m.recommended) ?? p.models[0])?.id ?? '';
 }
 
-/** Whether a concrete adapter exists for this provider yet. */
-export function isProviderImplemented(id: LLMProviderId): boolean {
-  // Google (Gemini) lands in M1d; everything else is wired.
-  return id !== 'google';
+/** Whether a concrete adapter exists for this provider. All five are wired. */
+export function isProviderImplemented(_id: LLMProviderId): boolean {
+  return true;
 }

@@ -1,5 +1,6 @@
 import { AnthropicProvider } from './anthropic';
 import { OpenAICompatibleProvider } from './openaiCompatible';
+import { GoogleProvider } from './google';
 import { LLMProvider, ProviderConfig } from './types';
 
 export * from './types';
@@ -7,8 +8,10 @@ export * from './registry';
 export * from './storage';
 export * from './canonical';
 export * from './openaiFormat';
+export * from './googleFormat';
 export { AnthropicProvider } from './anthropic';
 export { OpenAICompatibleProvider } from './openaiCompatible';
+export { GoogleProvider } from './google';
 
 const DEFAULT_OLLAMA_ENDPOINT = 'http://localhost:11434';
 
@@ -47,7 +50,7 @@ export function createProvider(config: ProviderConfig): LLMProvider {
       });
     }
     case 'google':
-      throw new Error('The Google (Gemini) adapter lands in M1d.');
+      return new GoogleProvider(config.apiKey, config.model);
     default:
       throw new Error(`Unknown provider "${config.id}".`);
   }
