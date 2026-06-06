@@ -186,6 +186,19 @@ export type TunnelConnectionState =
   | 'connected'
   | 'error';
 
+/**
+ * Pairing payload encoded in the desktop's QR (raw JSON, camelCase). Per
+ * base-studio-code: `relayUrl` is a wss:// base URL, `room` an opaque id,
+ * `hostPubKey` STANDARD base64 of the desktop's X25519 static key, and `psk`
+ * a 64-hex string used verbatim as the auth token.
+ */
+export type PairingPayload = {
+  relayUrl: string;
+  room: string;
+  hostPubKey: string;
+  psk: string;
+};
+
 export type ToolDefinition = {
   name: string;
   description: string;

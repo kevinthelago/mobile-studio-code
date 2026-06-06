@@ -1,7 +1,10 @@
+import { decode as b64decode } from '@stablelib/base64';
+import { encode as utf8Encode, decode as utf8Decode } from '@stablelib/utf8';
 import {
-  PaneState, PaneStreamingState, TunnelClientMessage,
+  PaneState, PaneStreamingState, PairingPayload, TunnelClientMessage,
   TunnelConnectionState, TunnelServerMessage,
 } from './types';
+import { NoiseSession } from './tunnel/noise';
 
 export type TunnelCallbacks = {
   onConnectionStateChange: (state: TunnelConnectionState) => void;
@@ -12,12 +15,18 @@ export type TunnelCallbacks = {
 /** Maximum PTY output chars buffered per pane before oldest chars are dropped */
 const OUTPUT_BUFFER_MAX = 50_000;
 
+/** Copy a Uint8Array's exact bytes into a standalone ArrayBuffer for ws.send. */
+function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
+  return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
+}
+
 export class TunnelClient {
   private ws: WebSocket | null = null;
-  private url = '';
-  private token = '';
+  private payload: PairingPayload | null = null;
   private fcmToken: string | undefined;
   private destroyed = false;
+  private noise: NoiseSession | null = null;
+  private handshakeDone = false;
 
   private connectionState: TunnelConnectionState = 'disconnected';
   private panes: Record<string, PaneState> = {};
@@ -28,11 +37,12 @@ export class TunnelClient {
     this.cb = callbacks;
   }
 
-  connect(url: string, token: string, fcmToken?: string) {
-    this.url = url;
-    this.token = token;
+  connect(payload: PairingPayload, fcmToken?: string) {
+    this.payload = payload;
     this.fcmToken = fcmToken;
     this.destroyed = false;
+    this.noise = null;
+    this.handshakeDone = false;
     this.openSocket();
   }
 
@@ -74,41 +84,75 @@ export class TunnelClient {
   getPanes() { return this.panes; }
 
   private openSocket() {
-    if (this.destroyed) return;
+    if (this.destroyed || !this.payload) return;
     this.setConnectionState('connecting');
+
+    const base = this.payload.relayUrl.replace(/\/+$/, '');
+    const url = `${base}/connect?room=${encodeURIComponent(this.payload.room)}&role=guest`;
+    let ws: WebSocket;
     try {
-      this.ws = new WebSocket(this.url);
+      ws = new WebSocket(url);
     } catch {
-      // No auto-reconnect — surface the failure and let the user retry.
       this.setConnectionState('error');
       return;
     }
+    ws.binaryType = 'arraybuffer';
+    this.ws = ws;
 
-    this.ws.onopen = () => {
-      if (this.destroyed) return;
+    ws.onopen = () => {
+      if (this.destroyed || !this.payload) return;
       this.setConnectionState('authenticating');
-      this.send({ type: 'auth', token: this.token, fcmToken: this.fcmToken });
-    };
-
-    this.ws.onmessage = (e) => {
-      if (this.destroyed) return;
       try {
-        const msg = JSON.parse(e.data as string) as TunnelServerMessage;
-        this.handleMessage(msg);
-      } catch { /* malformed frame — ignore */ }
+        // hostPubKey is standard (padded) base64 of the desktop's X25519 key.
+        const rs = b64decode(this.payload.hostPubKey);
+        this.noise = new NoiseSession(rs);
+        ws.send(toArrayBuffer(this.noise.startHandshake()));
+      } catch {
+        this.fail(ws);
+      }
     };
 
-    this.ws.onerror = () => {
+    ws.onmessage = (e) => {
+      if (this.destroyed || !this.noise) return;
+      // Relay control/errors (bad_role/host_taken/room_full) arrive as text.
+      if (typeof e.data === 'string') {
+        this.fail(ws);
+        return;
+      }
+      try {
+        const frame = new Uint8Array(e.data as ArrayBuffer);
+        if (!this.handshakeDone) {
+          // Desktop's handshake message 2 → enter transport, then send auth
+          // (the psk) as the first encrypted app frame.
+          this.noise.finishHandshake(frame);
+          this.handshakeDone = true;
+          this.send({ type: 'auth', token: this.payload!.psk, fcmToken: this.fcmToken });
+        } else {
+          const msg = JSON.parse(utf8Decode(this.noise.decrypt(frame))) as TunnelServerMessage;
+          this.handleMessage(msg);
+        }
+      } catch {
+        this.fail(ws);
+      }
+    };
+
+    ws.onerror = () => {
       // onclose always fires after onerror; state is set there.
     };
 
-    this.ws.onclose = () => {
+    ws.onclose = () => {
       if (this.destroyed) return;
       this.ws = null;
       // No auto-reconnect — drop to disconnected so the user can choose to
       // reconnect from the pairing screen.
       this.setConnectionState('disconnected');
     };
+  }
+
+  /** Surface a handshake/transport failure and close (no auto-retry). */
+  private fail(ws: WebSocket) {
+    this.setConnectionState('error');
+    try { ws.close(); } catch { /* already closing */ }
   }
 
   private handleMessage(msg: TunnelServerMessage) {
@@ -213,9 +257,10 @@ export class TunnelClient {
   }
 
   private send(msg: TunnelClientMessage) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(msg));
-    }
+    if (!this.noise || !this.handshakeDone) return;
+    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    const ct = this.noise.encrypt(utf8Encode(JSON.stringify(msg)));
+    this.ws.send(toArrayBuffer(ct));
   }
 
   private setConnectionState(state: TunnelConnectionState) {
