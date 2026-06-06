@@ -19,7 +19,7 @@ import { runAgent, AgentEvent } from './agent';
 import { pullRepo, pushModifiedFiles, PushFailure } from './github';
 import { pushError } from './errorBus';
 
-type Stage = 'loading' | 'setup' | 'repo' | 'ready';
+type Stage = 'loading' | 'repo' | 'ready';
 
 type SessionValue = {
   stage: Stage;
@@ -126,10 +126,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setApiKey(k);
       setGhUser(u);
 
-      if (!p || !k) {
-        setStage('setup');
-        return;
-      }
+      // Onboarding has been removed: credentials are no longer gated behind a
+      // setup stage. Boot straight into the repo picker (or the app if a repo
+      // is already cloned). Agent/GitHub calls will surface their own errors
+      // if credentials are absent.
       if (r) {
         const m = await readManifest(r);
         if (cancelled) return;
@@ -239,7 +239,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setPat(newPat);
     setApiKey(newKey);
     setGhUser(newUser);
-    setStage((s) => (s === 'setup' ? 'repo' : s));
+    setStage((s) => (s === 'ready' ? s : 'repo'));
   }, []);
 
   const resetAuth = useCallback(async () => {
@@ -255,7 +255,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setGhUser(null);
     setManifest(null);
     manifestRef.current = null;
-    setStage('setup');
+    setStage('repo');
   }, []);
 
   // ── Repo ─────────────────────────────────────────────────────────────────

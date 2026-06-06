@@ -90,7 +90,6 @@ Errors should be actionable, not technical.
 /
 ├── app/                        # Expo Router file-based routing
 │   ├── _layout.tsx             # Root layout: theme, session, nav guards, ambient Orbs background
-│   ├── setup.tsx               # Onboarding: GitHub PAT + Anthropic API key entry
 │   ├── repo.tsx                # Repo picker: search GitHub repos, clone (download) selected repo
 │   └── (tabs)/                 # Main app — bottom tab navigator
 │       ├── _layout.tsx         # Tab definitions + custom BottomTabBar
@@ -180,9 +179,12 @@ Errors should be actionable, not technical.
 ## Key Data Flows
 
 ### Session stages
-`loading` → `setup` (no credentials) → `repo` (no repo selected) → `ready` (app usable)
+`loading` → `repo` (no repo selected) → `ready` (app usable)
 
-Navigation is enforced by `StageGate` in `app/_layout.tsx`.
+Navigation is enforced by `StageGate` in `app/_layout.tsx`. There is no
+onboarding screen — credentials (`saveAuth`) are persisted via `storage.ts`
+but are not gated behind a stage. `agent.ts` / `github.ts` calls surface their
+own errors if a PAT or Anthropic key is missing.
 
 ### Agent loop (per message send)
 1. User sends message via chat UI in `edit.tsx` (the main chat interface)

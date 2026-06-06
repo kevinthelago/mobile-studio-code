@@ -18,11 +18,9 @@ function StageGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (stage === 'loading') return;
     const inTabs = segments[0] === '(tabs)';
-    const onSetup = segments[0] === 'setup';
     const onRepo = segments[0] === 'repo';
 
-    if (stage === 'setup' && !onSetup) router.replace('/setup');
-    else if (stage === 'repo' && !onRepo) router.replace('/repo');
+    if (stage === 'repo' && !onRepo) router.replace('/repo');
     else if (stage === 'ready' && !inTabs && !onRepo) router.replace('/(tabs)');
   }, [stage, segments, router]);
 
@@ -109,7 +107,6 @@ function InnerStack() {
       }}
     >
       <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="setup" options={{ animation: 'fade' }} />
       <Stack.Screen name="repo" options={{ animation: 'slide_from_bottom' }} />
     </Stack>
   );
