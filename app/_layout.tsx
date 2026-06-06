@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import { ThemeProvider as NavThemeProvider, DarkTheme } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { SessionProvider, useSession } from '../src/lib/session';
 import { TunnelProvider, useTunnel } from '../src/lib/TunnelContext';
@@ -9,6 +10,14 @@ import { Orbs } from '../src/components/ui/Orbs';
 import {
   initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
 } from '../src/lib/fcm';
+
+// Dark navigation theme with a transparent background so the ThemedFrame (theme
+// bg + ambient Orbs) shows through behind every screen rather than React
+// Navigation's default light-grey background.
+const NAV_THEME = {
+  ...DarkTheme,
+  colors: { ...DarkTheme.colors, background: 'transparent' },
+};
 
 // Holds the UI on a spinner until secrets + any saved manifest have loaded,
 // then renders the app. Navigation isn't gated — the app boots into the tabs
@@ -87,20 +96,25 @@ function FcmBootstrap() {
 
 function InnerStack() {
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        // Native screen bg comes from ThemedFrame; keep stack content
-        // transparent so the orbs/theme bg show through. (The native-stack
-        // accepts contentStyle even though Tabs doesn't.)
-        contentStyle: { backgroundColor: 'transparent' },
-        animation: 'fade',
-      }}
-    >
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="repo" options={{ animation: 'slide_from_bottom' }} />
-      <Stack.Screen name="(planner)" options={{ animation: 'slide_from_bottom' }} />
-    </Stack>
+    // Transparent navigation background so the dark ThemedFrame + Orbs show
+    // through behind every screen, instead of React Navigation's default
+    // light-grey theme background (the iOS "grey bleed-through"). This restores
+    // the intent of the old `screenBackgroundColor: t.bg` fix, which is no
+    // longer a valid native-stack option under React Navigation v7.
+    <NavThemeProvider value={NAV_THEME}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          // Keep screen content transparent so the orbs/theme bg show through.
+          contentStyle: { backgroundColor: 'transparent' },
+          animation: 'fade',
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="repo" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="(planner)" options={{ animation: 'slide_from_bottom' }} />
+      </Stack>
+    </NavThemeProvider>
   );
 }
 
