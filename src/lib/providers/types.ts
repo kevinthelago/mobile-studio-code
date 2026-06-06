@@ -11,6 +11,15 @@ export type LLMResponse = AnthropicResponse;
 
 export type LLMProviderId = 'anthropic' | 'openai' | 'google' | 'xai' | 'local';
 
+/** Everything needed to instantiate a concrete provider. */
+export type ProviderConfig = {
+  id: LLMProviderId;
+  apiKey: string;
+  model: string;
+  /** Base URL for the `local` provider (Ollama); ignored otherwise. */
+  endpoint?: string;
+};
+
 /**
  * The seam between the agent loop and a concrete model backend. A provider owns
  * its own credential and model selection; callers pass a provider instead of a

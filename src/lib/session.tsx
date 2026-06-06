@@ -16,7 +16,7 @@ import {
   bootstrapTasks, makeTask, patchIndexEntry, removeFromIndex, setActive,
 } from './tasks';
 import { runAgent, AgentEvent } from './agent';
-import { createProvider } from './providers';
+import { createProvider, getSelectedModel } from './providers';
 import { pullRepo, pushModifiedFiles, PushFailure } from './github';
 import { pushError } from './errorBus';
 
@@ -550,7 +550,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const m = manifestRef.current;
     const t = activeTaskRef.current;
     if (!m || !apiKey || !t) return;
-    const provider = createProvider(apiKey);
+    // Anthropic is the only wired backend today; the Providers screen (#59)
+    // will let the user switch the active provider. We still honour the stored
+    // model selection so Sonnet/Opus/Haiku already take effect.
+    const provider = createProvider({
+      id: 'anthropic',
+      apiKey,
+      model: await getSelectedModel(),
+    });
     cancelRef.current = { cancelled: false };
     setChatBusy(true);
     // Tracks whether we've already emitted a chat note for the current

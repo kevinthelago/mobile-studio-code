@@ -9,6 +9,11 @@ export const KEYS = {
   TUNNEL_URL: 'tunnel_url',
   TUNNEL_TOKEN: 'tunnel_token',
   FCM_TOKEN: 'fcm_token',
+  // Multi-provider (M1g). Per-provider API keys use the `provider_key_` prefix
+  // via providers/storage.ts; Anthropic keeps its legacy ANTHROPIC_KEY slot.
+  SELECTED_PROVIDER: 'selected_provider',
+  SELECTED_MODEL: 'selected_model',
+  LOCAL_ENDPOINT: 'local_endpoint',
 } as const;
 
 export async function getSecret(key: string): Promise<string | null> {

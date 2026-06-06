@@ -27,7 +27,7 @@ export class AnthropicProvider implements LLMProvider {
     tools: ToolDefinition[],
     systemPrompt: string,
   ): Promise<LLMResponse> {
-    return anthropicChat(this.apiKey, messages, tools, systemPrompt);
+    return anthropicChat(this.apiKey, messages, tools, systemPrompt, this.model);
   }
 
   complete(

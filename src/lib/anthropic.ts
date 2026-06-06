@@ -91,6 +91,7 @@ export async function anthropicChat(
   messages: ChatMessage[],
   tools: ToolDefinition[],
   systemPrompt: string,
+  model: string = ANTHROPIC_MODEL,
 ): Promise<AnthropicResponse> {
   // Three cache breakpoints: system prompt, last tool def (covers all tools),
   // and last assistant turn in history. After the first call within a 5-minute
@@ -110,7 +111,7 @@ export async function anthropicChat(
       'anthropic-version': ANTHROPIC_VERSION,
     },
     body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
+      model,
       // 8192: most responses fit in one call. Below 8K, long tool-using
       // turns hit max_tokens and the agent loop terminates mid-flight.
       max_tokens: 8192,

@@ -1,14 +1,26 @@
 import { AnthropicProvider } from './anthropic';
-import { LLMProvider } from './types';
+import { LLMProvider, ProviderConfig } from './types';
+import { isProviderImplemented } from './registry';
 
 export * from './types';
+export * from './registry';
+export * from './storage';
 export { AnthropicProvider } from './anthropic';
 
 /**
- * Build the active LLM provider. Anthropic is the only backend today (M1a);
- * OpenAI / Google / xAI / local adapters (M1c–M1f) plug in here, selected by
- * the stored provider id from the Providers screen (#59).
+ * Build a provider from a resolved config. Anthropic is the only backend with a
+ * concrete adapter today (M1a); OpenAI / Google / xAI / local (M1c–M1f) plug in
+ * here. Selecting an unimplemented provider throws rather than silently using
+ * the wrong backend.
  */
-export function createProvider(apiKey: string): LLMProvider {
-  return new AnthropicProvider(apiKey);
+export function createProvider(config: ProviderConfig): LLMProvider {
+  switch (config.id) {
+    case 'anthropic':
+      return new AnthropicProvider(config.apiKey, config.model);
+    default:
+      if (!isProviderImplemented(config.id)) {
+        throw new Error(`Provider "${config.id}" isn't supported yet.`);
+      }
+      throw new Error(`No adapter wired for provider "${config.id}".`);
+  }
 }
