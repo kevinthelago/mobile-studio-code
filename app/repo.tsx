@@ -7,19 +7,50 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../src/theme';
 import { useSession } from '../src/lib/session';
-import { downloadRepo } from '../src/lib/github';
+import { downloadRepo, verifyGithubPat } from '../src/lib/github';
 import { Surface } from '../src/components/ui/Surface';
 import { ThemePicker } from '../src/components/ui/ThemePicker';
+
+type PatStatus = 'idle' | 'testing' | 'ok' | 'error';
 
 export default function RepoScreen() {
   const t = useTheme();
   const router = useRouter();
-  const { pat, ghUser, manifest, selectRepo, resetAuth } = useSession();
+  const { pat, ghUser, manifest, selectRepo, resetAuth, saveGithubPat } = useSession();
   const [repo, setRepo] = useState(manifest?.repo ?? '');
   const [branch, setBranch] = useState(manifest?.branch ?? 'main');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string>();
   const [error, setError] = useState<string>();
+
+  // GitHub token entry. Onboarding used to collect this; with onboarding gone
+  // the repo picker is its home. Expanded by default until a token is stored.
+  const [ghPat, setGhPat] = useState('');
+  const [ghStatus, setGhStatus] = useState<PatStatus>('idle');
+  const [ghMsg, setGhMsg] = useState<string>();
+  const [showGhInput, setShowGhInput] = useState(!pat);
+
+  async function saveGh() {
+    const trimmed = ghPat.trim();
+    if (!trimmed) return;
+    setGhStatus('testing');
+    setGhMsg(undefined);
+    try {
+      const u = await verifyGithubPat(trimmed);
+      await saveGithubPat(trimmed, u.login);
+      setGhPat('');
+      setShowGhInput(false);
+      setGhStatus('ok');
+      const missing = ['repo'].filter((s) => !u.scopes.includes(s));
+      setGhMsg(
+        `Signed in as ${u.login}` +
+          (missing.length ? ` · missing scopes: ${missing.join(', ')}` : ''),
+      );
+    } catch (e) {
+      setGhStatus('error');
+      setGhMsg(e instanceof Error ? e.message : 'Verification failed');
+    }
+  }
 
   async function download() {
     if (!repo.includes('/')) {
@@ -27,7 +58,8 @@ export default function RepoScreen() {
       return;
     }
     if (!pat) {
-      setError('No GitHub token. Reset and reauthenticate.');
+      setError('Add a GitHub token above to download.');
+      setShowGhInput(true);
       return;
     }
     setBusy(true);
@@ -77,6 +109,74 @@ export default function RepoScreen() {
               Files are saved on this device. Push later to commit changes back.
             </Text>
           </View>
+
+          <Surface style={styles.card} radius={20}>
+            <View style={styles.cardHeader}>
+              <Text style={[styles.cardTitle, { color: t.fg }]}>GitHub</Text>
+              {pat && (
+                <Text style={[styles.verifiedTag, { color: t.code.ty, fontFamily: t.fontMono }]}>
+                  connected
+                </Text>
+              )}
+            </View>
+
+            {pat && !showGhInput ? (
+              <View style={styles.connectedRow}>
+                <Text style={[styles.connectedText, { color: t.fgMuted }]} numberOfLines={1}>
+                  {ghUser ? `Signed in as ${ghUser}.` : 'Token saved.'}
+                </Text>
+                <Pressable onPress={() => { setShowGhInput(true); setGhMsg(undefined); }} hitSlop={8}>
+                  <Text style={[styles.replaceLink, { color: t.accent }]}>Replace</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <Text style={[styles.helpText, { color: t.fgMuted }]}>
+                  Personal access token with the "repo" scope. Create one at
+                  github.com → Settings → Developer settings.
+                </Text>
+                <TextInput
+                  value={ghPat}
+                  onChangeText={setGhPat}
+                  placeholder="ghp_… or github_pat_…"
+                  placeholderTextColor={t.fgDim}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={[styles.input, {
+                    color: t.fg,
+                    fontFamily: t.fontMono,
+                    borderColor: t.borderColor,
+                    backgroundColor: 'rgba(0,0,0,0.25)',
+                  }]}
+                  editable={ghStatus !== 'testing'}
+                />
+                <Pressable
+                  style={[
+                    styles.primary,
+                    { backgroundColor: t.accent },
+                    (!ghPat.trim() || ghStatus === 'testing') && styles.disabled,
+                  ]}
+                  onPress={saveGh}
+                  disabled={!ghPat.trim() || ghStatus === 'testing'}
+                >
+                  {ghStatus === 'testing' ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.primaryText}>Save & Verify</Text>
+                  )}
+                </Pressable>
+              </>
+            )}
+            {ghMsg && (
+              <Text style={[
+                styles.statusMsg,
+                { color: ghStatus === 'error' ? '#ff8a8a' : t.code.ty },
+              ]}>
+                {ghMsg}
+              </Text>
+            )}
+          </Surface>
 
           <Surface style={styles.card} radius={20}>
             <Text style={[styles.label, { color: t.fgDim }]}>Repository</Text>
@@ -171,6 +271,18 @@ const styles = StyleSheet.create({
   title: { fontSize: 30, fontWeight: '700', letterSpacing: -0.6, marginBottom: 10 },
   subtitle: { fontSize: 14, lineHeight: 20 },
   card: { padding: 16, marginBottom: 14 },
+  cardHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 8,
+  },
+  cardTitle: { fontSize: 17, fontWeight: '600' },
+  verifiedTag: { fontSize: 11, letterSpacing: 0.6 },
+  connectedRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+  },
+  connectedText: { fontSize: 13, flexShrink: 1 },
+  replaceLink: { fontSize: 13, fontWeight: '600' },
+  helpText: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
   label: {
     fontSize: 11, letterSpacing: 1, textTransform: 'uppercase',
     fontWeight: '600', marginBottom: 6,
