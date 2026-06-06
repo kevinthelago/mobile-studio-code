@@ -9,8 +9,6 @@ export type TunnelCallbacks = {
   onUserRequest: (paneId: string, prompt: string) => void;
 };
 
-const RECONNECT_BASE_MS = 1000;
-const RECONNECT_MAX_MS = 30_000;
 /** Maximum PTY output chars buffered per pane before oldest chars are dropped */
 const OUTPUT_BUFFER_MAX = 50_000;
 
@@ -19,8 +17,6 @@ export class TunnelClient {
   private url = '';
   private token = '';
   private fcmToken: string | undefined;
-  private reconnectAttempt = 0;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
 
   private connectionState: TunnelConnectionState = 'disconnected';
@@ -37,13 +33,11 @@ export class TunnelClient {
     this.token = token;
     this.fcmToken = fcmToken;
     this.destroyed = false;
-    this.reconnectAttempt = 0;
     this.openSocket();
   }
 
   disconnect() {
     this.destroyed = true;
-    this.clearReconnectTimer();
     this.ws?.close();
     this.ws = null;
     this.setConnectionState('disconnected');
@@ -85,14 +79,14 @@ export class TunnelClient {
     try {
       this.ws = new WebSocket(this.url);
     } catch {
-      this.scheduleReconnect();
+      // No auto-reconnect — surface the failure and let the user retry.
+      this.setConnectionState('error');
       return;
     }
 
     this.ws.onopen = () => {
       if (this.destroyed) return;
       this.setConnectionState('authenticating');
-      this.reconnectAttempt = 0;
       this.send({ type: 'auth', token: this.token, fcmToken: this.fcmToken });
     };
 
@@ -105,14 +99,15 @@ export class TunnelClient {
     };
 
     this.ws.onerror = () => {
-      // onclose always fires after onerror; reconnect logic lives there
+      // onclose always fires after onerror; state is set there.
     };
 
     this.ws.onclose = () => {
       if (this.destroyed) return;
       this.ws = null;
+      // No auto-reconnect — drop to disconnected so the user can choose to
+      // reconnect from the pairing screen.
       this.setConnectionState('disconnected');
-      this.scheduleReconnect();
     };
   }
 
@@ -230,22 +225,5 @@ export class TunnelClient {
 
   private emitPanes() {
     this.cb.onPanesChange({ ...this.panes });
-  }
-
-  private scheduleReconnect() {
-    this.clearReconnectTimer();
-    const delay = Math.min(RECONNECT_BASE_MS * 2 ** this.reconnectAttempt, RECONNECT_MAX_MS);
-    this.reconnectAttempt += 1;
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.openSocket();
-    }, delay);
-  }
-
-  private clearReconnectTimer() {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
   }
 }

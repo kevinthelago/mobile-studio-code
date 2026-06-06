@@ -14,6 +14,8 @@ export type TunnelValue = {
 
   connect: (url: string, token: string) => Promise<void>;
   disconnect: () => void;
+  /** Last-used pairing, loaded from storage — offered as a one-tap reconnect. */
+  lastConnection: { url: string; token: string } | null;
   focusPane: (paneId: string) => void;
   sendInput: (paneId: string, data: string) => void;
   sendResize: (paneId: string, cols: number, rows: number) => void;
@@ -35,6 +37,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const [connectionState, setConnectionState] = useState<TunnelConnectionState>('disconnected');
   const [panes, setPanes] = useState<Record<string, PaneState>>({});
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
+  const [lastConnection, setLastConnection] = useState<{ url: string; token: string } | null>(null);
   const fcmTokenRef = useRef<string | undefined>(undefined);
   const clientRef = useRef<TunnelClient | null>(null);
 
@@ -50,7 +53,9 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     const client = new TunnelClient(callbacks);
     clientRef.current = client;
 
-    // Auto-connect if credentials were saved from a previous pairing
+    // Load saved pairing + FCM token, but DO NOT auto-connect. Reconnecting is
+    // the user's choice (offered as a one-tap button on the pairing screen), so
+    // a down desktop never leaves the app stuck on "connecting".
     (async () => {
       const [url, token, fcm] = await Promise.all([
         getSecret(KEYS.TUNNEL_URL),
@@ -58,7 +63,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
         getSecret(KEYS.FCM_TOKEN),
       ]);
       if (fcm) fcmTokenRef.current = fcm;
-      if (url && token) client.connect(url, token, fcm ?? undefined);
+      if (url && token) setLastConnection({ url, token });
     })();
 
     return () => { client.disconnect(); };
@@ -69,6 +74,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
       setSecret(KEYS.TUNNEL_URL, url),
       setSecret(KEYS.TUNNEL_TOKEN, token),
     ]);
+    setLastConnection({ url, token });
     clientRef.current?.connect(url, token, fcmTokenRef.current);
   }, []);
 
@@ -123,6 +129,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     orderedPaneIds,
     connect,
     disconnect,
+    lastConnection,
     focusPane,
     sendInput,
     sendResize,
