@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import {
   ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
@@ -6,10 +6,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/theme';
 import { useSession } from '../../src/lib/session';
+import { getSelectedProvider, getSelectedModel, getProviderInfo } from '../../src/lib/providers';
 import { detectLang, tokenizeFile } from '../../src/lib/syntax';
 import { AttachedImage, ChatTurn } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
@@ -214,7 +215,23 @@ export default function EditScreen() {
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pendingImages, setPendingImages] = useState<AttachedImage[]>([]);
+  const [modelLabel, setModelLabel] = useState('Claude Sonnet 4.6');
   const chatScrollRef = useRef<ScrollView>(null);
+
+  // Reflect the active provider/model (set in the Run → Connect a model screen).
+  // Reloads on focus so switching the model is picked up when returning here.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const [pid, mid] = await Promise.all([getSelectedProvider(), getSelectedModel()]);
+        if (cancelled) return;
+        const model = getProviderInfo(pid)?.models.find((m) => m.id === mid);
+        setModelLabel(model?.name ?? mid);
+      })();
+      return () => { cancelled = true; };
+    }, []),
+  );
 
   const recentTurns = useMemo(() => turns.slice(-6), [turns]);
   const toolCount = useMemo(() => turns.filter((x) => x.kind === 'tool').length, [turns]);
@@ -344,7 +361,7 @@ export default function EditScreen() {
             <Surface style={styles.claudeChip} radius={14}>
               <ClaudeAvatar size={14} />
               <Text style={[styles.claudeChipText, { color: t.fg }]}>
-                Claude · sonnet 4.6
+                {modelLabel}
               </Text>
               <View style={[styles.claudeDivider, { backgroundColor: t.borderColor }]} />
               <Text style={[styles.claudeTools, { color: t.fgMuted }]}>

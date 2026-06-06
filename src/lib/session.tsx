@@ -54,6 +54,8 @@ type SessionValue = {
     updated: number; added: number; unchanged: number; conflicts: string[];
   }>;
   push: (message: string) => Promise<{ pushed: number; failures: PushFailure[] }>;
+  /** Draft a one-line commit message from a diff summary via the active model. */
+  draftCommitMessage: (summary: string) => Promise<string>;
 
   // Tasks
   taskSummaries: TaskSummary[];
@@ -74,6 +76,10 @@ type SessionValue = {
   cancelChat: () => void;
   clearChat: () => Promise<void>;
 };
+
+const COMMIT_MESSAGE_SYSTEM =
+  'Write a single-line conventional commit message describing the changes. ' +
+  'Imperative mood, lowercase type prefix, no trailing period. Output only the message.';
 
 const SessionContext = createContext<SessionValue | null>(null);
 
@@ -242,6 +248,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setApiKey(newKey);
     setGhUser(newUser);
     setStage((s) => (s === 'ready' ? s : 'repo'));
+  }, []);
+
+  // Draft a commit message with whichever model is active (standalone mode),
+  // not a hardcoded Anthropic call.
+  const draftCommitMessage = useCallback(async (summary: string): Promise<string> => {
+    const provider = await resolveActiveProvider();
+    if (!provider) {
+      throw new Error('No model configured — add a key in the Run tab.');
+    }
+    const text = await provider.complete(COMMIT_MESSAGE_SYSTEM, summary, 80);
+    return text.split('\n')[0];
   }, []);
 
   // Persist only the GitHub credential, leaving the LLM key untouched. Used by
@@ -734,6 +751,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     pushing,
     pull,
     push,
+    draftCommitMessage,
 
     taskSummaries: taskIndex?.tasks ?? [],
     activeTask,
