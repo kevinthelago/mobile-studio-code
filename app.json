@@ -22,7 +22,11 @@
         "NSPhotoLibraryUsageDescription": "Choose screenshots or images to send to Claude.",
         "NSCameraUsageDescription": "Scan a QR code to pair with base-studio-code.",
         "ITSAppUsesNonExemptEncryption": false,
-        "UIUserInterfaceStyle": "Dark"
+        "UIUserInterfaceStyle": "Dark",
+        "UIBackgroundModes": ["remote-notification"]
+      },
+      "entitlements": {
+        "aps-environment": "development"
       }
     },
     "android": {
