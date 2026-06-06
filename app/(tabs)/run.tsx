@@ -54,11 +54,15 @@ function parseQrPayload(data: string): { url: string; token: string } | null {
 
 function ConnectingView({ state }: { state: TunnelConnectionState }) {
   const t = useTheme();
+  const { disconnect } = useTunnel();
   const label = state === 'authenticating' ? 'Authenticating…' : 'Connecting…';
   return (
     <View style={styles.centered}>
       <ActivityIndicator color={t.accent} size="large" />
       <Text style={[styles.connectingText, { color: t.fgMuted }]}>{label}</Text>
+      <Pressable onPress={disconnect} style={[styles.cancelConnect, { borderColor: t.borderColor }]} hitSlop={8}>
+        <Text style={[styles.cancelConnectText, { color: t.fgMuted }]}>Cancel</Text>
+      </Pressable>
     </View>
   );
 }
@@ -66,7 +70,7 @@ function ConnectingView({ state }: { state: TunnelConnectionState }) {
 function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { connect, connectionState } = useTunnel();
+  const { connect, connectionState, lastConnection } = useTunnel();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
   const [manualUrl, setManualUrl] = useState('');
@@ -160,6 +164,22 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
 
         {error && (
           <Text style={styles.errorText}>{error}</Text>
+        )}
+
+        {lastConnection && (
+          <Pressable
+            onPress={() => connect(lastConnection.url, lastConnection.token)}
+            disabled={isConnecting}
+            style={[styles.reconnectBtn, { borderColor: t.accent, opacity: isConnecting ? 0.5 : 1 }]}
+          >
+            <Svg width={15} height={15} viewBox="0 0 14 14" fill="none">
+              <Path d="M2 7a5 5 0 105-5" stroke={t.accent} strokeWidth={1.6} strokeLinecap="round" />
+              <Path d="M2 2v3h3" stroke={t.accent} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+            <Text style={[styles.reconnectText, { color: t.accent }]} numberOfLines={1}>
+              Reconnect to {lastConnection.url.replace(/^wss?:\/\//, '')}
+            </Text>
+          </Pressable>
         )}
 
         <Pressable
@@ -491,6 +511,17 @@ export default function SessionsScreen() {
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   connectingText: { marginTop: 16, fontSize: 14 },
+  cancelConnect: {
+    marginTop: 24, paddingHorizontal: 22, paddingVertical: 9, borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  cancelConnectText: { fontSize: 14, fontWeight: '600' },
+  reconnectBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 18, paddingVertical: 11, borderRadius: 22,
+    borderWidth: 1, marginTop: 4,
+  },
+  reconnectText: { fontSize: 14, fontWeight: '600', flexShrink: 1 },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 22 },
 
   // Pairing
