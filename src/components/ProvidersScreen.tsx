@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../theme';
 import { Surface } from './ui/Surface';
+import { PrimaryButton } from './ui/PrimaryButton';
 import {
   PROVIDERS, LLMProviderId, defaultModelFor,
   getProviderKey, setProviderKey,
@@ -205,23 +206,12 @@ export function ProvidersScreen({ onBack, onConnected }: Props) {
                         />
                       ) : null}
 
-                      <Pressable
+                      <PrimaryButton
+                        label={isConnected ? 'Use this model' : 'Connect'}
                         onPress={() => activate(p.id)}
-                        disabled={busyId === p.id || (p.auth === 'key' && !isConnected && !(keyDrafts[p.id] ?? '').trim())}
-                        style={[
-                          styles.connectBtn,
-                          { backgroundColor: t.accent },
-                          (busyId === p.id || (p.auth === 'key' && !isConnected && !(keyDrafts[p.id] ?? '').trim())) && styles.disabled,
-                        ]}
-                      >
-                        {busyId === p.id ? (
-                          <ActivityIndicator color="#fff" size="small" />
-                        ) : (
-                          <Text style={styles.connectBtnText}>
-                            {isActive ? 'Use this model' : isConnected ? 'Use this model' : 'Connect'}
-                          </Text>
-                        )}
-                      </Pressable>
+                        loading={busyId === p.id}
+                        disabled={p.auth === 'key' && !isConnected && !(keyDrafts[p.id] ?? '').trim()}
+                      />
 
                       {p.auth === 'key' && isConnected && (
                         <Pressable
@@ -319,12 +309,6 @@ const styles = StyleSheet.create({
     height: 42, borderRadius: 11, borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12, fontSize: 13,
   },
-  connectBtn: {
-    height: 42, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  connectBtnText: { color: '#fff', fontSize: 13.5, fontWeight: '600' },
-  disabled: { opacity: 0.4 },
   replaceBtn: { alignItems: 'center', paddingVertical: 2 },
   replaceText: { fontSize: 12 },
 });

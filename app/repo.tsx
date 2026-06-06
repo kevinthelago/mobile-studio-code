@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable,
+  KeyboardAvoidingView, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { useSession } from '../src/lib/session';
 import { downloadRepo, verifyGithubPat } from '../src/lib/github';
 import { getRecentRepos, addRecentRepo, RecentRepo } from '../src/lib/storage';
 import { Surface } from '../src/components/ui/Surface';
+import { PrimaryButton } from '../src/components/ui/PrimaryButton';
 import { ThemePicker } from '../src/components/ui/ThemePicker';
 
 type PatStatus = 'idle' | 'testing' | 'ok' | 'error';
@@ -168,21 +169,13 @@ export default function RepoScreen() {
                   }]}
                   editable={ghStatus !== 'testing'}
                 />
-                <Pressable
-                  style={[
-                    styles.primary,
-                    { backgroundColor: t.accent },
-                    (!ghPat.trim() || ghStatus === 'testing') && styles.disabled,
-                  ]}
+                <PrimaryButton
+                  label="Save & Verify"
                   onPress={saveGh}
-                  disabled={!ghPat.trim() || ghStatus === 'testing'}
-                >
-                  {ghStatus === 'testing' ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.primaryText}>Save & Verify</Text>
-                  )}
-                </Pressable>
+                  loading={ghStatus === 'testing'}
+                  disabled={!ghPat.trim()}
+                  style={styles.primary}
+                />
               </>
             )}
             {ghMsg && (
@@ -230,21 +223,12 @@ export default function RepoScreen() {
               editable={!busy}
             />
 
-            <Pressable
-              style={[
-                styles.primary,
-                { backgroundColor: t.accent },
-                busy && styles.disabled,
-              ]}
+            <PrimaryButton
+              label="Download repo"
               onPress={download}
-              disabled={busy}
-            >
-              {busy ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.primaryText}>Download repo</Text>
-              )}
-            </Pressable>
+              loading={busy}
+              style={styles.primary}
+            />
 
             {progress && (
               <Text
@@ -358,12 +342,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 13, marginBottom: 12,
   },
-  primary: {
-    paddingVertical: 12, borderRadius: 12, alignItems: 'center',
-    justifyContent: 'center', minHeight: 44, marginTop: 6,
-  },
-  primaryText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  disabled: { opacity: 0.4 },
+  primary: { marginTop: 6 },
   statusMsg: { fontSize: 12, marginTop: 10, lineHeight: 17 },
   resetLink: { alignItems: 'center', marginTop: 8, paddingVertical: 12 },
   resetLinkText: { fontSize: 13 },
