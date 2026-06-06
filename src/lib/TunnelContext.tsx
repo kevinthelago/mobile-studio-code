@@ -2,7 +2,7 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
 import { TunnelClient, TunnelCallbacks } from './tunnel';
-import { PaneState, TunnelConnectionState } from './types';
+import { PaneState, PairingPayload, TunnelConnectionState } from './types';
 import { KEYS, getSecret, setSecret } from './storage';
 
 export type TunnelValue = {
@@ -12,10 +12,10 @@ export type TunnelValue = {
   /** Pane IDs ordered: awaiting_input (most recent first), then by last activity */
   orderedPaneIds: string[];
 
-  connect: (url: string, token: string) => Promise<void>;
+  connect: (payload: PairingPayload) => Promise<void>;
   disconnect: () => void;
   /** Last-used pairing, loaded from storage — offered as a one-tap reconnect. */
-  lastConnection: { url: string; token: string } | null;
+  lastConnection: PairingPayload | null;
   focusPane: (paneId: string) => void;
   sendInput: (paneId: string, data: string) => void;
   sendResize: (paneId: string, cols: number, rows: number) => void;
@@ -37,7 +37,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const [connectionState, setConnectionState] = useState<TunnelConnectionState>('disconnected');
   const [panes, setPanes] = useState<Record<string, PaneState>>({});
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
-  const [lastConnection, setLastConnection] = useState<{ url: string; token: string } | null>(null);
+  const [lastConnection, setLastConnection] = useState<PairingPayload | null>(null);
   const fcmTokenRef = useRef<string | undefined>(undefined);
   const clientRef = useRef<TunnelClient | null>(null);
 
@@ -57,25 +57,23 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     // the user's choice (offered as a one-tap button on the pairing screen), so
     // a down desktop never leaves the app stuck on "connecting".
     (async () => {
-      const [url, token, fcm] = await Promise.all([
-        getSecret(KEYS.TUNNEL_URL),
-        getSecret(KEYS.TUNNEL_TOKEN),
+      const [pairingJson, fcm] = await Promise.all([
+        getSecret(KEYS.TUNNEL_PAIRING),
         getSecret(KEYS.FCM_TOKEN),
       ]);
       if (fcm) fcmTokenRef.current = fcm;
-      if (url && token) setLastConnection({ url, token });
+      if (pairingJson) {
+        try { setLastConnection(JSON.parse(pairingJson) as PairingPayload); } catch { /* ignore */ }
+      }
     })();
 
     return () => { client.disconnect(); };
   }, []);
 
-  const connect = useCallback(async (url: string, token: string) => {
-    await Promise.all([
-      setSecret(KEYS.TUNNEL_URL, url),
-      setSecret(KEYS.TUNNEL_TOKEN, token),
-    ]);
-    setLastConnection({ url, token });
-    clientRef.current?.connect(url, token, fcmTokenRef.current);
+  const connect = useCallback(async (payload: PairingPayload) => {
+    await setSecret(KEYS.TUNNEL_PAIRING, JSON.stringify(payload));
+    setLastConnection(payload);
+    clientRef.current?.connect(payload, fcmTokenRef.current);
   }, []);
 
   const disconnect = useCallback(() => {

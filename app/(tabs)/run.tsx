@@ -8,7 +8,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
 import { useTunnel } from '../../src/lib/TunnelContext';
-import { PaneState, PaneStatus, TunnelConnectionState } from '../../src/lib/types';
+import { PaneState, PaneStatus, PairingPayload, TunnelConnectionState } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
 import { ProvidersScreen } from '../../src/components/ProvidersScreen';
@@ -38,15 +38,14 @@ function relativeTime(ts: number | null): string {
   return `${Math.floor(m / 60)}h ago`;
 }
 
-/** Parse QR payload. Accepts JSON {url, token} or bare "url|token" strings. */
-function parseQrPayload(data: string): { url: string; token: string } | null {
+/** Parse the desktop's pairing QR: raw JSON { relayUrl, room, hostPubKey, psk }. */
+function parsePairing(data: string): PairingPayload | null {
   try {
-    const obj = JSON.parse(data) as { url?: string; token?: string };
-    if (obj.url && obj.token) return { url: obj.url, token: obj.token };
-  } catch {
-    const parts = data.split('|');
-    if (parts.length === 2) return { url: parts[0], token: parts[1] };
-  }
+    const o = JSON.parse(data) as Partial<PairingPayload>;
+    if (o.relayUrl && o.room && o.hostPubKey && o.psk) {
+      return { relayUrl: o.relayUrl, room: o.room, hostPubKey: o.hostPubKey, psk: o.psk };
+    }
+  } catch { /* not JSON */ }
   return null;
 }
 
@@ -73,23 +72,22 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
   const { connect, connectionState, lastConnection } = useTunnel();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
-  const [manualUrl, setManualUrl] = useState('');
-  const [manualToken, setManualToken] = useState('');
+  const [manualJson, setManualJson] = useState('');
   const [showManual, setShowManual] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scannedRef = useRef(false);
 
   const handleQrScanned = useCallback(({ data }: { data: string }) => {
     if (scannedRef.current) return;
-    const parsed = parseQrPayload(data);
+    const parsed = parsePairing(data);
     if (!parsed) {
-      setError('Unrecognised QR code format.');
+      setError('Unrecognised QR code — expected the base-studio-code pairing code.');
       setScanning(false);
       return;
     }
     scannedRef.current = true;
     setScanning(false);
-    connect(parsed.url, parsed.token);
+    connect(parsed);
   }, [connect]);
 
   const handleScanPress = useCallback(async () => {
@@ -107,14 +105,13 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
 
   const handleManualConnect = useCallback(() => {
     setError(null);
-    const url = manualUrl.trim();
-    const token = manualToken.trim();
-    if (!url || !token) {
-      setError('Both URL and token are required.');
+    const parsed = parsePairing(manualJson.trim());
+    if (!parsed) {
+      setError('Paste the full pairing JSON from base-studio-code.');
       return;
     }
-    connect(url, token);
-  }, [manualUrl, manualToken, connect]);
+    connect(parsed);
+  }, [manualJson, connect]);
 
   if (scanning) {
     return (
@@ -168,7 +165,7 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
 
         {lastConnection && (
           <Pressable
-            onPress={() => connect(lastConnection.url, lastConnection.token)}
+            onPress={() => connect(lastConnection)}
             disabled={isConnecting}
             style={[styles.reconnectBtn, { borderColor: t.accent, opacity: isConnecting ? 0.5 : 1 }]}
           >
@@ -177,7 +174,7 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
               <Path d="M2 2v3h3" stroke={t.accent} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
             <Text style={[styles.reconnectText, { color: t.accent }]} numberOfLines={1}>
-              Reconnect to {lastConnection.url.replace(/^wss?:\/\//, '')}
+              Reconnect to {lastConnection.relayUrl.replace(/^wss?:\/\//, '')}
             </Text>
           </Pressable>
         )}
@@ -204,37 +201,24 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
 
         <Pressable onPress={() => setShowManual((v) => !v)} style={styles.manualToggle}>
           <Text style={[styles.manualToggleText, { color: t.fgMuted }]}>
-            {showManual ? 'Hide manual entry' : 'Enter URL and token manually'}
+            {showManual ? 'Hide manual entry' : 'Paste pairing code manually'}
           </Text>
         </Pressable>
 
         {showManual && (
           <View style={styles.manualForm}>
             <TextInput
-              value={manualUrl}
-              onChangeText={setManualUrl}
-              placeholder="ws://192.168.1.x:8765"
+              value={manualJson}
+              onChangeText={setManualJson}
+              placeholder={'{"relayUrl":"wss://…","room":"…","hostPubKey":"…","psk":"…"}'}
               placeholderTextColor={t.fgDim}
-              style={[styles.manualInput, {
+              style={[styles.manualInput, styles.manualJsonInput, {
                 color: t.fg, borderColor: t.borderColor,
                 fontFamily: t.fontMono, backgroundColor: t.surface,
               }]}
               autoCapitalize="none"
               autoCorrect={false}
-              keyboardType="url"
-            />
-            <TextInput
-              value={manualToken}
-              onChangeText={setManualToken}
-              placeholder="Pairing token"
-              placeholderTextColor={t.fgDim}
-              style={[styles.manualInput, {
-                color: t.fg, borderColor: t.borderColor,
-                fontFamily: t.fontMono, backgroundColor: t.surface,
-              }]}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
+              multiline
             />
             <Pressable
               onPress={handleManualConnect}
@@ -554,6 +538,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12, fontSize: 13,
   },
+  manualJsonInput: { height: 88, paddingTop: 10, textAlignVertical: 'top' },
   manualConnectBtn: {
     alignSelf: 'flex-end',
     borderWidth: 1, borderRadius: 8,

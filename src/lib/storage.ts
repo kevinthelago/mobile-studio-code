@@ -8,6 +8,8 @@ export const KEYS = {
   BRANCH: 'repo_branch',
   TUNNEL_URL: 'tunnel_url',
   TUNNEL_TOKEN: 'tunnel_token',
+  /** JSON-encoded PairingPayload from the desktop QR (relay + Noise pairing). */
+  TUNNEL_PAIRING: 'tunnel_pairing',
   FCM_TOKEN: 'fcm_token',
   // Multi-provider (M1g). Per-provider API keys use the `provider_key_` prefix
   // via providers/storage.ts; Anthropic keeps its legacy ANTHROPIC_KEY slot.
