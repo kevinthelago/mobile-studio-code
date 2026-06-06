@@ -19,9 +19,10 @@ function StageGate({ children }: { children: React.ReactNode }) {
     if (stage === 'loading') return;
     const inTabs = segments[0] === '(tabs)';
     const onRepo = segments[0] === 'repo';
+    const onPlanner = segments[0] === '(planner)';
 
-    if (stage === 'repo' && !onRepo) router.replace('/repo');
-    else if (stage === 'ready' && !inTabs && !onRepo) router.replace('/(tabs)');
+    if (stage === 'repo' && !onRepo && !onPlanner) router.replace('/repo');
+    else if (stage === 'ready' && !inTabs && !onRepo && !onPlanner) router.replace('/(tabs)');
   }, [stage, segments, router]);
 
   const t = useTheme();
@@ -108,6 +109,7 @@ function InnerStack() {
     >
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="repo" options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="(planner)" options={{ animation: 'slide_from_bottom' }} />
     </Stack>
   );
 }

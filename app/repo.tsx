@@ -128,6 +128,25 @@ export default function RepoScreen() {
             </Text>
           </View>
 
+          <Pressable onPress={() => router.push('/(planner)')}>
+            <Surface style={styles.plannerEntry} radius={18}>
+              <View style={[styles.plannerIcon, { backgroundColor: t.glass ? 'rgba(192,132,252,0.18)' : 'rgba(192,132,252,0.12)' }]}>
+                <Svg width={18} height={18} viewBox="0 0 18 18" fill="none">
+                  <Path d="M4 3h10M4 7h10M4 11h6" stroke="#c084fc" strokeWidth={1.6} strokeLinecap="round" />
+                </Svg>
+              </View>
+              <View style={styles.plannerText}>
+                <Text style={[styles.plannerTitle, { color: t.fg }]}>Plan a project</Text>
+                <Text style={[styles.plannerSub, { color: t.fgMuted }]}>
+                  Turn an idea into a GitHub plan with Claude
+                </Text>
+              </View>
+              <Svg width={11} height={11} viewBox="0 0 11 11" fill="none">
+                <Path d="M3.5 2l4 3.5-4 3.5" stroke={t.fgMuted} strokeWidth={1.6} strokeLinecap="round" />
+              </Svg>
+            </Surface>
+          </Pressable>
+
           <Surface style={styles.card} radius={20}>
             <View style={styles.cardHeader}>
               <Text style={[styles.cardTitle, { color: t.fg }]}>GitHub</Text>
@@ -319,6 +338,11 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 30, fontWeight: '700', letterSpacing: -0.6, marginBottom: 10 },
   subtitle: { fontSize: 14, lineHeight: 20 },
+  plannerEntry: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, marginBottom: 14 },
+  plannerIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  plannerText: { flex: 1, minWidth: 0 },
+  plannerTitle: { fontSize: 14, fontWeight: '600' },
+  plannerSub: { fontSize: 11.5, marginTop: 1 },
   card: { padding: 16, marginBottom: 14 },
   cardHeader: {
     flexDirection: 'row', justifyContent: 'space-between',
