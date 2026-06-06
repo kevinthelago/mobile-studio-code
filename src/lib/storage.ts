@@ -14,7 +14,33 @@ export const KEYS = {
   SELECTED_PROVIDER: 'selected_provider',
   SELECTED_MODEL: 'selected_model',
   LOCAL_ENDPOINT: 'local_endpoint',
+  RECENT_REPOS: 'recent_repos',
 } as const;
+
+export type RecentRepo = { repo: string; branch: string };
+
+const MAX_RECENT_REPOS = 6;
+
+export async function getRecentRepos(): Promise<RecentRepo[]> {
+  const raw = await getSecret(KEYS.RECENT_REPOS);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as RecentRepo[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Prepend a repo to the recents list (most-recent first, deduped, capped). */
+export async function addRecentRepo(repo: string, branch: string): Promise<void> {
+  const list = await getRecentRepos();
+  const next = [
+    { repo, branch },
+    ...list.filter((r) => !(r.repo === repo && r.branch === branch)),
+  ].slice(0, MAX_RECENT_REPOS);
+  await setSecret(KEYS.RECENT_REPOS, JSON.stringify(next));
+}
 
 export async function getSecret(key: string): Promise<string | null> {
   return SecureStore.getItemAsync(key);
