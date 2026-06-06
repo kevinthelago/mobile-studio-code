@@ -10,7 +10,6 @@ import { useTheme } from '../../src/theme';
 import { useSession } from '../../src/lib/session';
 import { Surface } from '../../src/components/ui/Surface';
 import { ClaudeAvatar } from '../../src/components/ui/ClaudeAvatar';
-import { anthropicDraftCommitMessage } from '../../src/lib/anthropic';
 
 type ChangeRow = { path: string; state: 'M' | 'A' };
 
@@ -20,8 +19,8 @@ export default function GitScreen() {
   const t = useTheme();
   const router = useRouter();
   const {
-    apiKey, manifest, modifiedCount, openFile, activeTask,
-    pull, push, pulling, pushing,
+    manifest, modifiedCount, openFile, activeTask,
+    pull, push, pulling, pushing, draftCommitMessage,
   } = useSession();
   const [commitMsg, setCommitMsg] = useState('');
   const [drafting, setDrafting] = useState(false);
@@ -114,14 +113,14 @@ export default function GitScreen() {
   }
 
   async function onDraftCommit() {
-    if (!apiKey || drafting || changes.length === 0) return;
+    if (drafting || changes.length === 0) return;
     setDrafting(true);
     try {
       const fileLines = changes.map((c) => `${c.state} ${c.path}`).join('\n');
       const summary = linkedIssue
         ? `Task: ${activeTask?.title ?? ''}\nLinked issue #${linkedIssue.number}: ${linkedIssue.title}\n\nChanged files:\n${fileLines}`
         : fileLines;
-      const msg = await anthropicDraftCommitMessage(apiKey, summary);
+      const msg = await draftCommitMessage(summary);
       setCommitMsg(msg);
     } catch (e) {
       Alert.alert('Draft failed', e instanceof Error ? e.message : 'Unknown error');
@@ -313,7 +312,7 @@ export default function GitScreen() {
               <View style={[styles.commitActions, { borderTopColor: t.borderColor }]}>
                 <Pressable
                   onPress={onDraftCommit}
-                  disabled={drafting || !apiKey || changes.length === 0}
+                  disabled={drafting || changes.length === 0}
                   style={styles.draftBtn}
                   hitSlop={8}
                 >

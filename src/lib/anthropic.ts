@@ -163,15 +163,3 @@ export async function anthropicComplete(
     .trim();
 }
 
-export async function anthropicDraftCommitMessage(
-  apiKey: string,
-  diffSummary: string,
-): Promise<string> {
-  const text = await anthropicComplete(
-    apiKey,
-    'Write a single-line conventional commit message describing the changes. Imperative mood, lowercase type prefix, no trailing period. Output only the message.',
-    diffSummary,
-    80,
-  );
-  return text.split('\n')[0];
-}
