@@ -16,6 +16,7 @@ import {
   bootstrapTasks, makeTask, patchIndexEntry, removeFromIndex, setActive,
 } from './tasks';
 import { runAgent, AgentEvent } from './agent';
+import { createProvider } from './providers';
 import { pullRepo, pushModifiedFiles, PushFailure } from './github';
 import { pushError } from './errorBus';
 
@@ -549,6 +550,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const m = manifestRef.current;
     const t = activeTaskRef.current;
     if (!m || !apiKey || !t) return;
+    const provider = createProvider(apiKey);
     cancelRef.current = { cancelled: false };
     setChatBusy(true);
     // Tracks whether we've already emitted a chat note for the current
@@ -574,7 +576,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
     try {
       const finalHistory = await runAgent({
-        apiKey,
+        provider,
         pat,
         initialHistory: fromHistory,
         manifest: m,

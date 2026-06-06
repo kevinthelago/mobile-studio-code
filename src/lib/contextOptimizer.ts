@@ -1,5 +1,5 @@
 import { ChatMessage, ContentBlock, ToolUseBlock, ToolResultBlock } from './types';
-import { anthropicComplete } from './anthropic';
+import { LLMProvider } from './providers';
 
 // Rough char→token conversion. 1 token ≈ 4 chars for English code/prose.
 // Lowered from 60K — at 60K we sometimes couldn't compact within a single
@@ -223,7 +223,7 @@ Be concise (under 200 words) but preserve enough detail that another assistant c
 // whether compaction happened so the caller can surface UI feedback.
 export async function maybeCompactHistory(
   messages: ChatMessage[],
-  apiKey: string,
+  provider: LLMProvider,
 ): Promise<{ messages: ChatMessage[]; compacted: boolean; reason: string }> {
   const size = approxMessagesSize(messages);
   if (size < COMPACT_THRESHOLD_CHARS) {
@@ -239,7 +239,7 @@ export async function maybeCompactHistory(
   const transcript = summarizableText(prefix);
   let summary: string;
   try {
-    summary = await anthropicComplete(apiKey, COMPACT_SYSTEM, transcript, 400);
+    summary = await provider.complete(COMPACT_SYSTEM, transcript, 400);
   } catch {
     // If the summarizer fails, return the original messages — better to pay
     // for a long turn than to lose context.

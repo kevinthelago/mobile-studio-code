@@ -2,7 +2,7 @@ import {
   ChatMessage, LinkedIssue, Manifest, ToolDefinition, ToolResultBlock,
   RetryStatus, CancelSignal,
 } from './types';
-import { anthropicChat } from './anthropic';
+import { LLMProvider } from './providers';
 import {
   repoDir, listDir, readText, writeText, isDirectory, isMscMetaFile,
   writeManifest, loadProjectInstructions, ProjectInstructions,
@@ -624,7 +624,7 @@ export type AgentEvent =
   | { kind: 'context_optimized'; note: string };
 
 export type RunAgentArgs = {
-  apiKey: string;
+  provider: LLMProvider;
   pat: string | null;
   initialHistory: ChatMessage[];
   manifest: Manifest;
@@ -679,7 +679,7 @@ export async function runAgent(args: RunAgentArgs): Promise<ChatMessage[]> {
 
     // Async, fires only when history grows past the threshold. Summarizes
     // older turns via Haiku and replaces them with a single user/assistant pair.
-    const compacted = await maybeCompactHistory(messages, args.apiKey);
+    const compacted = await maybeCompactHistory(messages, args.provider);
     if (compacted.compacted) {
       messages = compacted.messages;
       args.onEvent({ kind: 'context_optimized', note: compacted.reason });
@@ -688,7 +688,7 @@ export async function runAgent(args: RunAgentArgs): Promise<ChatMessage[]> {
     await args.onCheckpoint(messages);
 
     const response = await withRetry(
-      () => anthropicChat(args.apiKey, messages, tools, systemPrompt),
+      () => args.provider.chat(messages, tools, systemPrompt),
       (attempt, delayMs, error) => {
         args.onRetry({
           attempt,
@@ -806,7 +806,7 @@ export async function runAgent(args: RunAgentArgs): Promise<ChatMessage[]> {
 
   try {
     const wrapUp = await withRetry(
-      () => anthropicChat(args.apiKey, messages, [], wrapUpSystem),
+      () => args.provider.chat(messages, [], wrapUpSystem),
       (attempt, delayMs, error) => {
         args.onRetry({ attempt, delayMs, error: error?.message ?? 'unknown' });
       },
