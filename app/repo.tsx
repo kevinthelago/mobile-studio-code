@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator, KeyboardAvoidingView, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../src/theme';
 import { useSession } from '../src/lib/session';
 import { downloadRepo, verifyGithubPat } from '../src/lib/github';
+import { getRecentRepos, addRecentRepo, RecentRepo } from '../src/lib/storage';
 import { Surface } from '../src/components/ui/Surface';
 import { ThemePicker } from '../src/components/ui/ThemePicker';
 
@@ -22,6 +24,11 @@ export default function RepoScreen() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string>();
   const [error, setError] = useState<string>();
+  const [recents, setRecents] = useState<RecentRepo[]>([]);
+
+  useEffect(() => {
+    getRecentRepos().then(setRecents);
+  }, []);
 
   // GitHub token entry. Onboarding used to collect this; with onboarding gone
   // the repo picker is its home. Expanded by default until a token is stored.
@@ -70,6 +77,7 @@ export default function RepoScreen() {
         pat, repo.trim(), branch.trim(),
         (i, total, p) => setProgress(`(${i + 1}/${total}) ${p}`),
       );
+      await addRecentRepo(repo.trim(), branch.trim());
       await selectRepo(m);
       router.replace('/(tabs)');
     } catch (e) {
@@ -77,6 +85,12 @@ export default function RepoScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function pickRecent(r: RecentRepo) {
+    setRepo(r.repo);
+    setBranch(r.branch);
+    setError(undefined);
   }
 
   return (
@@ -89,6 +103,9 @@ export default function RepoScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Sheet grabber — this screen slides up over the app */}
+          <View style={[styles.grabber, { backgroundColor: t.borderColor }]} />
+
           {manifest && (
             <Pressable
               onPress={() => router.replace('/(tabs)')}
@@ -242,6 +259,37 @@ export default function RepoScreen() {
             )}
           </Surface>
 
+          {recents.length > 0 && (
+            <View style={styles.recentsBlock}>
+              <Text style={[styles.recentsLabel, { color: t.fgDim }]}>Recent</Text>
+              <Surface style={styles.recentsCard} radius={20}>
+                {recents.map((r, i) => (
+                  <Pressable
+                    key={`${r.repo}#${r.branch}`}
+                    onPress={() => pickRecent(r)}
+                    style={[
+                      styles.recentRow,
+                      i < recents.length - 1 && { borderBottomColor: t.borderColor, borderBottomWidth: StyleSheet.hairlineWidth },
+                    ]}
+                  >
+                    <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+                      <Circle cx={3.5} cy={3.5} r={1.6} stroke={t.fgMuted} strokeWidth={1.4} />
+                      <Circle cx={3.5} cy={10.5} r={1.6} stroke={t.fgMuted} strokeWidth={1.4} />
+                      <Circle cx={10.5} cy={7} r={1.6} stroke={t.fgMuted} strokeWidth={1.4} />
+                      <Path d="M3.5 5v5M5.5 3.5h3a2 2 0 012 2v.5" stroke={t.fgMuted} strokeWidth={1.4} />
+                    </Svg>
+                    <Text style={[styles.recentRepo, { color: t.fg, fontFamily: t.fontMono }]} numberOfLines={1}>
+                      {r.repo}
+                    </Text>
+                    <Text style={[styles.recentBranch, { color: t.fgDim, fontFamily: t.fontMono }]} numberOfLines={1}>
+                      {r.branch}
+                    </Text>
+                  </Pressable>
+                ))}
+              </Surface>
+            </View>
+          )}
+
           <Surface style={styles.card} radius={20}>
             <ThemePicker />
           </Surface>
@@ -261,8 +309,25 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: 'transparent' },
   flex1: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 60 },
+  grabber: {
+    width: 40, height: 5, borderRadius: 3,
+    alignSelf: 'center', marginTop: 2, marginBottom: 14,
+  },
   backLink: { paddingVertical: 6 },
   backLinkText: { fontSize: 14 },
+
+  recentsBlock: { marginBottom: 14 },
+  recentsLabel: {
+    fontSize: 11, letterSpacing: 1, textTransform: 'uppercase',
+    fontWeight: '600', marginBottom: 6, paddingHorizontal: 4,
+  },
+  recentsCard: { paddingHorizontal: 4 },
+  recentRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 12, paddingHorizontal: 10,
+  },
+  recentRepo: { flex: 1, fontSize: 13 },
+  recentBranch: { fontSize: 11, flexShrink: 0 },
   heroBlock: { paddingTop: 16, paddingBottom: 22 },
   eyebrow: {
     fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase',
