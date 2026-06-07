@@ -1,9 +1,10 @@
 {
   "expo": {
-    "name": "Mobile Studio Code",
+    "name": "base-studio-code",
     "slug": "mobile-studio-code",
     "owner": "kevinthelago",
     "version": "1.0.0",
+    "icon": "./src/assets/icon-ios.png",
     "orientation": "portrait",
     "scheme": "mobilestudiocode",
     "userInterfaceStyle": "dark",
@@ -36,6 +37,7 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./src/assets/source.png",
         "backgroundColor": "#0b0d14"
       },
       "backgroundColor": "#0b0d14",
