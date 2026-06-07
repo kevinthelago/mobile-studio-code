@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, KeyboardAvoidingView, Platform,
+  ActivityIndicator, FlatList, Keyboard, Platform,
   Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,14 +8,19 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
 import { useTunnel } from '../../src/lib/TunnelContext';
-import { PaneState, PaneStatus, PairingPayload, TunnelConnectionState } from '../../src/lib/types';
+import { PaneState, PaneStatus, TunnelConnectionState } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
 import { ProvidersScreen } from '../../src/components/ProvidersScreen';
 import { stripAnsi, lastLines } from '../../src/lib/ansi';
+import { fitTerminalFontSize, BASE_TERMINAL_FONT } from '../../src/lib/tunnel/paneSize';
+import { encodeSubmit } from '../../src/lib/tunnel/input';
+import { parsePairingPayload } from '../../src/lib/tunnel/pairing';
 
 const TAB_BAR_HEIGHT = 60;
 const TERMINAL_LINE_LIMIT = 200;
+/** Horizontal padding (each side) of the terminal output content. */
+const TERM_CONTENT_PAD = 12;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,17 +41,6 @@ function relativeTime(ts: number | null): string {
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m ago`;
   return `${Math.floor(m / 60)}h ago`;
-}
-
-/** Parse the desktop's pairing QR: raw JSON { relayUrl, room, hostPubKey, psk }. */
-function parsePairing(data: string): PairingPayload | null {
-  try {
-    const o = JSON.parse(data) as Partial<PairingPayload>;
-    if (o.relayUrl && o.room && o.hostPubKey && o.psk) {
-      return { relayUrl: o.relayUrl, room: o.room, hostPubKey: o.hostPubKey, psk: o.psk };
-    }
-  } catch { /* not JSON */ }
-  return null;
 }
 
 // ── Sub-screens ───────────────────────────────────────────────────────────────
@@ -79,7 +73,7 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
 
   const handleQrScanned = useCallback(({ data }: { data: string }) => {
     if (scannedRef.current) return;
-    const parsed = parsePairing(data);
+    const parsed = parsePairingPayload(data);
     if (!parsed) {
       setError('Unrecognised QR code — expected the base-studio-code pairing code.');
       setScanning(false);
@@ -105,7 +99,7 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
 
   const handleManualConnect = useCallback(() => {
     setError(null);
-    const parsed = parsePairing(manualJson.trim());
+    const parsed = parsePairingPayload(manualJson.trim());
     if (!parsed) {
       setError('Paste the full pairing JSON from base-studio-code.');
       return;
@@ -159,8 +153,11 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
           Open base-studio-code on your desktop and show the pairing QR code.
         </Text>
 
-        {error && (
-          <Text style={styles.errorText}>{error}</Text>
+        {(error || connectionState === 'error') && (
+          <Text style={styles.errorText}>
+            {error ??
+              "Couldn't reach the desktop. Make sure base-studio-code's tunnel is running, then scan the QR again — a saved pairing stops working once the desktop restarts."}
+          </Text>
         )}
 
         {lastConnection && (
@@ -357,10 +354,31 @@ function PaneGridView() {
 function TerminalView({ paneId }: { paneId: string }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { panes, sendInput, sendResize, unfocusPane } = useTunnel();
+  const { panes, sendInput, unfocusPane } = useTunnel();
   const [inputText, setInputText] = useState('');
+  const [kbHeight, setKbHeight] = useState(0);
+  const [termWidth, setTermWidth] = useState(0);
+  // Set once the user has submitted something — used to surface the view-only
+  // hint only after an attempt (a fresh pairing is view-only on the desktop
+  // until the user grants input there, and the desktop doesn't yet tell us).
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
-  const kbOffset = TAB_BAR_HEIGHT + insets.bottom;
+
+  // Track the keyboard directly so the input bar sits just above it when up,
+  // and above the floating (absolute) tab bar when down. Manual tracking is
+  // more predictable than KeyboardAvoidingView's offset math, which double-
+  // stacked the tab-bar clearance on top of the keyboard lift.
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, (e) => setKbHeight(e.endCoordinates.height));
+    const hideSub = Keyboard.addListener(hideEvt, () => setKbHeight(0));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
+
+  // iOS keyboard height already includes the home-indicator inset, so when the
+  // keyboard is up we don't add insets.bottom again.
+  const inputPadBottom = kbHeight > 0 ? kbHeight + 8 : insets.bottom + TAB_BAR_HEIGHT + 8;
 
   const pane = panes[paneId];
 
@@ -375,16 +393,21 @@ function TerminalView({ paneId }: { paneId: string }) {
   const handleSend = useCallback(() => {
     const text = inputText;
     setInputText('');
-    sendInput(paneId, text + '\n');
+    setHasSubmitted(true);
+    // encodeSubmit terminates the line with a carriage return (\r) — the byte a
+    // real terminal sends on Enter, which the desktop PTY's raw-mode TUI treats
+    // as submit. The paneId is the live desktop pane id from pane_list.
+    sendInput(paneId, encodeSubmit(text));
   }, [inputText, paneId, sendInput]);
 
-  const handleLayout = useCallback(({ nativeEvent }: { nativeEvent: { layout: { width: number; height: number } } }) => {
-    const { width, height } = nativeEvent.layout;
-    // Approximate columns/rows based on monospace char dimensions
-    const cols = Math.floor(width / 7.2);
-    const rows = Math.floor(height / 14);
-    sendResize(paneId, Math.max(cols, 40), Math.max(rows, 10));
-  }, [paneId, sendResize]);
+  // Record the output area's width so we can scale the font to the desktop's
+  // grid. We intentionally do NOT send pane_resize: the phone adopts the
+  // desktop PTY's size (driven by its `pane_size` frames) rather than driving
+  // it, which would fight the shared desktop terminal. A future "phone
+  // takeover" mode will revisit this.
+  const handleLayout = useCallback(({ nativeEvent }: { nativeEvent: { layout: { width: number } } }) => {
+    setTermWidth(nativeEvent.layout.width);
+  }, []);
 
   if (!pane) {
     return (
@@ -397,12 +420,17 @@ function TerminalView({ paneId }: { paneId: string }) {
   const status = pane.sessionState?.status ?? pane.descriptor.status;
   const dotColor = statusColor(status, t.accent);
 
+  // Scale the monospace font so the desktop's `cols` cells span the output
+  // width (minus the 12px horizontal content padding on each side). This
+  // reproduces the desktop's line-wrapping instead of re-wrapping at the phone
+  // width. Falls back to the base font until pane_size / layout arrive.
+  const fontSize = pane.ptySize
+    ? fitTerminalFontSize(termWidth - TERM_CONTENT_PAD * 2, pane.ptySize.cols)
+    : BASE_TERMINAL_FONT;
+  const lineHeight = Math.round(fontSize * 1.4);
+
   return (
-    <KeyboardAvoidingView
-      style={styles.termRoot}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={kbOffset}
-    >
+    <View style={styles.termRoot}>
       {/* Header */}
       <View style={[styles.termHeader, { paddingTop: insets.top + 8, borderBottomColor: t.borderColor }]}>
         <IconBtn onPress={unfocusPane}>
@@ -438,13 +466,19 @@ function TerminalView({ paneId }: { paneId: string }) {
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
       >
-        <Text style={[styles.termOutput, { color: t.fg, fontFamily: t.fontMono }]} selectable>
+        <Text style={[styles.termOutput, { color: t.fg, fontFamily: t.fontMono, fontSize, lineHeight }]} selectable>
           {output || ' '}
         </Text>
       </ScrollView>
 
-      {/* Input bar */}
-      <View style={[styles.termInputWrap, { borderTopColor: t.borderColor, paddingBottom: insets.bottom + 8 }]}>
+      {/* Input bar — above the keyboard when up, above the floating tab bar
+          when down (see inputPadBottom). */}
+      <View style={[styles.termInputWrap, { borderTopColor: t.borderColor, paddingBottom: inputPadBottom }]}>
+        {hasSubmitted ? (
+          <Text style={[styles.viewOnlyHint, { color: t.fgDim }]} numberOfLines={2}>
+            Not running? A new device is view-only — grant input control on the desktop.
+          </Text>
+        ) : null}
         <Surface style={styles.termInputBar} radius={20}>
           <Text style={[styles.termPromptArrow, { color: t.accent, fontFamily: t.fontMono }]}>›</Text>
           <TextInput
@@ -465,7 +499,7 @@ function TerminalView({ paneId }: { paneId: string }) {
           </IconBtn>
         </Surface>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -639,6 +673,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
+  viewOnlyHint: { fontSize: 11, lineHeight: 15, paddingHorizontal: 4, marginBottom: 6 },
   termInputBar: {
     minHeight: 48, flexDirection: 'row',
     alignItems: 'center', paddingHorizontal: 12, gap: 8,
