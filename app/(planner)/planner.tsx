@@ -1,228 +1,341 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  ScrollView, StyleSheet, Text, View,
+  ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
 import { Surface } from '../../src/components/ui/Surface';
-import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
-import {
-  PlannerHeader, PlannerTabBar, Composer, PlannerTabItem,
-} from '../../src/components/planner/PlannerChrome';
-import { QuickReplies } from '../../src/components/planner/atoms';
-import {
-  ChatMessages, ChatEmptyBody, GateCard, ReadySummary,
-} from '../../src/components/planner/ChatTab';
-import { PlanTab } from '../../src/components/planner/PlanTab';
-import { PreviewTab } from '../../src/components/planner/PreviewTab';
-import { GradeTab } from '../../src/components/planner/GradeTab';
-import { OverflowMenu } from '../../src/components/planner/OverflowMenu';
-import {
-  Plan, PlannerTab, StageId, StageState, confirmedLabel,
-} from '../../src/lib/planner/types';
-import { seedPlan } from '../../src/lib/planner/seed';
+import { IconBtn } from '../../src/components/ui/IconBtn';
+import { BlueprintPicker } from '../../src/components/planner/BlueprintPicker';
+import { BlueprintStageBar } from '../../src/components/planner/BlueprintStageBar';
+import { PlanConversation } from '../../src/components/planner/PlanConversation';
 import { PLAN_COLORS } from '../../src/lib/planner/colors';
+import type { Blueprint, SectionRenderStatus } from '../../src/lib/planner/core';
+import { projectReadiness } from '../../src/lib/planner/project';
+import { usePlanner } from '../../src/lib/planner/PlannerContext';
 
-const STATUS_COLOR: Record<string, string> = {
-  setup: PLAN_COLORS.info,
-  drafting: '#ffaecf',
+const STATUS_META: Record<SectionRenderStatus, { label: string; color: string }> = {
+  'complete': { label: 'Complete', color: PLAN_COLORS.good },
+  'in-progress': { label: 'In progress', color: PLAN_COLORS.plan },
+  'locked': { label: 'Locked', color: '#8a8f9a' },
+  'na': { label: 'N/A', color: '#8a8f9a' },
+};
+
+const PIPELINE_STATUS_COLOR: Record<string, string> = {
+  idle: '#8a8f9a',
+  running: PLAN_COLORS.info,
+  ok: PLAN_COLORS.good,
+  fail: PLAN_COLORS.bad,
   blocked: PLAN_COLORS.warn,
-  ready: PLAN_COLORS.good,
 };
 
-const DRAFT_QUICK = [
-  { label: 'Looks good →', primary: true },
-  { label: 'Add a settings screen' },
-  { label: 'Use tabs, not a drawer' },
-  { label: 'Explain the flows' },
-];
-
-const GATE_QUICK = [
-  { label: 'Yes, fix all →', primary: true },
-  { label: 'Assign milestone only' },
-  { label: 'Show the 3 issues' },
-];
-
-const ALL_DONE: Record<StageId, StageState> = {
-  context: 'done', repos: 'done', ui: 'done', structure: 'done',
-  perms: 'done', auto: 'done', skills: 'done',
-};
+function relativeTime(ts: number): string {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
 export default function PlannerScreen() {
   const t = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const {
+    loading, summaries, active, sending,
+    createProject, openProject, closeProject, deleteProject, sendMessage, runSectionPipeline,
+  } = usePlanner();
 
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [tab, setTab] = useState<PlannerTab>('chat');
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [pitch] = useState('');
-  const [blueprint, setBlueprint] = useState('full');
+  const [view, setView] = useState<'chat' | 'plan'>('chat');
+  const readiness = useMemo(() => (active ? projectReadiness(active) : null), [active]);
 
-  const isEmpty = plan === null;
-
-  function startPlanning() {
-    setPlan(seedPlan(pitch, blueprint));
-    setTab('chat');
+  function startBlueprint(bp: Blueprint) {
+    setView('chat');
+    void createProject(bp);
   }
-
-  // Confirm the UI section → advance, then surface the Structure→Perms gate.
-  function confirmSection(index: number) {
-    setPlan((p) => {
-      if (!p) return p;
-      const messages = p.messages.map((m, i) =>
-        i === index && m.kind === 'section'
-          ? { ...m, section: { ...m.section, confirmed: true } }
-          : m,
-      );
-      return {
-        ...p,
-        status: 'blocked',
-        stageStates: { ...p.stageStates, ui: 'done', structure: 'current' },
-        messages: [
-          ...messages,
-          {
-            kind: 'assistant',
-            text: 'Permissions is gated until Structure passes its readiness gate. Two things are blocking it:',
-          },
-        ],
-      };
-    });
+  function back() {
+    if (active) closeProject();
+    else router.back();
   }
-
-  // Resolve the gate → plan is ready to publish.
-  function fixGate() {
-    setPlan((p) => p ? {
-      ...p,
-      status: 'ready',
-      stageStates: { ...ALL_DONE },
-      gate: p.gate.map((g) => ({ ...g, ok: true })),
-      messages: [
-        ...p.messages,
-        {
-          kind: 'assistant',
-          text: "All seven sections are confirmed and the plan grades A- (91%). Here's what publishing will create on GitHub:",
-        },
-      ],
-    } : p);
+  function confirmDelete(id: string, title: string) {
+    Alert.alert('Delete plan?', `"${title}" will be removed from this device.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => { void deleteProject(id); } },
+    ]);
   }
-
-  function pickQuick(label: string) {
-    if (label.startsWith('Looks good') || label.startsWith('Explain')) return;
-    if (label.startsWith('Yes, fix')) { fixGate(); return; }
-    setPlan((p) => p ? { ...p, messages: [...p.messages, { kind: 'user', text: label }] } : p);
-  }
-
-  function clearPlan() {
-    setPlan(null);
-    setTab('chat');
-    setMenuOpen(false);
-  }
-
-  const status = plan?.status ?? 'setup';
-
-  const tabs: PlannerTabItem[] = isEmpty
-    ? [{ id: 'chat', label: 'Chat' }, { id: 'plan', label: 'Plan' }]
-    : [
-        { id: 'chat', label: 'Chat' },
-        { id: 'plan', label: 'Plan' },
-        { id: 'preview', label: 'Preview', badge: status === 'drafting' },
-        { id: 'grade', label: 'Grade', badge: status === 'blocked' },
-      ];
 
   return (
     <View style={styles.root}>
-      <PlannerHeader
-        title={plan?.title ?? 'New project'}
-        repo={plan?.repo}
-        status={status}
-        statusColor={STATUS_COLOR[status]}
-        confirmedLabel={plan ? confirmedLabel(plan) : '0/7'}
-        stageStates={plan?.stageStates}
-        onBack={() => router.back()}
-        onMenu={() => setMenuOpen(true)}
-        topInset={insets.top}
-      />
-
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentInner}
-        showsVerticalScrollIndicator={false}
-      >
-        {tab === 'chat' && isEmpty && (
-          <ChatEmptyBody pitch={pitch} blueprint={blueprint} onSelectBlueprint={setBlueprint} />
+      <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: t.borderColor }]}>
+        <IconBtn onPress={back}>
+          <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+            <Path d="M9 3L5 7l4 4" stroke={t.fg} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+        </IconBtn>
+        <View style={styles.headerText}>
+          <Text style={[styles.title, { color: t.fg }]} numberOfLines={1}>
+            {active ? active.title : 'Plan a project'}
+          </Text>
+          <Text style={[styles.subtitle, { color: t.fgDim }]} numberOfLines={1}>
+            {active ? 'Local plan · on this device' : 'Pick up a plan or start a new one'}
+          </Text>
+        </View>
+        {readiness && (
+          <View style={[styles.readyPill, {
+            borderColor: readiness.complete ? PLAN_COLORS.good : t.borderColor,
+            backgroundColor: readiness.complete ? 'rgba(126,226,196,0.12)' : 'transparent',
+          }]}>
+            <Text style={[styles.readyText, {
+              color: readiness.complete ? PLAN_COLORS.good : t.fgMuted, fontFamily: t.fontMono,
+            }]}>
+              {readiness.complete
+                ? 'Ready'
+                : `${readiness.sections.filter((s) => s.status.status === 'complete').length}`
+                  + `/${readiness.sections.filter((s) => s.status.status !== 'na').length}`}
+            </Text>
+          </View>
         )}
-        {tab === 'chat' && plan && (
-          <>
-            <ChatMessages plan={plan} onConfirmSection={confirmSection} />
-            {status === 'blocked' && (
-              <GateCard checks={plan.gate} onViewGrade={() => setTab('grade')} onFix={fixGate} />
-            )}
-            {status === 'ready' && <ReadySummary plan={plan} />}
-          </>
-        )}
-        {tab === 'plan' && plan && <PlanTab plan={plan} onGrade={() => setTab('grade')} />}
-        {tab === 'preview' && <PreviewTab />}
-        {tab === 'grade' && plan && <GradeTab grade={plan.grade} />}
-      </ScrollView>
+      </View>
 
-      {/* Footer — varies by state */}
-      {tab === 'chat' && isEmpty && (
-        <View style={styles.footer}>
-          <PrimaryButton label="Start planning" onPress={startPlanning} />
-        </View>
-      )}
-      {tab === 'chat' && plan && status === 'ready' && (
-        <View style={styles.footer}>
-          <Surface style={styles.publishBar} radius={16}>
-            <View style={[styles.gradeBadge, { backgroundColor: 'rgba(126,226,196,0.14)' }]}>
-              <Text style={[styles.gradeBadgeText, { color: PLAN_COLORS.good, fontFamily: t.fontMono }]}>
-                {plan.grade.letter}
+      {/* ── Home: recent projects + new from a blueprint ── */}
+      {!active && (
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={[styles.contentInner, { paddingBottom: insets.bottom + 24 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {loading ? (
+            <View style={styles.loading}><ActivityIndicator color={t.accent} /></View>
+          ) : (
+            <>
+              {summaries.length > 0 && (
+                <View style={styles.recent}>
+                  <Text style={[styles.sectionHeading, { color: t.fgDim }]}>RECENT PLANS</Text>
+                  {summaries.map((s) => (
+                    <Pressable key={s.id} onPress={() => { void openProject(s.id); }}>
+                      <Surface style={styles.recentCard} radius={14}>
+                        <View style={styles.recentMain}>
+                          <Text style={[styles.recentTitle, { color: t.fg }]} numberOfLines={1}>{s.title}</Text>
+                          <Text style={[styles.recentMeta, { color: t.fgDim }]} numberOfLines={1}>
+                            {s.blueprintName} · {s.complete ? 'ready' : `${s.done}/${s.total}`} · {relativeTime(s.updatedAt)}
+                          </Text>
+                        </View>
+                        <Pressable onPress={() => confirmDelete(s.id, s.title)} hitSlop={10} style={styles.trash}>
+                          <Svg width={15} height={15} viewBox="0 0 16 16" fill="none">
+                            <Path d="M3 4.5h10M6 4.5V3h4v1.5M5 4.5l.5 8h5l.5-8" stroke={t.fgMuted} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+                          </Svg>
+                        </Pressable>
+                      </Surface>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+              <Text style={[styles.sectionHeading, { color: t.fgDim, marginTop: summaries.length ? 6 : 0 }]}>
+                NEW FROM A BLUEPRINT
               </Text>
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[styles.publishTitle, { color: t.fg }]}>Ready to publish</Text>
-              <Text style={[styles.publishMeta, { color: t.fgMuted, fontFamily: t.fontMono }]}>
-                {plan.milestones.reduce((n, m) => n + m.issues, 0)} issues · {plan.milestones.reduce((n, m) => n + m.agents, 0)} agents
-              </Text>
-            </View>
-            <PrimaryButton onPress={() => {}} style={styles.syncBtn}>
-              <Svg width={15} height={15} viewBox="0 0 15 15" fill="none">
-                <Path d="M2 7.5h11M9 3.5l4 4-4 4" stroke="#fff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-              <Text style={styles.syncText}>Sync to GitHub</Text>
-            </PrimaryButton>
-          </Surface>
-        </View>
-      )}
-      {tab === 'chat' && plan && status !== 'ready' && (
-        <View style={styles.footer}>
-          <QuickReplies items={status === 'blocked' ? GATE_QUICK : DRAFT_QUICK} onPick={pickQuick} style={styles.quick} />
-          <Composer onSend={() => {}} />
-        </View>
+              <BlueprintPicker onPick={startBlueprint} />
+            </>
+          )}
+        </ScrollView>
       )}
 
-      <PlannerTabBar tabs={tabs} active={tab} onChange={setTab} bottomInset={insets.bottom} />
+      {/* ── Active plan: stage bar + Chat / Plan ── */}
+      {active && readiness && (
+        <View style={styles.activeRoot}>
+          <View style={styles.activeTop}>
+            <BlueprintStageBar readiness={readiness} />
+            <View style={[styles.segment, { borderColor: t.borderColor }]}>
+              {(['chat', 'plan'] as const).map((v) => (
+                <Pressable
+                  key={v}
+                  onPress={() => setView(v)}
+                  style={[styles.segBtn, view === v && { backgroundColor: t.glass ? 'rgba(255,255,255,0.1)' : t.surface }]}
+                >
+                  <Text style={[styles.segText, { color: view === v ? t.fg : t.fgMuted }]}>
+                    {v === 'chat' ? 'Chat' : 'Plan'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
 
-      {menuOpen && <OverflowMenu onClose={() => setMenuOpen(false)} onPublish={clearPlan} />}
+          {view === 'chat' ? (
+            <PlanConversation
+              messages={active.messages}
+              sending={sending}
+              onSend={sendMessage}
+              bottomInset={insets.bottom}
+            />
+          ) : (
+            <ScrollView
+              style={styles.content}
+              contentContainerStyle={[styles.contentInner, { paddingBottom: insets.bottom + 24 }]}
+              showsVerticalScrollIndicator={false}
+            >
+              {readiness.complete ? (
+                <Surface style={[styles.banner, { borderColor: PLAN_COLORS.good }]} radius={14}>
+                  <Text style={[styles.bannerTitle, { color: PLAN_COLORS.good }]}>Plan complete</Text>
+                  <Text style={[styles.bannerBody, { color: t.fgMuted }]}>
+                    Every applicable section is satisfied. Transfer to base-studio-code is coming soon.
+                  </Text>
+                </Surface>
+              ) : readiness.current ? (
+                <Surface style={styles.banner} radius={14}>
+                  <Text style={[styles.bannerLabel, { color: t.fgDim }]}>UP NEXT</Text>
+                  <Text style={[styles.bannerTitle, { color: t.fg }]}>
+                    {readiness.current.glyph}  {readiness.current.name}
+                  </Text>
+                  <Text style={[styles.bannerBody, { color: t.fgMuted }]}>{readiness.current.blurb}</Text>
+                </Surface>
+              ) : null}
+
+              <View style={styles.sectionList}>
+                {readiness.sections.map(({ section, status }) => {
+                  const meta = status.blocked
+                    ? { label: 'Blocked', color: PLAN_COLORS.warn }
+                    : STATUS_META[status.status];
+                  const content = active.sections[section.key]?.content;
+                  return (
+                    <Surface key={section.key} style={styles.sectionCard} radius={14}>
+                      <View style={styles.sectionRow}>
+                        <Text style={[styles.sectionGlyph, { color: meta.color }]}>{section.glyph}</Text>
+                        <View style={styles.sectionMain}>
+                          <Text style={[styles.sectionName, { color: t.fg }]}>{section.name}</Text>
+                          <Text style={[styles.sectionGate, { color: t.fgDim }]} numberOfLines={1}>
+                            Gate: {section.gate}
+                          </Text>
+                        </View>
+                        <View style={[styles.statusPill, { backgroundColor: `${meta.color}22` }]}>
+                          <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
+                        </View>
+                      </View>
+                      {content ? (
+                        <Text style={[styles.sectionContent, { color: t.fgMuted }]} numberOfLines={6}>{content}</Text>
+                      ) : null}
+                      {section.pipelines.length > 0 && (
+                        <View style={[styles.pipelineList, { borderTopColor: t.borderColor }]}>
+                          {section.pipelines.map((pl) => {
+                            const run = active.pipelineRuns[pl.uid];
+                            const rs = run?.status ?? 'idle';
+                            const pc = PIPELINE_STATUS_COLOR[rs] ?? '#8a8f9a';
+                            return (
+                              <View key={pl.uid} style={styles.pipelineRow}>
+                                <View style={[styles.pipelineDot, { backgroundColor: pc }]} />
+                                <View style={styles.pipelineMain}>
+                                  <Text style={[styles.pipelineName, { color: t.fgMuted }]} numberOfLines={1}>
+                                    {pl.name}{pl.gate ? ' · gate' : ''}
+                                  </Text>
+                                  <Text style={[styles.pipelineMeta, { color: t.fgDim }]} numberOfLines={1}>
+                                    {run?.message ?? pl.trigger}
+                                  </Text>
+                                </View>
+                                <Pressable
+                                  onPress={() => { void runSectionPipeline(section.key, pl.uid); }}
+                                  disabled={rs === 'running' || !pl.enabled}
+                                  style={[styles.runBtn, { borderColor: t.borderColor, opacity: pl.enabled ? 1 : 0.4 }]}
+                                  hitSlop={6}
+                                >
+                                  {rs === 'running'
+                                    ? <ActivityIndicator color={t.fgMuted} size="small" />
+                                    : <Text style={[styles.runText, { color: t.accent }]}>Run</Text>}
+                                </Pressable>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </Surface>
+                  );
+                })}
+              </View>
+
+              {!readiness.complete && readiness.incomplete.length > 0 && (
+                <Surface style={styles.incompleteCard} radius={14}>
+                  <Text style={[styles.incompleteTitle, { color: t.fg }]}>What's left</Text>
+                  {readiness.incomplete.map((s) => (
+                    <View key={s.key} style={styles.incompleteRow}>
+                      <View style={[styles.incDot, {
+                        backgroundColor: s.status === 'locked' ? '#8a8f9a' : PLAN_COLORS.plan,
+                      }]} />
+                      <Text style={[styles.incName, { color: t.fgMuted }]}>{s.name}</Text>
+                      <Text style={[styles.incReason, { color: t.fgDim }]} numberOfLines={1}>{s.reason}</Text>
+                    </View>
+                  ))}
+                </Surface>
+              )}
+            </ScrollView>
+          )}
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { flex: 1 },
-  contentInner: { paddingHorizontal: 14, paddingTop: 4, paddingBottom: 16 },
-  footer: { paddingHorizontal: 12, paddingTop: 8, gap: 8 },
-  quick: { marginHorizontal: -12 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 12, paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerText: { flex: 1, minWidth: 0 },
+  title: { fontSize: 16, fontWeight: '700' },
+  subtitle: { fontSize: 11.5, marginTop: 1 },
+  readyPill: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 9, paddingVertical: 4 },
+  readyText: { fontSize: 11, fontWeight: '600' },
 
-  publishBar: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10 },
-  gradeBadge: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  gradeBadgeText: { fontSize: 14, fontWeight: '700' },
-  publishTitle: { fontSize: 13.5, fontWeight: '600' },
-  publishMeta: { fontSize: 10.5, marginTop: 1 },
-  syncBtn: { paddingHorizontal: 14, minHeight: 40 },
-  syncText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  content: { flex: 1 },
+  contentInner: { paddingHorizontal: 14, paddingTop: 12, gap: 14 },
+
+  loading: { paddingVertical: 40, alignItems: 'center' },
+  sectionHeading: { fontSize: 10.5, letterSpacing: 1.2, fontWeight: '700' },
+
+  recent: { gap: 8 },
+  recentCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13 },
+  recentMain: { flex: 1, minWidth: 0, gap: 2 },
+  recentTitle: { fontSize: 14, fontWeight: '600' },
+  recentMeta: { fontSize: 11.5 },
+  trash: { padding: 4 },
+
+  activeRoot: { flex: 1 },
+  activeTop: { paddingHorizontal: 14, paddingTop: 10, gap: 10 },
+  segment: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, padding: 2 },
+  segBtn: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 8 },
+  segText: { fontSize: 13, fontWeight: '600' },
+
+  banner: { padding: 14, gap: 4 },
+  bannerLabel: { fontSize: 10, letterSpacing: 1.2, fontWeight: '700' },
+  bannerTitle: { fontSize: 15, fontWeight: '700' },
+  bannerBody: { fontSize: 12.5, lineHeight: 18 },
+
+  sectionList: { gap: 8 },
+  sectionCard: { padding: 13, gap: 8 },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  sectionGlyph: { fontSize: 17, width: 22, textAlign: 'center' },
+  sectionMain: { flex: 1, minWidth: 0, gap: 2 },
+  sectionName: { fontSize: 14, fontWeight: '600' },
+  sectionGate: { fontSize: 11.5 },
+  statusPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  statusText: { fontSize: 10.5, fontWeight: '600' },
+  sectionContent: { fontSize: 12, lineHeight: 17 },
+
+  pipelineList: { gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, marginTop: 2 },
+  pipelineRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  pipelineDot: { width: 7, height: 7, borderRadius: 4 },
+  pipelineMain: { flex: 1, minWidth: 0 },
+  pipelineName: { fontSize: 12.5, fontWeight: '500' },
+  pipelineMeta: { fontSize: 11, marginTop: 1 },
+  runBtn: { borderWidth: 1, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 5, minWidth: 50, alignItems: 'center' },
+  runText: { fontSize: 12.5, fontWeight: '600' },
+
+  incompleteCard: { padding: 14, gap: 8 },
+  incompleteTitle: { fontSize: 13.5, fontWeight: '700' },
+  incompleteRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  incDot: { width: 7, height: 7, borderRadius: 4 },
+  incName: { fontSize: 12.5, fontWeight: '500' },
+  incReason: { fontSize: 11.5, flex: 1 },
 });
