@@ -4,6 +4,7 @@ import React, {
 import { TunnelClient, TunnelCallbacks } from './tunnel';
 import { PaneState, PairingPayload, TunnelConnectionState } from './types';
 import { KEYS, getSecret, setSecret } from './storage';
+import { parsePairingPayload } from './tunnel/pairing';
 
 export type TunnelValue = {
   connectionState: TunnelConnectionState;
@@ -63,7 +64,11 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
       ]);
       if (fcm) fcmTokenRef.current = fcm;
       if (pairingJson) {
-        try { setLastConnection(JSON.parse(pairingJson) as PairingPayload); } catch { /* ignore */ }
+        // Validate + normalise the persisted payload the same way as a fresh
+        // scan, so a corrupt or legacy (e.g. https://) stored value can't power
+        // a broken reconnect button.
+        const saved = parsePairingPayload(pairingJson);
+        if (saved) setLastConnection(saved);
       }
     })();
 

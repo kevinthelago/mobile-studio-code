@@ -135,6 +135,9 @@ export type PaneDescriptor = {
   status: PaneStatus;
 };
 
+/** The desktop PTY's grid dimensions for a pane (columns × rows of cells). */
+export type PaneSize = { cols: number; rows: number };
+
 export type PaneSessionState = {
   paneId: string;
   status: PaneStatus;
@@ -148,6 +151,11 @@ export type TunnelServerMessage =
   | { type: 'auth_ok' }
   | { type: 'pane_list'; panes: PaneDescriptor[] }
   | { type: 'pane_output'; paneId: string; data: string; coarse: boolean }
+  // The desktop PTY's grid size for a pane. Sent on pairing replay (after
+  // pane_list + session_state, one per pane) and whenever the desktop PTY
+  // resizes. The phone adopts this size; it does not drive it.
+  // Canonical shape: shared fixture serverToClient.pane_size (base-studio-code).
+  | { type: 'pane_size'; paneId: string; cols: number; rows: number }
   | {
       type: 'session_state';
       paneId: string;
@@ -174,6 +182,13 @@ export type PaneState = {
   outputBuffer: string;
   /** Latest structured state update — populated for minimized panes */
   sessionState: PaneSessionState | null;
+  /**
+   * Desktop PTY grid size, from the server's `pane_size` frame. Drives the
+   * terminal's render width (font is scaled so `cols` cells span the device)
+   * so the desktop's line-wrapping is reproduced instead of re-wrapped. Null
+   * until the first `pane_size` frame for this pane arrives.
+   */
+  ptySize: PaneSize | null;
   hasUserRequest: boolean;
   lastUserRequestAt: number | null;
   lastActivityAt: number | null;

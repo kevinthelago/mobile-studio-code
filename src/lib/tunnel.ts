@@ -1,9 +1,11 @@
 import { utf8ToBytes } from '@noble/hashes/utils.js';
 import {
-  PaneState, PaneStreamingState, PairingPayload, TunnelClientMessage,
+  PaneSize, PaneState, PaneStreamingState, PairingPayload, TunnelClientMessage,
   TunnelConnectionState, TunnelServerMessage,
 } from './types';
 import { NoiseSession } from './tunnel/noise';
+import { attachPaneSize, createPaneState } from './tunnel/paneSize';
+import { buildPaneInput } from './tunnel/input';
 
 export type TunnelCallbacks = {
   onConnectionStateChange: (state: TunnelConnectionState) => void;
@@ -13,6 +15,13 @@ export type TunnelCallbacks = {
 
 /** Maximum PTY output chars buffered per pane before oldest chars are dropped */
 const OUTPUT_BUFFER_MAX = 50_000;
+
+/**
+ * How long to wait for the Noise handshake + auth_ok before giving up. A stale
+ * saved pairing dials a room the desktop is no longer in, so no host ever
+ * answers; without this the UI spins on "authenticating" forever.
+ */
+const CONNECT_TIMEOUT_MS = 12_000;
 
 /** Copy a Uint8Array's exact bytes into a standalone ArrayBuffer for ws.send. */
 function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
@@ -63,9 +72,14 @@ export class TunnelClient {
   private destroyed = false;
   private noise: NoiseSession | null = null;
   private handshakeDone = false;
+  private connectTimer: ReturnType<typeof setTimeout> | null = null;
 
   private connectionState: TunnelConnectionState = 'disconnected';
   private panes: Record<string, PaneState> = {};
+  // Latest desktop PTY size per pane. Buffered separately from `panes` because
+  // `pane_size` can replay before the pane appears in `pane_list`; the cache is
+  // applied at pane creation and on every subsequent frame.
+  private paneSizes: Record<string, PaneSize> = {};
   private activePaneId: string | null = null;
   private readonly cb: TunnelCallbacks;
 
@@ -84,8 +98,7 @@ export class TunnelClient {
 
   disconnect() {
     this.destroyed = true;
-    this.ws?.close();
-    this.ws = null;
+    this.closeSocket();
     this.setConnectionState('disconnected');
   }
 
@@ -108,7 +121,7 @@ export class TunnelClient {
   }
 
   sendInput(paneId: string, data: string) {
-    this.send({ type: 'pane_input', paneId, data });
+    this.send(buildPaneInput(paneId, data));
   }
 
   sendResize(paneId: string, cols: number, rows: number) {
@@ -121,6 +134,13 @@ export class TunnelClient {
 
   private openSocket() {
     if (this.destroyed || !this.payload) return;
+    // Tear down any prior socket FIRST so its stale event handlers can't fire
+    // against this new attempt. That race was the reconnect bug: the old
+    // socket's late onclose nulled the new `this.ws`, so send() dropped the
+    // auth frame and the UI hung on "authenticating".
+    this.closeSocket();
+    this.handshakeDone = false;
+    this.noise = null;
     this.setConnectionState('connecting');
 
     const base = this.payload.relayUrl.replace(/\/+$/, '');
@@ -129,14 +149,21 @@ export class TunnelClient {
     try {
       ws = new WebSocket(url);
     } catch {
-      this.setConnectionState('error');
+      this.failConnection('could not open WebSocket');
       return;
     }
     ws.binaryType = 'arraybuffer';
     this.ws = ws;
+    // Bound the handshake/auth: a stale room (host not present) never answers.
+    this.connectTimer = setTimeout(() => {
+      if (ws === this.ws && this.connectionState !== 'connected') {
+        this.failConnection('timed out waiting for the desktop (saved pairing may be stale — rescan the QR)');
+      }
+    }, CONNECT_TIMEOUT_MS);
 
+    // Every handler guards `ws === this.ws` so a superseded socket is inert.
     ws.onopen = () => {
-      if (this.destroyed || !this.payload) return;
+      if (this.destroyed || ws !== this.ws || !this.payload) return;
       this.setConnectionState('authenticating');
       try {
         // hostPubKey is standard (padded) base64 of the desktop's X25519 key.
@@ -144,15 +171,16 @@ export class TunnelClient {
         this.noise = new NoiseSession(rs);
         ws.send(toArrayBuffer(this.noise.startHandshake()));
       } catch {
-        this.fail(ws);
+        this.failConnection('handshake init failed');
       }
     };
 
     ws.onmessage = (e) => {
-      if (this.destroyed || !this.noise) return;
+      if (this.destroyed || ws !== this.ws || !this.noise) return;
       // Relay control/errors (bad_role/host_taken/room_full) arrive as text.
       if (typeof e.data === 'string') {
-        this.fail(ws);
+        console.log('tunnel← relay text (error):', e.data);
+        this.failConnection(`relay rejected: ${e.data}`);
         return;
       }
       try {
@@ -162,38 +190,89 @@ export class TunnelClient {
           // (the psk) as the first encrypted app frame.
           this.noise.finishHandshake(frame);
           this.handshakeDone = true;
+          console.log(`tunnel handshake complete (${frame.length}B msg2) → sending auth`);
           this.send({ type: 'auth', token: this.payload!.psk, fcmToken: this.fcmToken });
         } else {
           const msg = JSON.parse(utf8Decode(this.noise.decrypt(frame))) as TunnelServerMessage;
           this.handleMessage(msg);
         }
-      } catch {
-        this.fail(ws);
+      } catch (err) {
+        console.log('tunnel decode/handle error:', (err as Error)?.message ?? err);
+        this.failConnection('decode error');
       }
     };
 
-    ws.onerror = () => {
+    ws.onerror = (ev) => {
+      if (ws !== this.ws) return;
+      console.log('tunnel ws error:', (ev as { message?: string })?.message ?? '(no message)');
       // onclose always fires after onerror; state is set there.
     };
 
-    ws.onclose = () => {
-      if (this.destroyed) return;
+    ws.onclose = (ev) => {
+      if (ws !== this.ws) return; // superseded socket — ignore
+      const c = ev as { code?: number; reason?: string };
+      console.log(`tunnel ws closed code=${c?.code ?? '?'} reason=${c?.reason || '(none)'}`);
+      this.clearConnectTimeout();
       this.ws = null;
+      if (this.destroyed) return;
       // No auto-reconnect — drop to disconnected so the user can choose to
       // reconnect from the pairing screen.
       this.setConnectionState('disconnected');
     };
   }
 
-  /** Surface a handshake/transport failure and close (no auto-retry). */
-  private fail(ws: WebSocket) {
-    this.setConnectionState('error');
+  /** Detach handlers from and close the current socket without emitting state. */
+  private closeSocket() {
+    this.clearConnectTimeout();
+    const ws = this.ws;
+    this.ws = null;
+    if (!ws) return;
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onerror = null;
+    ws.onclose = null;
     try { ws.close(); } catch { /* already closing */ }
   }
 
+  private clearConnectTimeout() {
+    if (this.connectTimer != null) {
+      clearTimeout(this.connectTimer);
+      this.connectTimer = null;
+    }
+  }
+
+  /** Surface a handshake/transport failure and tear down (no auto-retry). */
+  private failConnection(reason: string) {
+    console.log(`tunnel connect failed: ${reason}`);
+    this.closeSocket();
+    this.handshakeDone = false;
+    this.noise = null;
+    if (!this.destroyed) this.setConnectionState('error');
+  }
+
+  /** Diagnostics: summarise every inbound (server→client) frame. */
+  private logInbound(msg: TunnelServerMessage) {
+    switch (msg.type) {
+      case 'auth_ok':
+        console.log('tunnel← auth_ok'); break;
+      case 'pane_list':
+        console.log(`tunnel← pane_list ids=${msg.panes.map((p) => p.id).join(',') || '(none)'}`); break;
+      case 'pane_output':
+        console.log(`tunnel← pane_output pane=${msg.paneId} bytes=${msg.data.length}`); break;
+      case 'pane_size':
+        console.log(`tunnel← pane_size pane=${msg.paneId} ${msg.cols}x${msg.rows}`); break;
+      case 'session_state':
+        console.log(`tunnel← session_state pane=${msg.paneId} status=${msg.status}`); break;
+      case 'user_request':
+        console.log(`tunnel← user_request pane=${msg.paneId}`); break;
+    }
+  }
+
   private handleMessage(msg: TunnelServerMessage) {
+    this.logInbound(msg);
     switch (msg.type) {
       case 'auth_ok': {
+        this.clearConnectTimeout();
         this.setConnectionState('connected');
         // Re-assert streaming state for the active pane after reconnect
         if (this.activePaneId) {
@@ -208,23 +287,31 @@ export class TunnelClient {
         for (const desc of msg.panes) {
           next[desc.id] = next[desc.id]
             ? { ...next[desc.id], descriptor: desc }
-            : {
-                descriptor: desc,
-                streamingState: desc.id === this.activePaneId ? 'streaming' : 'minimized',
-                outputBuffer: '',
-                sessionState: null,
-                hasUserRequest: false,
-                lastUserRequestAt: null,
-                lastActivityAt: Date.now(),
-              };
+            : createPaneState(desc, {
+                active: desc.id === this.activePaneId,
+                size: this.paneSizes[desc.id] ?? null, // apply any buffered size
+                now: Date.now(),
+              });
         }
-        // Drop panes no longer in the list
+        // Drop panes no longer in the list (and their buffered sizes)
         const live = new Set(msg.panes.map((p) => p.id));
         for (const id of Object.keys(next)) {
-          if (!live.has(id)) delete next[id];
+          if (!live.has(id)) { delete next[id]; delete this.paneSizes[id]; }
         }
         this.panes = next;
         this.emitPanes();
+        break;
+      }
+
+      case 'pane_size': {
+        // The phone adopts the desktop's grid; it never sends pane_resize back.
+        const size: PaneSize = { cols: msg.cols, rows: msg.rows };
+        this.paneSizes[msg.paneId] = size;
+        const updated = attachPaneSize(this.panes, msg.paneId, size);
+        if (updated !== this.panes) {
+          this.panes = updated;
+          this.emitPanes();
+        }
         break;
       }
 
@@ -295,11 +382,19 @@ export class TunnelClient {
   private send(msg: TunnelClientMessage) {
     if (!this.noise || !this.handshakeDone) return;
     if (this.ws?.readyState !== WebSocket.OPEN) return;
+    // Diagnostics: log every outbound frame so it can be correlated with the
+    // desktop's logs (confirms we send pane_input to a real pane id with a \r).
+    // `data` is shown JSON-escaped so control bytes (e.g. \r) are visible.
+    const paneId = 'paneId' in msg ? msg.paneId : '-';
+    const bytes = 'data' in msg ? msg.data.length : 0;
+    const preview = 'data' in msg ? ` data=${JSON.stringify(msg.data)}` : '';
     const ct = this.noise.encrypt(utf8Encode(JSON.stringify(msg)));
+    console.log(`tunnel→ ${msg.type} pane=${paneId} bytes=${bytes}${preview} cipher=${ct.length}B`);
     this.ws.send(toArrayBuffer(ct));
   }
 
   private setConnectionState(state: TunnelConnectionState) {
+    if (this.connectionState !== state) console.log(`tunnel state=${state}`);
     this.connectionState = state;
     this.cb.onConnectionStateChange(state);
   }
