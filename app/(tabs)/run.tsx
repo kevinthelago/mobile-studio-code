@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, Keyboard, Platform,
+  ActivityIndicator, FlatList, Keyboard, PanResponder, Platform,
   Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
@@ -11,6 +12,7 @@ import { useTunnel } from '../../src/lib/TunnelContext';
 import { PaneState, PaneStatus, TunnelConnectionState } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
+import { SESSION_STRIP_HEIGHT } from '../../src/components/ui/SessionStrip';
 import { ProvidersScreen } from '../../src/components/ProvidersScreen';
 import { stripAnsi, lastLines } from '../../src/lib/ansi';
 import { fitTerminalFontSize, BASE_TERMINAL_FONT } from '../../src/lib/tunnel/paneSize';
@@ -252,6 +254,25 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
           </Svg>
         </Surface>
       </Pressable>
+
+      {/* Plan a project locally — no desktop/tunnel required. */}
+      <Pressable onPress={() => router.push('/(planner)/planner')} style={styles.standaloneSecondary}>
+        <Surface style={styles.standaloneCard} radius={16}>
+          <View style={[styles.standaloneIcon, { backgroundColor: t.glass ? 'rgba(192,132,252,0.18)' : 'rgba(192,132,252,0.12)' }]}>
+            <Svg width={17} height={17} viewBox="0 0 16 16" fill="none">
+              <Path d="M5 2.5h6M5 8h6M5 13.5h6M2.5 2.5h.01M2.5 8h.01M2.5 13.5h.01"
+                stroke="#c084fc" strokeWidth={1.6} strokeLinecap="round" />
+            </Svg>
+          </View>
+          <View style={styles.standaloneText}>
+            <Text style={[styles.standaloneTitle, { color: t.fg }]}>Plan a project</Text>
+            <Text style={[styles.standaloneSub, { color: t.fgMuted }]}>Blueprint &amp; pipelines · on this device</Text>
+          </View>
+          <Svg width={11} height={11} viewBox="0 0 11 11" fill="none">
+            <Path d="M3.5 2l4 3.5-4 3.5" stroke={t.fgMuted} strokeWidth={1.6} strokeLinecap="round" />
+          </Svg>
+        </Surface>
+      </Pressable>
     </View>
   );
 }
@@ -315,6 +336,29 @@ function SessionCard({ pane, onPress }: { pane: PaneState; onPress: () => void }
   );
 }
 
+/** Pill shortcut into the project planner (a full-screen takeover). The tunnel
+ *  stays connected — it lives in TunnelProvider, not this screen. */
+function PlanShortcut() {
+  const t = useTheme();
+  const purple = '#c084fc';
+  return (
+    <Pressable
+      onPress={() => router.push('/(planner)/planner')}
+      hitSlop={8}
+      style={[styles.planBtn, {
+        borderColor: purple,
+        backgroundColor: t.glass ? 'rgba(192,132,252,0.18)' : 'rgba(192,132,252,0.12)',
+      }]}
+    >
+      <Svg width={13} height={13} viewBox="0 0 16 16" fill="none">
+        <Path d="M5 2.5h6M5 8h6M5 13.5h6M2.5 2.5h.01M2.5 8h.01M2.5 13.5h.01"
+          stroke={purple} strokeWidth={1.6} strokeLinecap="round" />
+      </Svg>
+      <Text style={[styles.planBtnText, { color: purple }]}>Plan</Text>
+    </Pressable>
+  );
+}
+
 function PaneGridView() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -322,12 +366,19 @@ function PaneGridView() {
   const ordered = orderedPaneIds.map((id) => panes[id]).filter(Boolean) as PaneState[];
 
   return (
-    <View style={[styles.grid, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 8 }]}>
+    <View style={[styles.grid, {
+      // Clear the SessionStrip when it's showing (i.e. there are panes).
+      paddingTop: insets.top + (ordered.length > 0 ? SESSION_STRIP_HEIGHT : 0) + 8,
+      paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 8,
+    }]}>
       <View style={styles.gridHeader}>
         <Text style={[styles.gridTitle, { color: t.fg }]}>Sessions</Text>
-        <Pressable onPress={disconnect} hitSlop={8}>
-          <Text style={[styles.disconnectText, { color: t.fgMuted }]}>Disconnect</Text>
-        </Pressable>
+        <View style={styles.gridActions}>
+          <PlanShortcut />
+          <Pressable onPress={disconnect} hitSlop={8}>
+            <Text style={[styles.disconnectText, { color: t.fgMuted }]}>Disconnect</Text>
+          </Pressable>
+        </View>
       </View>
 
       {ordered.length === 0 ? (
@@ -358,6 +409,24 @@ function TerminalView({ paneId }: { paneId: string }) {
   const [inputText, setInputText] = useState('');
   const [kbHeight, setKbHeight] = useState(0);
   const [termWidth, setTermWidth] = useState(0);
+
+  // Swipe horizontally to leave the console and return to the session list.
+  // `unfocusPane` is read from a ref so the (one-time) PanResponder always
+  // calls the current handler. Only a decisive horizontal drag is claimed, so
+  // vertical scrolling and taps still work.
+  const unfocusRef = useRef(unfocusPane);
+  unfocusRef.current = unfocusPane;
+  const swipe = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) =>
+        Math.abs(g.dx) > 18 && Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
+      onPanResponderRelease: (_e, g) => {
+        if (Math.abs(g.dx) > 56 && Math.abs(g.dx) > Math.abs(g.dy) * 1.4) {
+          unfocusRef.current();
+        }
+      },
+    }),
+  ).current;
   // Set once the user has submitted something — used to surface the view-only
   // hint only after an attempt (a fresh pairing is view-only on the desktop
   // until the user grants input there, and the desktop doesn't yet tell us).
@@ -430,14 +499,16 @@ function TerminalView({ paneId }: { paneId: string }) {
   const lineHeight = Math.round(fontSize * 1.4);
 
   return (
-    <View style={styles.termRoot}>
-      {/* Header */}
-      <View style={[styles.termHeader, { paddingTop: insets.top + 8, borderBottomColor: t.borderColor }]}>
-        <IconBtn onPress={unfocusPane}>
+    <View style={styles.termRoot} {...swipe.panHandlers}>
+      {/* Header — cleared below the persistent SessionStrip so the back control
+          isn't hidden under it. */}
+      <View style={[styles.termHeader, { paddingTop: insets.top + SESSION_STRIP_HEIGHT + 8, borderBottomColor: t.borderColor }]}>
+        <Pressable onPress={unfocusPane} hitSlop={8} style={styles.termBack}>
           <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-            <Path d="M9 3L5 7l4 4" stroke={t.fg} strokeWidth={1.6} strokeLinecap="round" />
+            <Path d="M9 3L5 7l4 4" stroke={t.accent} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-        </IconBtn>
+          <Text style={[styles.termBackLabel, { color: t.accent }]}>Sessions</Text>
+        </Pressable>
         <View style={[styles.statusDot, { backgroundColor: dotColor }]} />
         <Text style={[styles.termTitle, { color: t.fg, fontFamily: t.fontMono }]} numberOfLines={1}>
           {pane.descriptor.name || pane.descriptor.id}
@@ -590,6 +661,7 @@ const styles = StyleSheet.create({
   standaloneCard: {
     flexDirection: 'row', alignItems: 'center', gap: 11, padding: 14,
   },
+  standaloneSecondary: { marginTop: 10 },
   standaloneIcon: {
     width: 34, height: 34, borderRadius: 9,
     alignItems: 'center', justifyContent: 'center',
@@ -623,6 +695,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingBottom: 12,
   },
   gridTitle: { fontSize: 20, fontWeight: '700' },
+  gridActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  planBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 11, paddingVertical: 6, borderRadius: 16, borderWidth: 1,
+  },
+  planBtnText: { fontSize: 12.5, fontWeight: '600' },
   disconnectText: { fontSize: 13 },
   cardList: { paddingHorizontal: 16, gap: 10 },
 
@@ -652,6 +730,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingBottom: 10, gap: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  termBack: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  termBackLabel: { fontSize: 13, fontWeight: '600' },
   termTitle: { fontSize: 13, fontWeight: '600', flex: 1 },
   termTask: { fontSize: 11, flexShrink: 1 },
 

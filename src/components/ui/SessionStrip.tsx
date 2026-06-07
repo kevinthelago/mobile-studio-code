@@ -10,6 +10,10 @@ import { useTunnel } from '../../lib/TunnelContext';
 import { PaneState, PaneStatus } from '../../lib/types';
 import { useTheme } from '../../theme';
 
+/** Height of the strip itself; it's pinned just below the top safe-area inset.
+ *  Screens that render their own header while connected must clear this. */
+export const SESSION_STRIP_HEIGHT = 40;
+
 function dotColor(status: PaneStatus): string {
   switch (status) {
     case 'running': return '#4ade80';
@@ -72,7 +76,7 @@ export function SessionStrip() {
     router.navigate('/(tabs)/run' as never);
   };
 
-  const STRIP_H = 40;
+  const STRIP_H = SESSION_STRIP_HEIGHT;
 
   return (
     // absoluteFill overlay — box-none so taps fall through to content beneath
