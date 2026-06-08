@@ -14,6 +14,7 @@ import { lineDiffStat, DiffStat } from '../../src/lib/diff';
 import { Surface } from '../../src/components/ui/Surface';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { ClaudeAvatar } from '../../src/components/ui/ClaudeAvatar';
+import { SectionLabel } from '../../src/components/ui/SectionLabel';
 
 type ChangeRow = { path: string; state: 'M' | 'A' };
 
@@ -234,7 +235,7 @@ export default function GitScreen() {
       >
         <View style={styles.container}>
           <View style={styles.header}>
-            <Text style={[styles.eyebrow, { color: t.fgDim }]}>Branch</Text>
+            <SectionLabel>Branch</SectionLabel>
             <View style={styles.branchRow}>
               <Svg width={18} height={18} viewBox="0 0 18 18" fill="none">
                 <Circle cx={5} cy={4} r={2} stroke={t.accent} strokeWidth={1.8} />
@@ -308,7 +309,7 @@ export default function GitScreen() {
           <View style={styles.changesWrap}>
             <Surface style={styles.changesCard}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionLabel, { color: t.fgDim }]}>Modified</Text>
+                <SectionLabel>Modified</SectionLabel>
                 <Text style={[styles.sectionCount, { color: t.fgDim }]}>{changes.length}</Text>
               </View>
               <ScrollView showsVerticalScrollIndicator={false}>
@@ -421,9 +422,6 @@ const styles = StyleSheet.create({
   emptyBtn: { alignSelf: 'stretch', marginTop: 8 },
 
   header: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 },
-  eyebrow: {
-    fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', fontWeight: '600',
-  },
   branchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   branchName: { fontSize: 22, fontWeight: '700', letterSpacing: -0.4, flexShrink: 1 },
   upstreamText: { fontSize: 12, marginTop: 4 },
@@ -442,9 +440,6 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8,
-  },
-  sectionLabel: {
-    fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: '600',
   },
   sectionCount: { fontSize: 11 },
   cleanText: { fontSize: 12.5, padding: 16, lineHeight: 18 },

@@ -10,6 +10,7 @@ import { useTheme } from '../../src/theme';
 import { useSession } from '../../src/lib/session';
 import { FileEntry } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
+import { SectionLabel } from '../../src/components/ui/SectionLabel';
 
 type TreeRow =
   | { type: 'folder'; path: string; name: string; depth: number; open: boolean }
@@ -194,7 +195,7 @@ export default function FilesScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={[styles.eyebrow, { color: t.fgDim }]}>Workspace</Text>
+          <SectionLabel>Workspace</SectionLabel>
           <View style={styles.headerRow}>
             <Text style={[styles.headerTitle, { color: t.fg }]} numberOfLines={1}>{repoLeaf}</Text>
             <Text style={[styles.headerMeta, { color: t.fgMuted }]}>
@@ -227,9 +228,7 @@ export default function FilesScreen() {
 
         {recents.length > 0 && (
           <>
-            <Text style={[styles.sectionLabel, styles.sectionPad, { color: t.fgDim }]}>
-              Recent
-            </Text>
+            <SectionLabel style={styles.sectionPad}>Recent</SectionLabel>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -264,9 +263,7 @@ export default function FilesScreen() {
         )}
 
         <View style={styles.treeLabelRow}>
-          <Text style={[styles.sectionLabel, { color: t.fgDim }]}>
-            {q ? 'Matches' : 'Files'}
-          </Text>
+          <SectionLabel>{q ? 'Matches' : 'Files'}</SectionLabel>
           <Text style={[styles.treeAction, { color: t.fgDim }]}>
             {q ? `${tree.length} match${tree.length === 1 ? '' : 'es'}` : 'tap folder to expand'}
           </Text>
@@ -350,10 +347,6 @@ const styles = StyleSheet.create({
   emptyHint: { fontSize: 12.5, textAlign: 'center' },
 
   header: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 },
-  eyebrow: {
-    fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase',
-    fontWeight: '600',
-  },
   headerRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 2 },
   headerTitle: {
     fontSize: 28, fontWeight: '700', letterSpacing: -0.6, flexShrink: 1,
@@ -368,9 +361,6 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 13.5 },
 
-  sectionLabel: {
-    fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: '600',
-  },
   sectionPad: { paddingHorizontal: 24, marginTop: 6, marginBottom: 6 },
 
   recentsRow: { paddingHorizontal: 16, gap: 10, paddingBottom: 4 },

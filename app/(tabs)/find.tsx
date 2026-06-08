@@ -12,6 +12,7 @@ import { repoDir, readText } from '../../src/lib/fs';
 import { grepInText, GrepMatch } from '../../src/lib/syntax';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
+import { SectionLabel } from '../../src/components/ui/SectionLabel';
 
 type FileResult = { file: string; matches: GrepMatch[] };
 
@@ -142,7 +143,7 @@ export default function FindScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={[styles.eyebrow, { color: t.fgDim }]}>Search</Text>
+          <SectionLabel>Search</SectionLabel>
           <Text style={[styles.headerTitle, { color: t.fg }]}>Find in workspace</Text>
         </View>
 
@@ -292,9 +293,6 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 14 },
 
   header: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 },
-  eyebrow: {
-    fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', fontWeight: '600',
-  },
   headerTitle: {
     fontSize: 28, fontWeight: '700', letterSpacing: -0.6, marginTop: 2,
   },
