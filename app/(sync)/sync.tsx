@@ -9,6 +9,7 @@ import { useTheme } from '../../src/theme';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
+import { Tag } from '../../src/components/ui/Tag';
 import { PLAN_COLORS } from '../../src/lib/planner/colors';
 import { usePlannerSync } from '../../src/lib/planner/PlannerSyncContext';
 import type { ReconcileAction } from '../../src/lib/planner/sync/reconcile';
@@ -172,9 +173,7 @@ function ByIdResolver({ action, onResolve }: { action: ConflictAction; onResolve
           <Surface key={c.id} style={styles.idCard} radius={14}>
             <View style={styles.idHead}>
               <Text style={[styles.idText, { color: t.fg, fontFamily: t.fontMono }]}>id: {c.id}</Text>
-              <View style={[styles.tag, { backgroundColor: `${PLAN_COLORS.warn}22` }]}>
-                <Text style={[styles.tagText, { color: PLAN_COLORS.warn }]}>same id</Text>
-              </View>
+              <Tag color={PLAN_COLORS.warn} bg={`${PLAN_COLORS.warn}22`} border={false}>same id</Tag>
             </View>
             {!c.mine || !c.theirs ? (
               // delete-vs-edit
@@ -489,8 +488,6 @@ const styles = StyleSheet.create({
   idCard: { padding: 13, gap: 8 },
   idHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   idText: { fontSize: 13, fontWeight: '600', flex: 1 },
-  tag: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3 },
-  tagText: { fontSize: 10, fontWeight: '600' },
   fieldLabel: { fontSize: 11, fontWeight: '600' },
   row: { flexDirection: 'row', gap: 8 },
   choice: { flex: 1, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

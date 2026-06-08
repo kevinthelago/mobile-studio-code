@@ -8,6 +8,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
+import { Tag } from '../../src/components/ui/Tag';
 import { BlueprintPicker } from '../../src/components/planner/BlueprintPicker';
 import { BlueprintStageBar } from '../../src/components/planner/BlueprintStageBar';
 import { PlanConversation } from '../../src/components/planner/PlanConversation';
@@ -256,9 +257,7 @@ export default function PlannerScreen() {
                             Gate: {section.gate}
                           </Text>
                         </View>
-                        <View style={[styles.statusPill, { backgroundColor: `${meta.color}22` }]}>
-                          <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
-                        </View>
+                        <Tag color={meta.color} bg={`${meta.color}22`} border={false}>{meta.label}</Tag>
                       </View>
                       {content ? (
                         <Text style={[styles.sectionContent, { color: t.fgMuted }]} numberOfLines={6}>{content}</Text>
@@ -381,8 +380,6 @@ const styles = StyleSheet.create({
   sectionMain: { flex: 1, minWidth: 0, gap: 2 },
   sectionName: { fontSize: 14, fontWeight: '600' },
   sectionGate: { fontSize: 11.5 },
-  statusPill: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  statusText: { fontSize: 10.5, fontWeight: '600' },
   sectionContent: { fontSize: 12, lineHeight: 17 },
 
   pipelineList: { gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, marginTop: 2 },
