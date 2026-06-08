@@ -164,7 +164,19 @@ export type TunnelServerMessage =
       lastActivity: string;
       prompt: string | null;
     }
-  | { type: 'user_request'; paneId: string; prompt: string };
+  | { type: 'user_request'; paneId: string; prompt: string }
+  // ── Planner sync (see docs/planner-sync-protocol.md) ──
+  | { type: 'plan_sync_manifest'; projects: PlanSyncManifestEntry[] }
+  | { type: 'plan_sync_files'; projectId: string; files: Record<string, string> }
+  | { type: 'plan_sync_ack'; projectId: string };
+
+/** One project's manifest in a plan_sync_manifest frame (relpath → content hash). */
+export type PlanSyncManifestEntry = {
+  projectId: string;
+  title: string;
+  updatedAt: number;
+  files: Record<string, string>;
+};
 
 /** Messages sent from mobile → base-studio-code desktop */
 export type TunnelClientMessage =
@@ -172,7 +184,11 @@ export type TunnelClientMessage =
   | { type: 'pane_set_state'; paneId: string; state: PaneStreamingState }
   | { type: 'pane_focus'; paneId: string }
   | { type: 'pane_input'; paneId: string; data: string }
-  | { type: 'pane_resize'; paneId: string; cols: number; rows: number };
+  | { type: 'pane_resize'; paneId: string; cols: number; rows: number }
+  // ── Planner sync (mobile is the merge authority) ──
+  | { type: 'plan_sync_manifest_request' }
+  | { type: 'plan_sync_pull'; projectId: string; paths: string[] }
+  | { type: 'plan_sync_push'; projectId: string; title: string; files: Record<string, string> };
 
 /** Per-pane runtime state held in memory on the mobile side */
 export type PaneState = {
