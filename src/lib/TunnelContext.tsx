@@ -2,7 +2,7 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
 import { TunnelClient, TunnelCallbacks } from './tunnel';
-import { PaneState, PairingPayload, TunnelConnectionState } from './types';
+import { PaneState, PairingPayload, PlanSyncManifestEntry, TunnelConnectionState } from './types';
 import { KEYS, getSecret, setSecret } from './storage';
 import { parsePairingPayload } from './tunnel/pairing';
 
@@ -24,6 +24,13 @@ export type TunnelValue = {
   unfocusPane: () => void;
   /** Call after FCM token is obtained so it is included in future auth handshakes */
   setFcmToken: (fcmToken: string) => void;
+
+  // ── Planner sync (reconcile-on-connect; see docs/planner-sync-protocol.md) ──
+  syncRequestManifest: () => void;
+  syncPull: (projectId: string, paths: string[]) => Promise<Record<string, string>>;
+  syncPush: (projectId: string, title: string, files: Record<string, string>) => Promise<void>;
+  /** Register the handler for incoming desktop manifests (the sync hook uses this). */
+  setSyncManifestHandler: (fn: ((projects: PlanSyncManifestEntry[]) => void) | null) => void;
 };
 
 const TunnelContext = createContext<TunnelValue | null>(null);
@@ -41,6 +48,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const [lastConnection, setLastConnection] = useState<PairingPayload | null>(null);
   const fcmTokenRef = useRef<string | undefined>(undefined);
   const clientRef = useRef<TunnelClient | null>(null);
+  const syncManifestHandlerRef = useRef<((projects: PlanSyncManifestEntry[]) => void) | null>(null);
 
   useEffect(() => {
     const callbacks: TunnelCallbacks = {
@@ -50,6 +58,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
         // Desktop fires the FCM push; mobile only needs to update pane state,
         // which TunnelClient already does before calling this callback.
       },
+      onSyncManifest: (projects) => syncManifestHandlerRef.current?.(projects),
     };
     const client = new TunnelClient(callbacks);
     clientRef.current = client;
@@ -113,6 +122,22 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     setSecret(KEYS.FCM_TOKEN, fcmToken).catch(() => {});
   }, []);
 
+  const syncRequestManifest = useCallback(() => { clientRef.current?.syncRequestManifest(); }, []);
+  const syncPull = useCallback(
+    (projectId: string, paths: string[]) =>
+      clientRef.current?.syncPull(projectId, paths) ?? Promise.reject(new Error('tunnel not connected')),
+    [],
+  );
+  const syncPush = useCallback(
+    (projectId: string, title: string, files: Record<string, string>) =>
+      clientRef.current?.syncPush(projectId, title, files) ?? Promise.reject(new Error('tunnel not connected')),
+    [],
+  );
+  const setSyncManifestHandler = useCallback(
+    (fn: ((projects: PlanSyncManifestEntry[]) => void) | null) => { syncManifestHandlerRef.current = fn; },
+    [],
+  );
+
   const orderedPaneIds = useMemo(() => {
     return Object.values(panes)
       .sort((a, b) => {
@@ -138,6 +163,10 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     sendResize,
     unfocusPane,
     setFcmToken,
+    syncRequestManifest,
+    syncPull,
+    syncPush,
+    setSyncManifestHandler,
   };
 
   return (

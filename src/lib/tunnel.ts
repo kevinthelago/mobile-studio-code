@@ -1,7 +1,7 @@
 import { utf8ToBytes } from '@noble/hashes/utils.js';
 import {
-  PaneSize, PaneState, PaneStreamingState, PairingPayload, TunnelClientMessage,
-  TunnelConnectionState, TunnelServerMessage,
+  PaneSize, PaneState, PaneStreamingState, PairingPayload, PlanSyncManifestEntry,
+  TunnelClientMessage, TunnelConnectionState, TunnelServerMessage,
 } from './types';
 import { NoiseSession } from './tunnel/noise';
 import { attachPaneSize, createPaneState } from './tunnel/paneSize';
@@ -11,7 +11,11 @@ export type TunnelCallbacks = {
   onConnectionStateChange: (state: TunnelConnectionState) => void;
   onPanesChange: (panes: Record<string, PaneState>) => void;
   onUserRequest: (paneId: string, prompt: string) => void;
+  /** A planner-sync manifest arrived from the desktop (reconcile-on-connect). */
+  onSyncManifest?: (projects: PlanSyncManifestEntry[]) => void;
 };
+
+type PendingRequest<T> = { resolve: (v: T) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> };
 
 /** Maximum PTY output chars buffered per pane before oldest chars are dropped */
 const OUTPUT_BUFFER_MAX = 50_000;
@@ -22,6 +26,9 @@ const OUTPUT_BUFFER_MAX = 50_000;
  * answers; without this the UI spins on "authenticating" forever.
  */
 const CONNECT_TIMEOUT_MS = 12_000;
+
+/** How long to wait for a plan_sync reply (files / ack) before rejecting. */
+const SYNC_REQUEST_TIMEOUT_MS = 20_000;
 
 /** Copy a Uint8Array's exact bytes into a standalone ArrayBuffer for ws.send. */
 function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
@@ -81,6 +88,9 @@ export class TunnelClient {
   // applied at pane creation and on every subsequent frame.
   private paneSizes: Record<string, PaneSize> = {};
   private activePaneId: string | null = null;
+  // In-flight planner-sync requests, keyed by projectId (resolved by files/ack frames).
+  private pendingPulls = new Map<string, PendingRequest<Record<string, string>>>();
+  private pendingPushes = new Map<string, PendingRequest<void>>();
   private readonly cb: TunnelCallbacks;
 
   constructor(callbacks: TunnelCallbacks) {
@@ -221,8 +231,47 @@ export class TunnelClient {
     };
   }
 
+  /** Fail any in-flight sync requests (e.g. on disconnect) so callers don't hang. */
+  private rejectPendingSync(reason: string) {
+    for (const p of this.pendingPulls.values()) { clearTimeout(p.timer); p.reject(new Error(reason)); }
+    for (const p of this.pendingPushes.values()) { clearTimeout(p.timer); p.reject(new Error(reason)); }
+    this.pendingPulls.clear();
+    this.pendingPushes.clear();
+  }
+
+  // ── Planner sync transport (mobile is the merge authority) ──
+  /** Ask the desktop for its planner manifest (kicks off reconcile-on-connect). */
+  syncRequestManifest() {
+    this.send({ type: 'plan_sync_manifest_request' });
+  }
+
+  /** Request specific files for a project; resolves with the desktop's contents. */
+  syncPull(projectId: string, paths: string[]): Promise<Record<string, string>> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingPulls.delete(projectId);
+        reject(new Error(`plan_sync_pull timed out (${projectId})`));
+      }, SYNC_REQUEST_TIMEOUT_MS);
+      this.pendingPulls.set(projectId, { resolve, reject, timer });
+      this.send({ type: 'plan_sync_pull', projectId, paths });
+    });
+  }
+
+  /** Push the agreed canonical map; resolves on the desktop's ack. */
+  syncPush(projectId: string, title: string, files: Record<string, string>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingPushes.delete(projectId);
+        reject(new Error(`plan_sync_push timed out (${projectId})`));
+      }, SYNC_REQUEST_TIMEOUT_MS);
+      this.pendingPushes.set(projectId, { resolve, reject, timer });
+      this.send({ type: 'plan_sync_push', projectId, title, files });
+    });
+  }
+
   /** Detach handlers from and close the current socket without emitting state. */
   private closeSocket() {
+    this.rejectPendingSync('tunnel disconnected');
     this.clearConnectTimeout();
     const ws = this.ws;
     this.ws = null;
@@ -265,6 +314,12 @@ export class TunnelClient {
         console.log(`tunnel← session_state pane=${msg.paneId} status=${msg.status}`); break;
       case 'user_request':
         console.log(`tunnel← user_request pane=${msg.paneId}`); break;
+      case 'plan_sync_manifest':
+        console.log(`tunnel← plan_sync_manifest projects=${msg.projects.length}`); break;
+      case 'plan_sync_files':
+        console.log(`tunnel← plan_sync_files ${msg.projectId} files=${Object.keys(msg.files).length}`); break;
+      case 'plan_sync_ack':
+        console.log(`tunnel← plan_sync_ack ${msg.projectId}`); break;
     }
   }
 
@@ -367,6 +422,22 @@ export class TunnelClient {
         };
         this.emitPanes();
         this.cb.onUserRequest(msg.paneId, msg.prompt);
+        break;
+      }
+
+      case 'plan_sync_manifest':
+        this.cb.onSyncManifest?.(msg.projects);
+        break;
+
+      case 'plan_sync_files': {
+        const p = this.pendingPulls.get(msg.projectId);
+        if (p) { clearTimeout(p.timer); this.pendingPulls.delete(msg.projectId); p.resolve(msg.files); }
+        break;
+      }
+
+      case 'plan_sync_ack': {
+        const p = this.pendingPushes.get(msg.projectId);
+        if (p) { clearTimeout(p.timer); this.pendingPushes.delete(msg.projectId); p.resolve(); }
         break;
       }
     }
