@@ -1,10 +1,6 @@
 import React from 'react';
-import {
-  ActivityIndicator, Pressable, StyleSheet, Text,
-  type StyleProp, type ViewStyle,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../../theme';
+import { type StyleProp, type ViewStyle } from 'react-native';
+import { Btn } from './Btn';
 
 type Props = {
   /** Button text (ignored when `children` is provided). */
@@ -17,59 +13,14 @@ type Props = {
 };
 
 /**
- * Full-width primary CTA. Matches the redesign: glass themes use the
- * Claude-orange → purple gradient; other themes use a solid accent fill.
- * Mirrors the gradient treatment already in `IconBtn`'s primary variant so all
- * primary actions read consistently.
+ * Full-width primary CTA — a thin wrapper over the `Btn` primitive
+ * (`kind="primary"`). Kept as a named export because it reads clearly at call
+ * sites and is used widely; all of its styling now lives in `Btn`.
  */
-export function PrimaryButton({
-  label, children, onPress, disabled, loading, style,
-}: Props) {
-  const t = useTheme();
-  const radius = t.sharp ? 6 : 14;
-  const dim = disabled || loading;
-  const content = loading
-    ? <ActivityIndicator color="#fff" />
-    : children ?? <Text style={styles.label}>{label}</Text>;
-
-  if (t.glass) {
-    return (
-      <Pressable
-        onPress={onPress}
-        disabled={dim}
-        style={({ pressed }) => [{ opacity: dim ? 0.4 : pressed ? 0.85 : 1 }, style]}
-      >
-        <LinearGradient
-          colors={['#d97757', '#c084fc']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.base, { borderRadius: radius }]}
-        >
-          {content}
-        </LinearGradient>
-      </Pressable>
-    );
-  }
-
+export function PrimaryButton({ label, children, onPress, disabled, loading, style }: Props) {
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={dim}
-      style={({ pressed }) => [
-        styles.base,
-        { backgroundColor: t.accent, borderRadius: radius, opacity: dim ? 0.4 : pressed ? 0.85 : 1 },
-        style,
-      ]}
-    >
-      {content}
-    </Pressable>
+    <Btn kind="primary" size="lg" label={label} onPress={onPress} disabled={disabled} loading={loading} style={style}>
+      {children}
+    </Btn>
   );
 }
-
-const styles = StyleSheet.create({
-  base: {
-    minHeight: 48, flexDirection: 'row', gap: 9,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18,
-  },
-  label: { color: '#fff', fontSize: 15, fontWeight: '600' },
-});
