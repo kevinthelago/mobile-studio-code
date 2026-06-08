@@ -38,12 +38,14 @@ Use these exact KEYS (and no others):
 - Context (discovery topics, one each): ${CONTEXT_TOPICS.join(', ')}
 - Repos: repos.json  (a JSON array of { owner, repo, branch, role })
 - UI: screens.json  (a JSON array of { name, approved })
-- Structure: phases.json (JSON array of milestones) and issues.json (JSON array of agent-ready issues: { title, acceptance, files, deps, labels, milestone, stream })
-- Permissions/fleet: fleet.json (JSON array of streams: { name, owns, issues, dependsOn, sessions, profile })
+- Structure: phases.json (JSON array of milestones: { id, name, description }) and issues.json (JSON array of agent-ready issues: { id, title, acceptance, files, deps, labels, milestone, stream })
+- Permissions/fleet: fleet.json (JSON array of streams: { id, name, owns, issues, dependsOn, sessions, profile })
 - Automations: automations.md
 - Skills: skills.json
 
 A section's gate (above) is met from the data in these keys, so only emit a <plan_update> once a topic is genuinely confirmed by the user. Confirm the core topics (goal, scope, stack, architecture) explicitly.
+
+Give every issue/phase/stream a short, STABLE id (e.g. "auth", "phase-1") and never reuse or renumber it — ids let the same plan merge cleanly across devices. When you revise an item, keep its id and change the rest.
 
 ## Pipelines (checks you can run)
 Run a check on the current plan with:
