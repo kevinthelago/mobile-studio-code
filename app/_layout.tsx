@@ -7,7 +7,7 @@ import { SessionProvider, useSession } from '../src/lib/session';
 import { TunnelProvider, useTunnel } from '../src/lib/TunnelContext';
 import { ThemeProvider, useTheme } from '../src/theme';
 import { Orbs } from '../src/components/ui/Orbs';
-import { PlannerSyncRunner } from '../src/components/PlannerSyncRunner';
+import { PlannerSyncProvider } from '../src/lib/planner/PlannerSyncContext';
 import {
   initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
 } from '../src/lib/fcm';
@@ -114,6 +114,7 @@ function InnerStack() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="repo" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="(planner)" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="(sync)" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
     </NavThemeProvider>
   );
@@ -124,13 +125,14 @@ export default function RootLayout() {
     <ThemeProvider>
       <SessionProvider>
         <TunnelProvider>
-          <FcmBootstrap />
-          <PlannerSyncRunner />
-          <ThemedFrame>
-            <StageGate>
-              <InnerStack />
-            </StageGate>
-          </ThemedFrame>
+          <PlannerSyncProvider>
+            <FcmBootstrap />
+            <ThemedFrame>
+              <StageGate>
+                <InnerStack />
+              </StageGate>
+            </ThemedFrame>
+          </PlannerSyncProvider>
         </TunnelProvider>
       </SessionProvider>
     </ThemeProvider>
