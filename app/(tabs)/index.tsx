@@ -91,7 +91,27 @@ function FolderChevron({ open, color }: { open: boolean; color: string }) {
   );
 }
 
-function FileGlyph({ color }: { color: string }) {
+// Extension → accent tint for file icons (matches the design's FileIcon).
+const EXT_TINT: Record<string, string> = {
+  ts: '#67d3ff', tsx: '#67d3ff', js: '#e2c08d', jsx: '#e2c08d', mjs: '#e2c08d',
+  json: '#ffaecf', css: '#c084fc', scss: '#c084fc', py: '#67d3ff',
+  svg: '#7ee2c4', png: '#7ee2c4', jpg: '#7ee2c4', jpeg: '#7ee2c4', gif: '#7ee2c4',
+};
+function fileTint(name: string, fallback: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  return EXT_TINT[ext] ?? fallback;
+}
+
+function FileIcon({ folder, name, mutedColor }: { folder: boolean; name: string; mutedColor: string }) {
+  if (folder) {
+    return (
+      <Svg width={15} height={15} viewBox="0 0 16 16" fill="none">
+        <Path d="M2 5a1.5 1.5 0 011.5-1.5h2.8L7.5 5H13a1.5 1.5 0 011.5 1.5v5A1.5 1.5 0 0113 13H3.5A1.5 1.5 0 012 11.5V5z"
+          stroke={mutedColor} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+      </Svg>
+    );
+  }
+  const color = fileTint(name, mutedColor);
   return (
     <Svg width={11} height={14} viewBox="0 0 11 14" fill="none">
       <Path d="M1 1h6l3 3v9H1z" stroke={color} strokeWidth={1.2} />
@@ -293,7 +313,7 @@ export default function FilesScreen() {
                     )
                     : <View style={styles.chevronPlaceholder} />
                   }
-                  <FileGlyph color={t.fgMuted} />
+                  <FileIcon folder={row.type === 'folder'} name={row.name} mutedColor={t.fgMuted} />
 
                   <Text
                     style={[
