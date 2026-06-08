@@ -553,6 +553,68 @@ export async function createIssue(
   return normalizeIssue((await res.json()) as IssueApiShape);
 }
 
+// ── Milestones + rich issues (planner publish) ──────────────────────────────
+
+export type GithubMilestone = { number: number; title: string; state: 'open' | 'closed' };
+
+export async function listMilestones(pat: string, repo: string): Promise<GithubMilestone[]> {
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/milestones?state=all&per_page=100`,
+    { headers: GH_HEADERS_GET(pat) },
+  );
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Milestones fetch failed (${res.status}): ${body.slice(0, 160)}`);
+  }
+  const raw = (await res.json()) as { number: number; title: string; state: 'open' | 'closed' }[];
+  return raw.map((m) => ({ number: m.number, title: m.title, state: m.state }));
+}
+
+export async function createMilestone(
+  pat: string, repo: string, title: string, description?: string,
+): Promise<GithubMilestone> {
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/milestones`,
+    {
+      method: 'POST',
+      headers: GH_HEADERS_POST(pat),
+      body: JSON.stringify({ title, description: description ?? undefined }),
+    },
+  );
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Milestone create failed (${res.status}): ${extractGithubMessage(body).slice(0, 200)}`);
+  }
+  const m = (await res.json()) as { number: number; title: string; state: 'open' | 'closed' };
+  return { number: m.number, title: m.title, state: m.state };
+}
+
+/** Create an issue with optional labels + milestone (by number). */
+export async function createIssueWithMeta(
+  pat: string,
+  repo: string,
+  issue: { title: string; body: string; labels?: string[]; milestone?: number },
+): Promise<GithubIssue> {
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/issues`,
+    {
+      method: 'POST',
+      headers: GH_HEADERS_POST(pat),
+      body: JSON.stringify({
+        title: issue.title,
+        body: issue.body,
+        labels: issue.labels?.length ? issue.labels : undefined,
+        milestone: issue.milestone,
+      }),
+    },
+  );
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(`Issue create failed (${res.status}): ${extractGithubMessage(errBody).slice(0, 200)}`);
+  }
+  return normalizeIssue((await res.json()) as IssueApiShape);
+}
+
 export async function commentOnIssue(
   pat: string, repo: string, number: number, body: string,
 ): Promise<void> {
