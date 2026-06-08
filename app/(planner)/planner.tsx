@@ -17,6 +17,7 @@ import type { Blueprint, SectionRenderStatus } from '../../src/lib/planner/core'
 import { projectReadiness } from '../../src/lib/planner/project';
 import { buildPublishPlan } from '../../src/lib/planner/publish';
 import { usePlanner } from '../../src/lib/planner/PlannerContext';
+import { usePlannerSync } from '../../src/lib/planner/PlannerSyncContext';
 
 const STATUS_META: Record<SectionRenderStatus, { label: string; color: string }> = {
   'complete': { label: 'Complete', color: PLAN_COLORS.good },
@@ -52,6 +53,7 @@ export default function PlannerScreen() {
     createProject, openProject, closeProject, deleteProject, sendMessage, runSectionPipeline,
   } = usePlanner();
 
+  const { conflicts: syncConflicts } = usePlannerSync();
   const [view, setView] = useState<'chat' | 'plan'>('chat');
   const [showPublish, setShowPublish] = useState(false);
   const readiness = useMemo(() => (active ? projectReadiness(active) : null), [active]);
@@ -116,6 +118,26 @@ export default function PlannerScreen() {
             <View style={styles.loading}><ActivityIndicator color={t.accent} /></View>
           ) : (
             <>
+              {syncConflicts.length > 0 && (
+                <Pressable onPress={() => router.push(`/(sync)/sync?projectId=${syncConflicts[0].projectId}`)}>
+                  <Surface style={[styles.syncBanner, { borderColor: PLAN_COLORS.warn }]} radius={14}>
+                    <Svg width={18} height={18} viewBox="0 0 16 16" fill="none">
+                      <Path d="M8 5v3.5M8 11h.01M8 1.5l6.5 11h-13z" stroke={PLAN_COLORS.warn} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                    <View style={styles.syncBannerText}>
+                      <Text style={[styles.syncBannerTitle, { color: t.fg }]}>
+                        {syncConflicts.length} plan{syncConflicts.length === 1 ? '' : 's'} need conflict resolution
+                      </Text>
+                      <Text style={[styles.syncBannerSub, { color: t.fgMuted }]} numberOfLines={1}>
+                        “{syncConflicts[0].local.title}” diverged from base-studio-code
+                      </Text>
+                    </View>
+                    <Svg width={11} height={11} viewBox="0 0 11 11" fill="none">
+                      <Path d="M3.5 2l4 3.5-4 3.5" stroke={t.fgMuted} strokeWidth={1.6} strokeLinecap="round" />
+                    </Svg>
+                  </Surface>
+                </Pressable>
+              )}
               {summaries.length > 0 && (
                 <View style={styles.recent}>
                   <Text style={[styles.sectionHeading, { color: t.fgDim }]}>RECENT PLANS</Text>
@@ -322,6 +344,11 @@ const styles = StyleSheet.create({
 
   loading: { paddingVertical: 40, alignItems: 'center' },
   sectionHeading: { fontSize: 10.5, letterSpacing: 1.2, fontWeight: '700' },
+
+  syncBanner: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 13, marginBottom: 4 },
+  syncBannerText: { flex: 1, minWidth: 0 },
+  syncBannerTitle: { fontSize: 13.5, fontWeight: '600' },
+  syncBannerSub: { fontSize: 11.5, marginTop: 1 },
 
   recent: { gap: 8 },
   recentCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13 },
