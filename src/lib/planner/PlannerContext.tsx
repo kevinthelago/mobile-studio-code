@@ -13,7 +13,9 @@ import {
 import { appendUserMessage, applyAssistantReply } from './apply';
 import { plannerReply } from './driver';
 import { registerBuiltinPipelines } from './pipelineHandlers';
+import { registerBuiltinPipelineModules } from './pipelineModules';
 import { runProjectPipeline, firePipelinesForTrigger, newlyCompleteSections } from './pipelines';
+import { applyPipelineTags } from './commandBus';
 import { KEYS, getSecret } from '../storage';
 
 export interface PlannerValue {
@@ -54,8 +56,11 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
   const activeRef = useRef<PlanProject | null>(null);
   activeRef.current = active;
 
-  // Register the builtin pipeline handlers (lint-plan / grade-plan) once.
-  useEffect(() => { registerBuiltinPipelines(); }, []);
+  // Register the builtin pipeline handlers + Claude-driven command modules once.
+  useEffect(() => {
+    registerBuiltinPipelines();
+    registerBuiltinPipelineModules();
+  }, []);
 
   // Bootstrap from the on-disk index; rebuild it from project files if missing.
   useEffect(() => {
@@ -137,11 +142,13 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
       if (!apiKey) throw new Error('Add an Anthropic API key in Settings to use the planner.');
       const reply = await plannerReply(withUser, apiKey);
       const applied = applyAssistantReply(withUser, reply).project;
+      // Run any pipelines Claude drove via <pipeline cmd> tags.
+      const piped = await applyPipelineTags(applied, reply);
       // Fire "on completion" pipelines for sections that just became complete.
-      const newly = newlyCompleteSections(cur, applied);
+      const newly = newlyCompleteSections(cur, piped);
       const fired = newly.length
-        ? await firePipelinesForTrigger(applied, newly, 'on completion').catch(() => applied)
-        : applied;
+        ? await firePipelinesForTrigger(piped, newly, 'on completion').catch(() => piped)
+        : piped;
       const next: PlanProject = { ...fired, updatedAt: Date.now() };
       setActive(next);
       await persist(next);
