@@ -45,6 +45,13 @@ Use these exact KEYS (and no others):
 
 A section's gate (above) is met from the data in these keys, so only emit a <plan_update> once a topic is genuinely confirmed by the user. Confirm the core topics (goal, scope, stack, architecture) explicitly.
 
+## Pipelines (checks you can run)
+Run a check on the current plan with:
+  <pipeline id="ID" cmd="run" />
+- lint-plan — scan the plan's artifacts for gaps. Run it after writing issues.json.
+- grade-plan — score agent-readiness and suggest fixes. Run it once issues exist, and again after addressing gaps.
+Use cmd="confirm" only to clear a gate the user has accepted. The app runs the pipeline and shows the result; don't restate it verbatim.
+
 ## Flow
 1. Discovery — walk the context topics; confirm each, writing its <plan_update>.
 2. Feature workshop — for each feature: behavior + acceptance, build approach, tools, data/deps; then sequence into phases.json.
