@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "description": "Shared cross-app contract for planner sync. BOTH mobile-studio-code and base-studio-code must validate their implementations against these cases (see docs/planner-sync-protocol.md). If a shape changes on either side, change it here and both test suites will surface it.",
+  "canonical": {
+    "markdown": [
+      { "name": "crlf + trailing space + collapsed blank lines + single trailing NL", "in": "a  \r\nb\r\n\n\n", "out": "a\nb\n" },
+      { "name": "empty stays empty", "in": "", "out": "" }
+    ],
+    "json": [
+      { "name": "recursively sorted keys, 2-space, trailing NL", "in": { "b": 1, "a": { "d": 4, "c": 3 } }, "out": "{\n  \"a\": {\n    \"c\": 3,\n    \"d\": 4\n  },\n  \"b\": 1\n}\n" }
+    ],
+    "hash": [
+      { "in": "hello", "out": "4f9f2cab" },
+      { "in": "goal\n", "out": "cd617b34" },
+      { "in": "# Goal\n", "out": "b364f679" }
+    ]
+  },
+  "mergeText": [
+    { "name": "non-overlapping edits auto-merge", "base": "a\nb\nc\n", "mine": "A\nb\nc\n", "theirs": "a\nb\nC\n", "conflicts": 0, "merged": "A\nb\nC\n" },
+    { "name": "one-sided change is taken", "base": "a\nb\nc\n", "mine": "a\nB\nc\n", "theirs": "a\nb\nc\n", "conflicts": 0, "merged": "a\nB\nc\n" },
+    { "name": "overlapping edits conflict", "base": "a\nb\nc\n", "mine": "a\nMINE\nc\n", "theirs": "a\nTHEIRS\nc\n", "conflicts": 1 }
+  ],
+  "mergeJsonById": [
+    { "name": "independent element edits merge", "base": [{ "id": "1", "t": "a" }], "mine": [{ "id": "1", "t": "a", "x": 1 }], "theirs": [{ "id": "1", "t": "a" }], "conflicts": 0, "merged": [{ "id": "1", "t": "a", "x": 1 }] },
+    { "name": "same element diverges → conflict", "base": [{ "id": "1", "t": "a" }], "mine": [{ "id": "1", "t": "b" }], "theirs": [{ "id": "1", "t": "c" }], "conflicts": 1 }
+  ],
+  "reconcile": [
+    { "name": "edits to different files both apply", "base": { "goal.md": "g\n", "scope.md": "s\n" }, "local": { "goal.md": "G\n", "scope.md": "s\n" }, "remote": { "goal.md": "g\n", "scope.md": "S\n" }, "conflicts": 0, "result": { "goal.md": "G\n", "scope.md": "S\n" } },
+    { "name": "absence is not a deletion", "base": { "goal.md": "g\n" }, "local": { "goal.md": "g\n", "scope.md": "new\n" }, "remote": {}, "conflicts": 0, "result": { "goal.md": "g\n", "scope.md": "new\n" } }
+  ]
+}
