@@ -96,6 +96,11 @@ function FcmBootstrap() {
 }
 
 function InnerStack() {
+  const t = useTheme();
+  // Slide-up modals get an OPAQUE content background (the theme bg) so they
+  // occlude the screen beneath during the slide animation. The tabs stay
+  // transparent so the ThemedFrame + Orbs show through behind them.
+  const modal = { animation: 'slide_from_bottom' as const, contentStyle: { backgroundColor: t.bg } };
   return (
     // Transparent navigation background so the dark ThemedFrame + Orbs show
     // through behind every screen, instead of React Navigation's default
@@ -112,9 +117,9 @@ function InnerStack() {
         }}
       >
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="repo" options={{ animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="(planner)" options={{ animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="(sync)" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="repo" options={modal} />
+        <Stack.Screen name="(planner)" options={modal} />
+        <Stack.Screen name="(sync)" options={modal} />
       </Stack>
     </NavThemeProvider>
   );
