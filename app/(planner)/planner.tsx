@@ -11,9 +11,11 @@ import { IconBtn } from '../../src/components/ui/IconBtn';
 import { BlueprintPicker } from '../../src/components/planner/BlueprintPicker';
 import { BlueprintStageBar } from '../../src/components/planner/BlueprintStageBar';
 import { PlanConversation } from '../../src/components/planner/PlanConversation';
+import { PublishSheet } from '../../src/components/planner/PublishSheet';
 import { PLAN_COLORS } from '../../src/lib/planner/colors';
 import type { Blueprint, SectionRenderStatus } from '../../src/lib/planner/core';
 import { projectReadiness } from '../../src/lib/planner/project';
+import { buildPublishPlan } from '../../src/lib/planner/publish';
 import { usePlanner } from '../../src/lib/planner/PlannerContext';
 
 const STATUS_META: Record<SectionRenderStatus, { label: string; color: string }> = {
@@ -51,7 +53,9 @@ export default function PlannerScreen() {
   } = usePlanner();
 
   const [view, setView] = useState<'chat' | 'plan'>('chat');
+  const [showPublish, setShowPublish] = useState(false);
   const readiness = useMemo(() => (active ? projectReadiness(active) : null), [active]);
+  const publishPlan = useMemo(() => (active ? buildPublishPlan(active) : null), [active]);
 
   function startBlueprint(bp: Blueprint) {
     setView('chat');
@@ -193,6 +197,27 @@ export default function PlannerScreen() {
                 </Surface>
               ) : null}
 
+              {publishPlan && publishPlan.issues.length > 0 && (
+                <Pressable onPress={() => setShowPublish(true)}>
+                  <Surface style={styles.publishBtn} radius={14}>
+                    <View style={[styles.publishIcon, { backgroundColor: t.glass ? 'rgba(126,226,196,0.16)' : 'rgba(126,226,196,0.1)' }]}>
+                      <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+                        <Path d="M8 11V4M5 7l3-3 3 3M3 12.5h10" stroke={PLAN_COLORS.good} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </View>
+                    <View style={styles.publishText}>
+                      <Text style={[styles.publishTitle, { color: t.fg }]}>Publish to GitHub</Text>
+                      <Text style={[styles.publishMeta, { color: t.fgMuted, fontFamily: t.fontMono }]}>
+                        {publishPlan.milestones.length} milestones · {publishPlan.issues.length} issues
+                      </Text>
+                    </View>
+                    <Svg width={11} height={11} viewBox="0 0 11 11" fill="none">
+                      <Path d="M3.5 2l4 3.5-4 3.5" stroke={t.fgMuted} strokeWidth={1.6} strokeLinecap="round" />
+                    </Svg>
+                  </Surface>
+                </Pressable>
+              )}
+
               <View style={styles.sectionList}>
                 {readiness.sections.map(({ section, status }) => {
                   const meta = status.blocked
@@ -271,6 +296,10 @@ export default function PlannerScreen() {
           )}
         </View>
       )}
+
+      {active && showPublish && (
+        <PublishSheet project={active} onClose={() => setShowPublish(false)} />
+      )}
     </View>
   );
 }
@@ -306,6 +335,12 @@ const styles = StyleSheet.create({
   segment: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, padding: 2 },
   segBtn: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 8 },
   segText: { fontSize: 13, fontWeight: '600' },
+
+  publishBtn: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 13 },
+  publishIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  publishText: { flex: 1, minWidth: 0 },
+  publishTitle: { fontSize: 14, fontWeight: '600' },
+  publishMeta: { fontSize: 11, marginTop: 1 },
 
   banner: { padding: 14, gap: 4 },
   bannerLabel: { fontSize: 10, letterSpacing: 1.2, fontWeight: '700' },
