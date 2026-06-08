@@ -7,6 +7,7 @@ import { SessionProvider, useSession } from '../src/lib/session';
 import { TunnelProvider, useTunnel } from '../src/lib/TunnelContext';
 import { ThemeProvider, useTheme } from '../src/theme';
 import { Orbs } from '../src/components/ui/Orbs';
+import { PlannerSyncRunner } from '../src/components/PlannerSyncRunner';
 import {
   initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
 } from '../src/lib/fcm';
@@ -124,6 +125,7 @@ export default function RootLayout() {
       <SessionProvider>
         <TunnelProvider>
           <FcmBootstrap />
+          <PlannerSyncRunner />
           <ThemedFrame>
             <StageGate>
               <InnerStack />
