@@ -4,6 +4,13 @@ import React, {
 import { TunnelClient, TunnelCallbacks } from './tunnel';
 import { PaneState, TunnelConnectionState } from './types';
 import { KEYS, getSecret, setSecret } from './storage';
+import {
+  PlanSyncCoordinator,
+  PlanConflict,
+  PlanSyncStatus,
+  ConflictResolution,
+} from './planBundle/planSync';
+import { buildLocalManifest } from './planBundle/storage';
 
 export type TunnelValue = {
   connectionState: TunnelConnectionState;
@@ -21,6 +28,11 @@ export type TunnelValue = {
   unfocusPane: () => void;
   /** Call after FCM token is obtained so it is included in future auth handshakes */
   setFcmToken: (fcmToken: string) => void;
+
+  // ── Plan sync ─────────────────────────────────────────────────────────────
+  planSyncStatus: PlanSyncStatus;
+  planConflicts: PlanConflict[];
+  resolvePlanConflict: (projectId: string, resolution: ConflictResolution) => void;
 };
 
 const TunnelContext = createContext<TunnelValue | null>(null);
@@ -35,16 +47,45 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const [connectionState, setConnectionState] = useState<TunnelConnectionState>('disconnected');
   const [panes, setPanes] = useState<Record<string, PaneState>>({});
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
+  const [planSyncStatus, setPlanSyncStatus] = useState<PlanSyncStatus>('idle');
+  const [planConflicts, setPlanConflicts] = useState<PlanConflict[]>([]);
   const fcmTokenRef = useRef<string | undefined>(undefined);
   const clientRef = useRef<TunnelClient | null>(null);
+  const planSyncRef = useRef<PlanSyncCoordinator | null>(null);
 
   useEffect(() => {
+    const coordinator = new PlanSyncCoordinator(
+      (bundle) => clientRef.current?.sendPlanPush(bundle),
+      (projectId, fileKeys) => clientRef.current?.sendPlanRequest(projectId, fileKeys),
+      (manifest) => clientRef.current?.sendPlanSyncManifest(manifest),
+      {
+        onStatusChange: setPlanSyncStatus,
+        onConflicts: setPlanConflicts,
+      },
+    );
+    planSyncRef.current = coordinator;
+
     const callbacks: TunnelCallbacks = {
       onConnectionStateChange: setConnectionState,
       onPanesChange: setPanes,
       onUserRequest: (_paneId, _prompt) => {
         // Desktop fires the FCM push; mobile only needs to update pane state,
         // which TunnelClient already does before calling this callback.
+      },
+      getLocalPlanManifest: () => buildLocalManifest(),
+      onDesktopPlanManifest: (manifest, now) => {
+        coordinator.onDesktopManifest(manifest, now).catch((e) => {
+          console.warn('[planSync] reconciliation error', e);
+          setPlanSyncStatus('error');
+        });
+      },
+      onPlanPull: (bundle) => {
+        coordinator.onPlanPull(bundle).catch((e) => {
+          console.warn('[planSync] onPlanPull error', e);
+        });
+      },
+      onPlanAck: (projectId) => {
+        coordinator.onPlanAck(projectId);
       },
     };
     const client = new TunnelClient(callbacks);
@@ -104,6 +145,18 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     setSecret(KEYS.FCM_TOKEN, fcmToken).catch(() => {});
   }, []);
 
+  const resolvePlanConflict = useCallback((
+    projectId: string,
+    resolution: ConflictResolution,
+  ) => {
+    const coordinator = planSyncRef.current;
+    if (!coordinator) return;
+    const now = Date.now();
+    coordinator.resolveConflict(projectId, resolution, now).catch((e) => {
+      console.warn('[planSync] resolveConflict error', e);
+    });
+  }, []);
+
   const orderedPaneIds = useMemo(() => {
     return Object.values(panes)
       .sort((a, b) => {
@@ -128,6 +181,9 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     sendResize,
     unfocusPane,
     setFcmToken,
+    planSyncStatus,
+    planConflicts,
+    resolvePlanConflict,
   };
 
   return (

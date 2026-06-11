@@ -2,11 +2,22 @@ import {
   PaneState, PaneStreamingState, TunnelClientMessage,
   TunnelConnectionState, TunnelServerMessage,
 } from './types';
+import type { PlanBundle, PlanSyncManifest } from './planBundle/types';
 
 export type TunnelCallbacks = {
   onConnectionStateChange: (state: TunnelConnectionState) => void;
   onPanesChange: (panes: Record<string, PaneState>) => void;
   onUserRequest: (paneId: string, prompt: string) => void;
+  // ── Plan sync callbacks ─────────────────────────────────────────────────
+  /** Return the mobile's current sync manifest just before it is sent.
+   *  Called once per auth_ok when the Noise session is established. */
+  getLocalPlanManifest?: () => Promise<PlanSyncManifest>;
+  /** Desktop sent its sync manifest — mobile reconciles from here. */
+  onDesktopPlanManifest?: (manifest: PlanSyncManifest, now: number) => void;
+  /** Desktop pushed a plan bundle to mobile (fulfilling a plan_request or proactive). */
+  onPlanPull?: (bundle: PlanBundle) => void;
+  /** Desktop acknowledged a plan bundle we pushed. */
+  onPlanAck?: (projectId: string) => void;
 };
 
 const RECONNECT_BASE_MS = 1000;
@@ -79,6 +90,20 @@ export class TunnelClient {
 
   getPanes() { return this.panes; }
 
+  // ── Plan sync public API ──────────────────────────────────────────────────
+
+  sendPlanSyncManifest(manifest: PlanSyncManifest) {
+    this.send({ type: 'plan_sync_manifest', manifest });
+  }
+
+  sendPlanPush(bundle: PlanBundle) {
+    this.send({ type: 'plan_push', bundle });
+  }
+
+  sendPlanRequest(projectId: string, fileKeys?: string[]) {
+    this.send({ type: 'plan_request', projectId, fileKeys });
+  }
+
   private openSocket() {
     if (this.destroyed) return;
     this.setConnectionState('connecting');
@@ -124,6 +149,15 @@ export class TunnelClient {
         if (this.activePaneId) {
           this.send({ type: 'pane_set_state', paneId: this.activePaneId, state: 'streaming' });
           this.send({ type: 'pane_focus', paneId: this.activePaneId });
+        }
+        // Kick off plan sync: fetch local manifest and send to desktop.
+        if (this.cb.getLocalPlanManifest) {
+          const now = Date.now();
+          this.cb.getLocalPlanManifest().then((manifest) => {
+              this.sendPlanSyncManifest(manifest);
+          }).catch((e) => {
+            console.warn('[planSync] failed to build local manifest', e);
+          });
         }
         break;
       }
@@ -205,6 +239,21 @@ export class TunnelClient {
         };
         this.emitPanes();
         this.cb.onUserRequest(msg.paneId, msg.prompt);
+        break;
+      }
+
+      case 'plan_sync_manifest': {
+        this.cb.onDesktopPlanManifest?.(msg.manifest, Date.now());
+        break;
+      }
+
+      case 'plan_pull': {
+        this.cb.onPlanPull?.(msg.bundle);
+        break;
+      }
+
+      case 'plan_ack': {
+        this.cb.onPlanAck?.(msg.projectId);
         break;
       }
     }
