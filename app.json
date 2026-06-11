@@ -27,12 +27,8 @@
         "UIUserInterfaceStyle": "Dark",
         "UIBackgroundModes": ["remote-notification"],
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
         }
-      },
-      "entitlements": {
-        "aps-environment": "development"
       }
     },
     "android": {
