@@ -1,0 +1,75 @@
+{
+  "_doc": "Canonical PlanBundle round-trip fixture shared between mobile (TypeScript) and desktop (Rust). Both implementations must pass all vectors. hash_vectors validates the FNV-1a implementation; round_trip validates bundle serialize/deserialize fidelity.",
+
+  "bundle_schema": "1.0",
+  "core_version": "0.9.75",
+
+  "hash_vectors": [
+    {
+      "_comment": "fnv1a('') — empty string equals the FNV offset_basis unchanged.",
+      "input": "",
+      "expected": "811c9dc5"
+    },
+    {
+      "_comment": "fnv1a('a') — single lowercase ASCII char.",
+      "input": "a",
+      "expected": "e40c292c"
+    },
+    {
+      "_comment": "fnv1a('foobar') — classic FNV test vector.",
+      "input": "foobar",
+      "expected": "bf9cf968"
+    },
+    {
+      "_comment": "fnv1a('hello') — additional cross-check.",
+      "input": "hello",
+      "expected": "4f9f2cab"
+    }
+  ],
+
+  "round_trip": {
+    "_comment": "serializeBundle('mobile', input_project, 1749600000000) then deserializeBundle must reproduce input_project fields. Hashes in files are recomputed on serialize, so stored hash values in input_project.files are not significant — what matters is that the content round-trips losslessly.",
+    "exported_at": 1749600000000,
+    "source": "mobile",
+    "input_project": {
+      "projectId": "fixture-project-001",
+      "title": "Fixture Test Project",
+      "createdAt": 1749600000000,
+      "updatedAt": 1749600000000,
+      "files": {
+        "goal.md": {
+          "content": "# Goal\n\nBuild a fixture-validated plan bundle.",
+          "hash": "placeholder-recomputed-on-serialize",
+          "updatedAt": 1749600000000
+        },
+        "scope.md": {
+          "content": "## In scope\n- Serialize\n- Deserialize\n\n## Out of scope\n- GitHub transport",
+          "hash": "placeholder-recomputed-on-serialize",
+          "updatedAt": 1749596400000
+        }
+      }
+    },
+    "expected_bundle_shape": {
+      "bundleSchema": "1.0",
+      "source": "mobile",
+      "exportedAt": 1749600000000,
+      "coreVersion": "0.9.75",
+      "project_fields": ["projectId", "title", "createdAt", "updatedAt", "files"],
+      "file_fields": ["content", "hash", "updatedAt"]
+    }
+  },
+
+  "sync_manifest": {
+    "_comment": "buildSyncManifest([input_project]) must produce this shape. Actual hash values are computed by fnv1a(file.content) — implementations verify this dynamically.",
+    "version": 1,
+    "projects": {
+      "fixture-project-001": {
+        "updatedAt": 1749600000000,
+        "files": {
+          "goal.md": { "updatedAt": 1749600000000 },
+          "scope.md": { "updatedAt": 1749596400000 }
+        }
+      }
+    }
+  }
+}

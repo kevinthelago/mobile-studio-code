@@ -1,5 +1,19 @@
 export type ChatRole = 'user' | 'assistant';
 
+// ── Plan bundle types (re-exported for cross-module convenience) ─────────────
+export type {
+  PlanFileKey,
+  PlanFileEntry,
+  PlanProject,
+  PlanBundle,
+  PlanSyncManifest,
+  ProjectSyncInfo,
+  ReconcileResult,
+  PlanConflict,
+  ConflictResolution,
+  PlanSyncStatus,
+} from './planBundle/types';
+
 export type TextBlock = { type: 'text'; text: string };
 export type ImageBlock = {
   type: 'image';
@@ -156,7 +170,14 @@ export type TunnelServerMessage =
       lastActivity: string;
       prompt: string | null;
     }
-  | { type: 'user_request'; paneId: string; prompt: string };
+  | { type: 'user_request'; paneId: string; prompt: string }
+  // ── Plan sync ─────────────────────────────────────────────────────────────
+  /** Desktop's lightweight project manifest, sent on connect for reconciliation. */
+  | { type: 'plan_sync_manifest'; manifest: import('./planBundle/types').PlanSyncManifest }
+  /** Desktop pushing a plan bundle to mobile (either proactive or fulfilling plan_request). */
+  | { type: 'plan_pull'; bundle: import('./planBundle/types').PlanBundle }
+  /** Desktop confirmed it stored a plan bundle we pushed. */
+  | { type: 'plan_ack'; projectId: string };
 
 /** Messages sent from mobile → base-studio-code desktop */
 export type TunnelClientMessage =
@@ -164,7 +185,14 @@ export type TunnelClientMessage =
   | { type: 'pane_set_state'; paneId: string; state: PaneStreamingState }
   | { type: 'pane_focus'; paneId: string }
   | { type: 'pane_input'; paneId: string; data: string }
-  | { type: 'pane_resize'; paneId: string; cols: number; rows: number };
+  | { type: 'pane_resize'; paneId: string; cols: number; rows: number }
+  // ── Plan sync ─────────────────────────────────────────────────────────────
+  /** Mobile's lightweight project manifest, sent on connect for reconciliation. */
+  | { type: 'plan_sync_manifest'; manifest: import('./planBundle/types').PlanSyncManifest }
+  /** Mobile pushing a plan bundle to the desktop hub. */
+  | { type: 'plan_push'; bundle: import('./planBundle/types').PlanBundle }
+  /** Mobile requesting the desktop to send a project (or specific files). */
+  | { type: 'plan_request'; projectId: string; fileKeys?: string[] };
 
 /** Per-pane runtime state held in memory on the mobile side */
 export type PaneState = {
