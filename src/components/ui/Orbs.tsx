@@ -1,6 +1,11 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useTheme } from '../../theme';
+
+// Blur strength for the orb-smoothing overlay. Higher = smoother but more
+// frosted; tune on-device. iOS needs less than Android for the same effect.
+const ORB_BLUR = Platform.OS === 'ios' ? 60 : 100;
 
 type OrbDef = { left: number; top: number; size: number; color: string };
 
@@ -19,8 +24,11 @@ const DARK_ORBS: OrbDef[] = [
 ];
 
 // Ambient blurred color orbs. Renders for all dark themes.
-// Native RN doesn't support filter:blur, so we approximate with a stack of
-// progressively-larger semi-transparent rings around each orb center.
+// Native RN has no filter:blur, so each orb is a stack of progressively-larger
+// semi-transparent rings (a coarse glow). On its own that stack shows visible
+// concentric banding ("staircase"), so we overlay a native BlurView that
+// dissolves the rings into a smooth glow. Content renders in front of <Orbs/>,
+// so only the orbs (and the flat theme bg) behind this layer get blurred.
 export function Orbs() {
   const t = useTheme();
   // Don't render on light themes — their bg is already the right colour
@@ -33,6 +41,12 @@ export function Orbs() {
       {orbs.map((o, i) => (
         <SoftOrb key={i} {...o} isGlass={!!t.orbs} />
       ))}
+      <BlurView
+        pointerEvents="none"
+        intensity={ORB_BLUR}
+        tint="dark"
+        style={StyleSheet.absoluteFill}
+      />
     </View>
   );
 }
