@@ -8,6 +8,7 @@ import { ThemeProvider, useTheme } from '../src/theme';
 import { Orbs } from '../src/components/ui/Orbs';
 import {
   initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
+  onNotificationResponse,
 } from '../src/lib/fcm';
 
 function StageGate({ children }: { children: React.ReactNode }) {
@@ -75,21 +76,27 @@ function FcmBootstrap() {
       cleanupSub = subscribeFcm(
         // Token refresh — keep the desktop in sync
         (newToken) => setFcmToken(newToken),
-        // Foreground user_request — pane state is already updated by TunnelClient;
-        // no additional action needed here since the SessionStrip will highlight it.
+        // Foreground user_request — the visible banner is presented by fcm.ts;
+        // pane state is already updated by TunnelClient and highlighted by the
+        // SessionStrip, so nothing extra is needed here.
         (_paneId, _prompt) => {},
       );
     })();
 
-    // Handle taps while the app was backgrounded (not quit)
-    const cleanupOpened = onNotificationOpened((paneId) => {
+    const routeToPane = (paneId: string) => {
       focusPane(paneId);
       router.navigate('/(tabs)/run' as never);
-    });
+    };
+
+    // Taps on the OS-rendered notification while backgrounded (not quit)…
+    const cleanupOpened = onNotificationOpened(routeToPane);
+    // …and taps on the local banner we present while foregrounded.
+    const cleanupResponse = onNotificationResponse(routeToPane);
 
     return () => {
       cleanupSub?.();
       cleanupOpened();
+      cleanupResponse();
     };
   }, [setFcmToken, focusPane, router]);
 
