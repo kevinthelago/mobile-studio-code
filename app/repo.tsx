@@ -78,7 +78,7 @@ export default function RepoScreen() {
             </Text>
           </View>
 
-          <Surface style={styles.card} radius={20}>
+          <Surface style={styles.card} radius={10}>
             <Text style={[styles.label, { color: t.fgDim }]}>Repository</Text>
             <TextInput
               value={repo}
@@ -142,7 +142,7 @@ export default function RepoScreen() {
             )}
           </Surface>
 
-          <Surface style={styles.card} radius={20}>
+          <Surface style={styles.card} radius={10}>
             <ThemePicker />
           </Surface>
 
@@ -177,12 +177,12 @@ const styles = StyleSheet.create({
   },
   labelTopGap: { marginTop: 14 },
   input: {
-    borderWidth: StyleSheet.hairlineWidth, borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth, borderRadius: 6,
     paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 13, marginBottom: 12,
   },
   primary: {
-    paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+    paddingVertical: 12, borderRadius: 6, alignItems: 'center',
     justifyContent: 'center', minHeight: 44, marginTop: 6,
   },
   primaryText: { color: '#fff', fontWeight: '600', fontSize: 15 },

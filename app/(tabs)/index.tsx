@@ -185,7 +185,7 @@ export default function FilesScreen() {
         </View>
 
         <View style={styles.searchWrap}>
-          <Surface style={styles.searchPill} radius={22}>
+          <Surface style={styles.searchPill} radius={6}>
             <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
               <Path d="M6 10A4 4 0 106 2a4 4 0 000 8zM9.5 9.5L13 13"
                 stroke={t.fgMuted} strokeWidth={1.6} strokeLinecap="round" />
@@ -217,7 +217,7 @@ export default function FilesScreen() {
                 const dir = r.path.split('/').slice(0, -1).join('/');
                 return (
                   <Pressable key={r.path} onPress={() => handleFileTap(r.path)}>
-                    <Surface style={styles.recentCard} radius={14}>
+                    <Surface style={styles.recentCard} radius={6}>
                       <View style={styles.recentHead}>
                         <Text style={[styles.recentName, { color: t.fg }]} numberOfLines={1}>
                           {name}
@@ -266,9 +266,7 @@ export default function FilesScreen() {
                     {
                       paddingLeft: 14 + row.depth * 16,
                       backgroundColor: row.type === 'file' && row.current
-                        ? (t.glass ? 'rgba(255,255,255,0.06)'
-                          : t.light ? 'rgba(9,105,218,0.06)'
-                          : 'rgba(217,119,87,0.10)')
+                        ? (t.light ? 'rgba(217,119,6,0.08)' : 'rgba(245,158,11,0.10)')
                         : 'transparent',
                       borderBottomColor: t.borderColor,
                     },

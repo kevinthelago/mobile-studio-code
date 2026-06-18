@@ -132,11 +132,7 @@ export default function FindScreen() {
     );
   }
 
-  const matchHi = t.glass
-    ? 'rgba(255, 174, 207, 0.25)'
-    : t.light
-      ? 'rgba(247,196,38,0.45)'
-      : 'rgba(255,174,207,0.18)';
+  const matchHi = t.light ? 'rgba(217,119,6,0.22)' : 'rgba(245,158,11,0.28)';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -147,7 +143,7 @@ export default function FindScreen() {
         </View>
 
         <View style={styles.searchWrap}>
-          <Surface style={styles.searchPill} radius={24}>
+          <Surface style={styles.searchPill} radius={6}>
             <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
               <Circle cx={6} cy={6} r={4} stroke={t.fgMuted} strokeWidth={1.6} />
               <Path d="M9.5 9.5L13 13"
@@ -190,11 +186,9 @@ export default function FindScreen() {
                 style={[
                   styles.chip,
                   {
-                    backgroundColor: active
-                      ? t.accent
-                      : t.glass ? 'rgba(255,255,255,0.06)' : t.surface,
+                    backgroundColor: active ? t.accent : t.surface,
                     borderColor: t.borderColor,
-                    borderRadius: t.sharp ? 4 : 16,
+                    borderRadius: 4,
                   },
                 ]}
               >

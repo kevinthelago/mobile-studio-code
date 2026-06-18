@@ -270,7 +270,7 @@ export default function GitScreen() {
 
           <View style={styles.actionRow}>
             <Pressable style={styles.actionItem} onPress={onPull} disabled={pulling}>
-              <Surface radius={14} style={styles.actionSurface}>
+              <Surface radius={6} style={styles.actionSurface}>
                 {pulling ? (
                   <ActivityIndicator size="small" color={t.fg} />
                 ) : (
@@ -283,7 +283,7 @@ export default function GitScreen() {
             <Pressable style={styles.actionItem} onPress={onPush} disabled={pushing}>
               {modifiedCount > 0 ? (
                 <View style={[styles.actionSurface, styles.actionReady, {
-                  backgroundColor: t.accent, borderRadius: 14, borderWidth: 0,
+                  backgroundColor: t.accent, borderRadius: 6, borderWidth: 0,
                 }]}>
                   {pushing ? (
                     <ActivityIndicator size="small" color="#fff" />
@@ -295,7 +295,7 @@ export default function GitScreen() {
                   </Text>
                 </View>
               ) : (
-                <Surface radius={14} style={styles.actionSurface}>
+                <Surface radius={6} style={styles.actionSurface}>
                   {pushing ? (
                     <ActivityIndicator size="small" color={t.fg} />
                   ) : (
@@ -307,7 +307,7 @@ export default function GitScreen() {
             </Pressable>
 
             <Pressable style={styles.actionItem} onPress={() => router.push('/repo')}>
-              <Surface radius={14} style={styles.actionSurface}>
+              <Surface radius={6} style={styles.actionSurface}>
                 <Svg width={18} height={18} viewBox="0 0 18 18" fill="none">
                   <Path
                     d="M3 4a1 1 0 011-1h3l1 1h6a1 1 0 011 1v8a1 1 0 01-1 1H4a1 1 0 01-1-1V4z"
@@ -337,7 +337,7 @@ export default function GitScreen() {
           </View>
 
           <View style={styles.commitWrap}>
-            <Surface style={styles.commitCard} radius={20}>
+            <Surface style={styles.commitCard} radius={10}>
               <TextInput
                 value={commitMsg}
                 onChangeText={setCommitMsg}
@@ -362,11 +362,9 @@ export default function GitScreen() {
                           key={mode}
                           onPress={() => setIssueRefMode(mode)}
                           style={[styles.issueRefChip, {
-                            backgroundColor: active
-                              ? t.accent
-                              : t.glass ? 'rgba(255,255,255,0.08)' : t.bg,
+                            backgroundColor: active ? t.accent : t.bg,
                             borderColor: t.borderColor,
-                            borderRadius: t.sharp ? 4 : 12,
+                            borderRadius: 4,
                           }]}
                         >
                           <Text style={[styles.issueRefChipText, {
@@ -583,7 +581,7 @@ const styles = StyleSheet.create({
   draftBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   draftBtnText: { fontSize: 11.5 },
   commitBtn: {
-    paddingVertical: 8, paddingHorizontal: 16, borderRadius: 14,
+    paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6,
     minWidth: 110, alignItems: 'center',
   },
   commitBtnText: { fontSize: 12.5, fontWeight: '600', color: '#fff' },

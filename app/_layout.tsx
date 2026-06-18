@@ -7,7 +7,6 @@ import { TunnelProvider, useTunnel } from '../src/lib/TunnelContext';
 import { ThemeProvider, useTheme } from '../src/theme';
 import { PlannerProvider } from '../src/lib/planner/PlannerContext';
 import { PlannerSyncProvider } from '../src/lib/planner/PlannerSyncContext';
-import { Orbs } from '../src/components/ui/Orbs';
 import {
   initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
   onNotificationResponse,
@@ -44,9 +43,7 @@ function ThemedFrame({ children }: { children: React.ReactNode }) {
   const t = useTheme();
   return (
     <View style={[styles.frame, { backgroundColor: t.bg }]}>
-      <Orbs />
       <StatusBar style={t.light ? 'dark' : 'light'} />
-      {/* transparent so t.bg and Orbs show through all screens */}
       <View style={styles.content}>{children}</View>
     </View>
   );
@@ -112,9 +109,7 @@ function InnerStack() {
     <Stack
       screenOptions={{
         headerShown: false,
-        // Native screen bg comes from ThemedFrame; keep stack content
-        // transparent so the orbs/theme bg show through. (The native-stack
-        // accepts contentStyle even though Tabs doesn't.)
+        // Keep stack content transparent so ThemedFrame's t.bg shows through.
         contentStyle: { backgroundColor: 'transparent' },
         animation: 'fade',
       }}

@@ -1,17 +1,20 @@
 import React from 'react';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View } from 'react-native';
+import { useTheme } from '../../theme';
 
 type Props = { size?: number };
 
-// Claude brand-pink → orange gradient circle used in chips, top pills, and
-// commit-composer affordances.
+// Amber accent circle used in chips, top pills, and commit-composer affordances.
 export function ClaudeAvatar({ size = 14 }: Props) {
+  const t = useTheme();
   return (
-    <LinearGradient
-      colors={['#d97757', '#ffaecf']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={{ width: size, height: size, borderRadius: size / 2 }}
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: t.accent,
+      }}
     />
   );
 }
