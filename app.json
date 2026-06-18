@@ -3,7 +3,7 @@
     "name": "Mobile Studio Code",
     "slug": "mobile-studio-code",
     "owner": "kevinthelago",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "scheme": "mobilestudiocode",
     "userInterfaceStyle": "dark",
