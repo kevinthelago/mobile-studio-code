@@ -2,6 +2,13 @@ import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import {
+  Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold,
+} from '@expo-google-fonts/inter';
+import {
+  JetBrainsMono_400Regular, JetBrainsMono_500Medium,
+} from '@expo-google-fonts/jetbrains-mono';
 import { SessionProvider, useSession } from '../src/lib/session';
 import { TunnelProvider, useTunnel } from '../src/lib/TunnelContext';
 import { ThemeProvider, useTheme } from '../src/theme';
@@ -124,6 +131,13 @@ function InnerStack() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold,
+    JetBrainsMono_400Regular, JetBrainsMono_500Medium,
+  });
+
+  if (!fontsLoaded) return null;
+
   return (
     <ThemeProvider>
       <SessionProvider>

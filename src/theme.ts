@@ -30,6 +30,7 @@ export interface Theme {
   surfaceSolid: string;
   borderColor: string;
   radius: number;
+  font: string;
   fontMono: string;
   code: CodePalette;
   statusFg: string;
@@ -54,7 +55,8 @@ export const THEMES: Record<ThemeId, Theme> = {
     surfaceSolid: '#171717',
     borderColor: '#262626',
     radius: 6,
-    fontMono: 'Menlo',
+    font: 'Inter_400Regular',
+    fontMono: 'JetBrainsMono_400Regular',
     code: {
       kw: '#c084fc', fn: '#60a5fa', st: '#86efac', nm: '#fcd34d',
       cm: '#52525b', ty: '#34d399', op: '#a1a1aa',
@@ -74,7 +76,8 @@ export const THEMES: Record<ThemeId, Theme> = {
     surfaceSolid: '#f5f5f5',
     borderColor: '#e5e5e5',
     radius: 6,
-    fontMono: 'Menlo',
+    font: 'Inter_400Regular',
+    fontMono: 'JetBrainsMono_400Regular',
     code: {
       kw: '#7c3aed', fn: '#1d4ed8', st: '#15803d', nm: '#92400e',
       cm: '#6b7280', ty: '#0f766e', op: '#374151',
