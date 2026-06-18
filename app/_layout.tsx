@@ -16,7 +16,6 @@ import { PlannerProvider } from '../src/lib/planner/PlannerContext';
 import { PlannerSyncProvider } from '../src/lib/planner/PlannerSyncContext';
 import {
   initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
-  onNotificationResponse,
 } from '../src/lib/fcm';
 
 function StageGate({ children }: { children: React.ReactNode }) {
@@ -94,15 +93,12 @@ function FcmBootstrap() {
       router.navigate('/(tabs)/run' as never);
     };
 
-    // Taps on the OS-rendered notification while backgrounded (not quit)…
+    // Taps on the OS-rendered notification while backgrounded (not quit).
     const cleanupOpened = onNotificationOpened(routeToPane);
-    // …and taps on the local banner we present while foregrounded.
-    const cleanupResponse = onNotificationResponse(routeToPane);
 
     return () => {
       cleanupSub?.();
       cleanupOpened();
-      cleanupResponse();
     };
   }, [setFcmToken, focusPane, router]);
 

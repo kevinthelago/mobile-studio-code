@@ -3,7 +3,8 @@
     "name": "Mobile Studio Code",
     "slug": "mobile-studio-code",
     "owner": "kevinthelago",
-    "version": "1.0.0",
+    "version": "1.0.3",
+    "icon": "./src/assets/icon-ios.png",
     "orientation": "portrait",
     "scheme": "mobilestudiocode",
     "userInterfaceStyle": "dark",
@@ -53,7 +54,6 @@
       ],
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
-      "expo-notifications",
       "expo-font"
     ],
     "extra": {
