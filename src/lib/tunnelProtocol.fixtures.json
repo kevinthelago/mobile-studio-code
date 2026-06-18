@@ -1,0 +1,324 @@
+{
+  "_comment": "Wire-protocol fixtures for the Noise tunnel. Every TunnelServerMessage and TunnelClientMessage variant (Phase 1+2) plus Phase-3 additions (PT1/F1/A1/M1) must appear here. Both sides validate their implementations against this file. DO NOT add variants here without also adding them to types.ts.",
+  "serverToClient": {
+    "auth_ok": {
+      "type": "auth_ok"
+    },
+    "pane_list": {
+      "type": "pane_list",
+      "panes": [
+        {
+          "id": "t0p0",
+          "cwd": "/home/user/project",
+          "name": "claude",
+          "status": "running"
+        },
+        {
+          "id": "t0p1",
+          "cwd": "/home/user/project",
+          "name": "shell",
+          "status": "idle"
+        }
+      ]
+    },
+    "pane_output": {
+      "type": "pane_output",
+      "paneId": "t0p0",
+      "data": "\u001b[32m✓\u001b[0m tests passed\r\n",
+      "coarse": false
+    },
+    "pane_size": {
+      "type": "pane_size",
+      "paneId": "t0p0",
+      "cols": 220,
+      "rows": 50
+    },
+    "session_state": {
+      "type": "session_state",
+      "paneId": "t0p0",
+      "status": "awaiting_input",
+      "currentTask": "Fix failing test",
+      "lastActivity": "2026-06-18T12:34:56.789Z",
+      "prompt": "Should I proceed?"
+    },
+    "session_state_no_prompt": {
+      "_note": "session_state with null prompt",
+      "type": "session_state",
+      "paneId": "t0p1",
+      "status": "running",
+      "currentTask": "npm install",
+      "lastActivity": "2026-06-18T12:35:00.000Z",
+      "prompt": null
+    },
+    "user_request": {
+      "type": "user_request",
+      "paneId": "t0p0",
+      "prompt": "Should I delete the old migration file?"
+    },
+    "plan_sync_manifest": {
+      "type": "plan_sync_manifest",
+      "projects": [
+        {
+          "projectId": "proj-abc123",
+          "title": "Refactor auth",
+          "updatedAt": 1750245296000,
+          "files": {
+            "goal.md": "cd617b34",
+            "plan.json": "a1b2c3d4"
+          }
+        }
+      ]
+    },
+    "plan_sync_files": {
+      "type": "plan_sync_files",
+      "projectId": "proj-abc123",
+      "files": {
+        "goal.md": "# Goal\n\nRefactor the auth module.\n",
+        "plan.json": "{\"schema\":1,\"blueprintId\":\"default\",\"title\":\"Refactor auth\",\"sections\":{\"goal\":\"confirmed\"}}\n"
+      }
+    },
+    "plan_sync_ack": {
+      "type": "plan_sync_ack",
+      "projectId": "proj-abc123"
+    },
+    "plan_status": {
+      "_note": "PT1",
+      "type": "plan_status",
+      "projectId": "proj-abc123",
+      "phase": "implement",
+      "status": "running",
+      "updatedAt": 1750245300000
+    },
+    "plan_event": {
+      "_note": "PT1",
+      "type": "plan_event",
+      "projectId": "proj-abc123",
+      "event": "phase_complete",
+      "payload": {
+        "phase": "discover",
+        "issueCount": 3
+      }
+    },
+    "fleet_status": {
+      "_note": "F1",
+      "type": "fleet_status",
+      "streams": [
+        {
+          "streamId": "tunnel-mobile",
+          "label": "Tunnel - mobile",
+          "status": "running",
+          "currentIssue": "T1a",
+          "updatedAt": 1750245296000
+        },
+        {
+          "streamId": "ui-migration",
+          "label": "UI migration",
+          "status": "idle",
+          "currentIssue": null,
+          "updatedAt": 1750245100000
+        }
+      ]
+    },
+    "coord_event": {
+      "_note": "F1",
+      "type": "coord_event",
+      "streamId": "tunnel-mobile",
+      "kind": "bsc_ask",
+      "payload": {
+        "questionId": "q-001",
+        "question": "Should the reconnect delay cap at 30s or 60s?"
+      }
+    },
+    "automation_list": {
+      "_note": "A1",
+      "type": "automation_list",
+      "automations": [
+        {
+          "id": "auto-nightly-sync",
+          "name": "Nightly repo sync",
+          "enabled": true,
+          "lastRunAt": 1750202400000,
+          "status": "idle"
+        },
+        {
+          "id": "auto-pr-review",
+          "name": "PR review on push",
+          "enabled": false,
+          "lastRunAt": null,
+          "status": "idle"
+        }
+      ]
+    },
+    "automation_run_event": {
+      "_note": "A1",
+      "type": "automation_run_event",
+      "automationId": "auto-nightly-sync",
+      "event": "step_complete",
+      "payload": {
+        "step": "fetch",
+        "filesChanged": 4
+      }
+    },
+    "mcp_server_list": {
+      "_note": "M1",
+      "type": "mcp_server_list",
+      "servers": [
+        {
+          "id": "mcp-github",
+          "name": "GitHub MCP",
+          "status": "connected",
+          "toolCount": 12,
+          "transport": "stdio"
+        },
+        {
+          "id": "mcp-linear",
+          "name": "Linear MCP",
+          "status": "disconnected",
+          "toolCount": 0,
+          "transport": "sse"
+        }
+      ]
+    },
+    "mcp_tool_list": {
+      "_note": "M1",
+      "type": "mcp_tool_list",
+      "serverId": "mcp-github",
+      "tools": [
+        {
+          "name": "create_issue",
+          "description": "Create a GitHub issue.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "owner": {
+                "type": "string"
+              },
+              "repo": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "owner",
+              "repo",
+              "title"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "clientToServer": {
+    "auth": {
+      "type": "auth",
+      "token": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "fcmToken": "fXm:APA91bExampleToken"
+    },
+    "auth_no_fcm": {
+      "_note": "auth without fcmToken",
+      "type": "auth",
+      "token": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "pane_set_state": {
+      "type": "pane_set_state",
+      "paneId": "t0p0",
+      "state": "streaming"
+    },
+    "pane_set_state_minimized": {
+      "_note": "minimized variant",
+      "type": "pane_set_state",
+      "paneId": "t0p1",
+      "state": "minimized"
+    },
+    "pane_focus": {
+      "type": "pane_focus",
+      "paneId": "t0p0"
+    },
+    "pane_input": {
+      "type": "pane_input",
+      "paneId": "t0p0",
+      "data": "git status\r"
+    },
+    "pane_input_ctrl_c": {
+      "_note": "Ctrl-C interrupt",
+      "type": "pane_input",
+      "paneId": "t0p0",
+      "data": "\u0003"
+    },
+    "pane_resize": {
+      "type": "pane_resize",
+      "paneId": "t0p0",
+      "cols": 80,
+      "rows": 24
+    },
+    "plan_sync_manifest_request": {
+      "type": "plan_sync_manifest_request"
+    },
+    "plan_sync_pull": {
+      "type": "plan_sync_pull",
+      "projectId": "proj-abc123",
+      "paths": [
+        "goal.md",
+        "plan.json"
+      ]
+    },
+    "plan_sync_push": {
+      "type": "plan_sync_push",
+      "projectId": "proj-abc123",
+      "title": "Refactor auth",
+      "files": {
+        "goal.md": "# Goal\n\nRefactor the auth module.\n"
+      }
+    },
+    "plan_request": {
+      "_note": "PT1",
+      "type": "plan_request",
+      "projectId": "proj-abc123",
+      "action": "run"
+    },
+    "plan_request_pause": {
+      "_note": "PT1 pause variant",
+      "type": "plan_request",
+      "projectId": "proj-abc123",
+      "action": "pause"
+    },
+    "plan_directive": {
+      "_note": "PT1",
+      "type": "plan_directive",
+      "projectId": "proj-abc123",
+      "text": "Skip discovery, go straight to implementation."
+    },
+    "fleet_directive": {
+      "_note": "F1",
+      "type": "fleet_directive",
+      "streamId": "tunnel-mobile",
+      "text": "Prioritise the reconnect fix."
+    },
+    "coord_ask_response": {
+      "_note": "F1",
+      "type": "coord_ask_response",
+      "questionId": "q-001",
+      "answer": "Cap at 30s."
+    },
+    "automation_toggle": {
+      "_note": "A1",
+      "type": "automation_toggle",
+      "automationId": "auto-nightly-sync",
+      "enabled": false
+    },
+    "automation_trigger": {
+      "_note": "A1",
+      "type": "automation_trigger",
+      "automationId": "auto-nightly-sync",
+      "params": {
+        "force": true
+      }
+    },
+    "mcp_request_list": {
+      "_note": "M1",
+      "type": "mcp_request_list"
+    }
+  }
+}

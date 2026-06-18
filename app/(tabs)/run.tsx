@@ -8,7 +8,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
 import { useTunnel } from '../../src/lib/TunnelContext';
-import { PaneState, PaneStatus, TunnelConnectionState } from '../../src/lib/types';
+import { PairingPayload, PaneState, PaneStatus, TunnelConnectionState } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
 import { stripAnsi, lastLines } from '../../src/lib/ansi';
@@ -37,15 +37,14 @@ function relativeTime(ts: number | null): string {
   return `${Math.floor(m / 60)}h ago`;
 }
 
-/** Parse QR payload. Accepts JSON {url, token} or bare "url|token" strings. */
-function parseQrPayload(data: string): { url: string; token: string } | null {
+/** Parse QR payload. Accepts the new PairingPayload JSON {relayUrl,room,hostPubKey,psk}. */
+function parseQrPayload(data: string): PairingPayload | null {
   try {
-    const obj = JSON.parse(data) as { url?: string; token?: string };
-    if (obj.url && obj.token) return { url: obj.url, token: obj.token };
-  } catch {
-    const parts = data.split('|');
-    if (parts.length === 2) return { url: parts[0], token: parts[1] };
-  }
+    const obj = JSON.parse(data) as Partial<PairingPayload>;
+    if (obj.relayUrl && obj.room && obj.hostPubKey && obj.psk) {
+      return { relayUrl: obj.relayUrl, room: obj.room, hostPubKey: obj.hostPubKey, psk: obj.psk };
+    }
+  } catch { /* not JSON */ }
   return null;
 }
 
@@ -84,7 +83,7 @@ function PairingView() {
     }
     scannedRef.current = true;
     setScanning(false);
-    connect(parsed.url, parsed.token);
+    connect(parsed);
   }, [connect]);
 
   const handleScanPress = useCallback(async () => {
@@ -102,13 +101,25 @@ function PairingView() {
 
   const handleManualConnect = useCallback(() => {
     setError(null);
-    const url = manualUrl.trim();
+    const raw = manualUrl.trim();
     const token = manualToken.trim();
-    if (!url || !token) {
+    if (!raw || !token) {
       setError('Both URL and token are required.');
       return;
     }
-    connect(url, token);
+    // Try parsing as full PairingPayload JSON, fall back to bare URL (relay-only mode)
+    let payload: PairingPayload;
+    try {
+      const parsed = JSON.parse(raw) as Partial<PairingPayload>;
+      if (parsed.relayUrl && parsed.room && parsed.hostPubKey && parsed.psk) {
+        payload = parsed as PairingPayload;
+      } else {
+        payload = { relayUrl: raw, room: token, hostPubKey: '', psk: token };
+      }
+    } catch {
+      payload = { relayUrl: raw, room: token, hostPubKey: '', psk: token };
+    }
+    connect(payload);
   }, [manualUrl, manualToken, connect]);
 
   if (scanning) {

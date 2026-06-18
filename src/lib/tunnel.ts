@@ -1,4 +1,6 @@
 import {
+  AutomationSummary, FleetStreamStatus, McpServerInfo, McpToolInfo,
+  PairingDiagnostics, PairingLegStatus, PairingPayload,
   PaneState, PaneStreamingState, TunnelClientMessage,
   TunnelConnectionState, TunnelServerMessage,
 } from './types';
@@ -8,9 +10,10 @@ export type TunnelCallbacks = {
   onConnectionStateChange: (state: TunnelConnectionState) => void;
   onPanesChange: (panes: Record<string, PaneState>) => void;
   onUserRequest: (paneId: string, prompt: string) => void;
-  // ── Plan sync callbacks ─────────────────────────────────────────────────
-  /** Return the mobile's current sync manifest just before it is sent.
-   *  Called once per auth_ok when the Noise session is established. */
+  // ── T3 — per-leg diagnostics ────────────────────────────────────────────
+  onDiagnosticsChange?: (diag: PairingDiagnostics) => void;
+  // ── Plan sync callbacks (planBundle protocol) ───────────────────────────
+  /** Return the mobile's current sync manifest just before it is sent. */
   getLocalPlanManifest?: () => Promise<PlanSyncManifest>;
   /** Desktop sent its sync manifest — mobile reconciles from here. */
   onDesktopPlanManifest?: (manifest: PlanSyncManifest, now: number) => void;
@@ -18,37 +21,52 @@ export type TunnelCallbacks = {
   onPlanPull?: (bundle: PlanBundle) => void;
   /** Desktop acknowledged a plan bundle we pushed. */
   onPlanAck?: (projectId: string) => void;
+  // ── Phase-3 callbacks ───────────────────────────────────────────────────
+  onFleetStatus?: (streams: FleetStreamStatus[]) => void;
+  onCoordEvent?: (streamId: string, kind: string, payload: Record<string, unknown>) => void;
+  onAutomationList?: (automations: AutomationSummary[]) => void;
+  onAutomationRunEvent?: (automationId: string, event: string, payload: Record<string, unknown>) => void;
+  onMcpServerList?: (servers: McpServerInfo[]) => void;
+  onMcpToolList?: (serverId: string, tools: McpToolInfo[]) => void;
 };
 
-const RECONNECT_BASE_MS = 1000;
-const RECONNECT_MAX_MS = 30_000;
+// T5b — exponential backoff constants
+const BACKOFF_BASE_MS = 1_000;
+const BACKOFF_MAX_MS = 30_000;
+const BACKOFF_FACTOR = 2;
+
 /** Maximum PTY output chars buffered per pane before oldest chars are dropped */
 const OUTPUT_BUFFER_MAX = 50_000;
 
+const NULL_DIAGNOSTICS: PairingDiagnostics = {
+  relayReach: null, roomJoin: null, handshake: null, auth: null, failReason: null,
+};
+
 export class TunnelClient {
   private ws: WebSocket | null = null;
-  private url = '';
-  private token = '';
+  private payload: PairingPayload | null = null;
   private fcmToken: string | undefined;
-  private reconnectAttempt = 0;
+  private backoffMs = BACKOFF_BASE_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
 
   private connectionState: TunnelConnectionState = 'disconnected';
   private panes: Record<string, PaneState> = {};
   private activePaneId: string | null = null;
+  private diagnostics: PairingDiagnostics = { ...NULL_DIAGNOSTICS };
   private readonly cb: TunnelCallbacks;
 
   constructor(callbacks: TunnelCallbacks) {
     this.cb = callbacks;
   }
 
-  connect(url: string, token: string, fcmToken?: string) {
-    this.url = url;
-    this.token = token;
-    this.fcmToken = fcmToken;
+  connect(payload: PairingPayload, fcmToken?: string) {
+    this.payload = payload;
+    if (fcmToken !== undefined) this.fcmToken = fcmToken;
     this.destroyed = false;
-    this.reconnectAttempt = 0;
+    this.backoffMs = BACKOFF_BASE_MS;
+    this.clearReconnectTimer();
+    this.resetDiagnostics();
     this.openSocket();
   }
 
@@ -58,6 +76,11 @@ export class TunnelClient {
     this.ws?.close();
     this.ws = null;
     this.setConnectionState('disconnected');
+  }
+
+  /** T6b — update FCM token; stored and included in next auth frame. */
+  updateFcmToken(token: string) {
+    this.fcmToken = token;
   }
 
   focusPane(paneId: string) {
@@ -90,7 +113,12 @@ export class TunnelClient {
 
   getPanes() { return this.panes; }
 
-  // ── Plan sync public API ──────────────────────────────────────────────────
+  getDiagnostics(): PairingDiagnostics { return { ...this.diagnostics }; }
+
+  /** Send any client message (used for Phase-3 senders). */
+  sendMsg(msg: TunnelClientMessage) { this.send(msg); }
+
+  // ── Plan sync public API (planBundle protocol) ────────────────────────────
 
   sendPlanSyncManifest(manifest: PlanSyncManifest) {
     this.send({ type: 'plan_sync_manifest', manifest });
@@ -105,20 +133,26 @@ export class TunnelClient {
   }
 
   private openSocket() {
-    if (this.destroyed) return;
+    if (this.destroyed || !this.payload) return;
     this.setConnectionState('connecting');
+    this.setDiagLeg('relayReach', 'pending');
+    const wsUrl = `${this.payload.relayUrl}/room/${this.payload.room}`;
     try {
-      this.ws = new WebSocket(this.url);
+      this.ws = new WebSocket(wsUrl);
     } catch {
-      this.scheduleReconnect();
+      this.setDiagFailed('relayReach', 'WebSocket constructor threw');
+      this.scheduleReconnect(false);
       return;
     }
 
     this.ws.onopen = () => {
       if (this.destroyed) return;
+      this.setDiagLeg('relayReach', 'ok');
+      this.setDiagLeg('roomJoin', 'ok');
       this.setConnectionState('authenticating');
-      this.reconnectAttempt = 0;
-      this.send({ type: 'auth', token: this.token, fcmToken: this.fcmToken });
+      this.setDiagLeg('auth', 'pending');
+      this.backoffMs = BACKOFF_BASE_MS;
+      this.send({ type: 'auth', token: this.payload!.psk, fcmToken: this.fcmToken });
     };
 
     this.ws.onmessage = (e) => {
@@ -137,13 +171,14 @@ export class TunnelClient {
       if (this.destroyed) return;
       this.ws = null;
       this.setConnectionState('disconnected');
-      this.scheduleReconnect();
+      this.scheduleReconnect(false);
     };
   }
 
   private handleMessage(msg: TunnelServerMessage) {
     switch (msg.type) {
       case 'auth_ok': {
+        this.setDiagLeg('auth', 'ok');
         this.setConnectionState('connected');
         // Re-assert streaming state for the active pane after reconnect
         if (this.activePaneId) {
@@ -152,9 +187,8 @@ export class TunnelClient {
         }
         // Kick off plan sync: fetch local manifest and send to desktop.
         if (this.cb.getLocalPlanManifest) {
-          const now = Date.now();
           this.cb.getLocalPlanManifest().then((manifest) => {
-              this.sendPlanSyncManifest(manifest);
+            this.sendPlanSyncManifest(manifest);
           }).catch((e) => {
             console.warn('[planSync] failed to build local manifest', e);
           });
@@ -172,6 +206,7 @@ export class TunnelClient {
                 streamingState: desc.id === this.activePaneId ? 'streaming' : 'minimized',
                 outputBuffer: '',
                 sessionState: null,
+                ptySize: null,
                 hasUserRequest: false,
                 lastUserRequestAt: null,
                 lastActivityAt: Date.now(),
@@ -195,6 +230,17 @@ export class TunnelClient {
         this.panes = {
           ...this.panes,
           [msg.paneId]: { ...pane, outputBuffer: buf, lastActivityAt: Date.now() },
+        };
+        this.emitPanes();
+        break;
+      }
+
+      case 'pane_size': {
+        const pane = this.panes[msg.paneId];
+        if (!pane) return;
+        this.panes = {
+          ...this.panes,
+          [msg.paneId]: { ...pane, ptySize: { cols: msg.cols, rows: msg.rows } },
         };
         this.emitPanes();
         break;
@@ -256,6 +302,30 @@ export class TunnelClient {
         this.cb.onPlanAck?.(msg.projectId);
         break;
       }
+
+      // ── Phase-3 message handling ──────────────────────────────────────────
+      case 'fleet_status':
+        this.cb.onFleetStatus?.(msg.streams);
+        break;
+      case 'coord_event':
+        this.cb.onCoordEvent?.(msg.streamId, msg.kind, msg.payload);
+        break;
+      case 'automation_list':
+        this.cb.onAutomationList?.(msg.automations);
+        break;
+      case 'automation_run_event':
+        this.cb.onAutomationRunEvent?.(msg.automationId, msg.event, msg.payload);
+        break;
+      case 'mcp_server_list':
+        this.cb.onMcpServerList?.(msg.servers);
+        break;
+      case 'mcp_tool_list':
+        this.cb.onMcpToolList?.(msg.serverId, msg.tools);
+        break;
+      case 'plan_status':
+      case 'plan_event':
+        // Informational; consumers that need them register callbacks directly.
+        break;
     }
   }
 
@@ -281,10 +351,30 @@ export class TunnelClient {
     this.cb.onPanesChange({ ...this.panes });
   }
 
-  private scheduleReconnect() {
+  private resetDiagnostics() {
+    this.diagnostics = { ...NULL_DIAGNOSTICS };
+    this.cb.onDiagnosticsChange?.({ ...this.diagnostics });
+  }
+
+  private setDiagLeg(leg: keyof Omit<PairingDiagnostics, 'failReason'>, status: PairingLegStatus) {
+    this.diagnostics = { ...this.diagnostics, [leg]: status };
+    this.cb.onDiagnosticsChange?.({ ...this.diagnostics });
+  }
+
+  private setDiagFailed(leg: keyof Omit<PairingDiagnostics, 'failReason'>, reason: string) {
+    this.diagnostics = { ...this.diagnostics, [leg]: 'fail' as PairingLegStatus, failReason: reason };
+    this.cb.onDiagnosticsChange?.({ ...this.diagnostics });
+  }
+
+  // T5b — stale=true surfaces error (room gone); stale=false schedules backoff reconnect
+  private scheduleReconnect(stale: boolean) {
+    if (stale) {
+      this.setConnectionState('error');
+      return;
+    }
     this.clearReconnectTimer();
-    const delay = Math.min(RECONNECT_BASE_MS * 2 ** this.reconnectAttempt, RECONNECT_MAX_MS);
-    this.reconnectAttempt += 1;
+    const delay = Math.min(this.backoffMs, BACKOFF_MAX_MS);
+    this.backoffMs = Math.min(this.backoffMs * BACKOFF_FACTOR, BACKOFF_MAX_MS);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.openSocket();
