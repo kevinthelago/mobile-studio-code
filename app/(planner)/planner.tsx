@@ -12,10 +12,14 @@ import { Tag } from '../../src/components/ui/Tag';
 import { BlueprintPicker } from '../../src/components/planner/BlueprintPicker';
 import { BlueprintStageBar } from '../../src/components/planner/BlueprintStageBar';
 import { PlanConversation } from '../../src/components/planner/PlanConversation';
+import { PlannerTabBar, type PlannerTabItem } from '../../src/components/planner/PlannerChrome';
+import { GradeTab } from '../../src/components/planner/GradeTab';
+import { PreviewTab } from '../../src/components/planner/PreviewTab';
 import { PublishSheet } from '../../src/components/planner/PublishSheet';
 import { PLAN_COLORS } from '../../src/lib/planner/colors';
+import type { Grade, GradeSuggestion } from '../../src/lib/planner/types';
 import type { Blueprint, SectionRenderStatus } from '../../src/lib/planner/core';
-import { projectReadiness } from '../../src/lib/planner/project';
+import { projectReadiness, type ProjectReadiness } from '../../src/lib/planner/project';
 import { buildPublishPlan } from '../../src/lib/planner/publish';
 import { usePlanner } from '../../src/lib/planner/PlannerContext';
 import { usePlannerSync } from '../../src/lib/planner/PlannerSyncContext';
@@ -34,6 +38,35 @@ const PIPELINE_STATUS_COLOR: Record<string, string> = {
   fail: PLAN_COLORS.bad,
   blocked: PLAN_COLORS.warn,
 };
+
+const PLANNER_TABS: PlannerTabItem[] = [
+  { id: 'chat', label: 'Chat' },
+  { id: 'plan', label: 'Plan' },
+  { id: 'preview', label: 'Preview' },
+  { id: 'grade', label: 'Grade' },
+];
+
+function deriveGrade(readiness: ProjectReadiness): Grade {
+  const applicable = readiness.sections.filter((r) => r.status.status !== 'na');
+  const done = applicable.filter((r) => r.status.status === 'complete').length;
+  const pct = applicable.length > 0 ? Math.round(done / applicable.length * 100) : 0;
+  const letter = pct >= 90 ? 'A' : pct >= 75 ? 'B' : pct >= 60 ? 'C' : pct >= 40 ? 'D' : 'F';
+  const categories = applicable.map((r) => ({
+    name: r.section.name,
+    pct: r.status.status === 'complete' ? 100
+      : r.status.status === 'in-progress' ? Math.round(r.status.fraction * 100)
+      : 0,
+  }));
+  const suggestions: GradeSuggestion[] = readiness.incomplete.slice(0, 5).map((s) => ({
+    severity: s.status === 'locked' ? 'info' as const : 'warn' as const,
+    title: s.name,
+    detail: s.reason,
+  }));
+  const summary = readiness.complete
+    ? 'All sections complete — ready to publish.'
+    : `${done} of ${applicable.length} sections complete.`;
+  return { letter, pct, summary, categories, suggestions };
+}
 
 function relativeTime(ts: number): string {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -55,10 +88,11 @@ export default function PlannerScreen() {
   } = usePlanner();
 
   const { conflicts: syncConflicts } = usePlannerSync();
-  const [view, setView] = useState<'chat' | 'plan'>('chat');
+  const [view, setView] = useState<'chat' | 'plan' | 'preview' | 'grade'>('chat');
   const [showPublish, setShowPublish] = useState(false);
   const readiness = useMemo(() => (active ? projectReadiness(active) : null), [active]);
   const publishPlan = useMemo(() => (active ? buildPublishPlan(active) : null), [active]);
+  const grade = useMemo(() => (readiness ? deriveGrade(readiness) : null), [readiness]);
 
   function startBlueprint(bp: Blueprint) {
     setView('chat');
@@ -170,37 +204,43 @@ export default function PlannerScreen() {
         </ScrollView>
       )}
 
-      {/* ── Active plan: stage bar + Chat / Plan ── */}
-      {active && readiness && (
+      {/* ── Active plan: stage bar + Chat / Plan / Preview / Grade ── */}
+      {active && readiness && grade && (
         <View style={styles.activeRoot}>
           <View style={styles.activeTop}>
             <BlueprintStageBar readiness={readiness} />
-            <View style={[styles.segment, { borderColor: t.borderColor }]}>
-              {(['chat', 'plan'] as const).map((v) => (
-                <Pressable
-                  key={v}
-                  onPress={() => setView(v)}
-                  style={[styles.segBtn, view === v && { backgroundColor: t.glass ? 'rgba(255,255,255,0.1)' : t.surface }]}
-                >
-                  <Text style={[styles.segText, { color: view === v ? t.fg : t.fgMuted }]}>
-                    {v === 'chat' ? 'Chat' : 'Plan'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
           </View>
 
-          {view === 'chat' ? (
+          {view === 'chat' && (
             <PlanConversation
               messages={active.messages}
               sending={sending}
               onSend={sendMessage}
-              bottomInset={insets.bottom}
+              bottomInset={0}
             />
-          ) : (
+          )}
+          {view === 'preview' && (
             <ScrollView
               style={styles.content}
-              contentContainerStyle={[styles.contentInner, { paddingBottom: insets.bottom + 24 }]}
+              contentContainerStyle={[styles.contentInner, { paddingBottom: 16 }]}
+              showsVerticalScrollIndicator={false}
+            >
+              <PreviewTab />
+            </ScrollView>
+          )}
+          {view === 'grade' && (
+            <ScrollView
+              style={styles.content}
+              contentContainerStyle={[styles.contentInner, { paddingBottom: 16 }]}
+              showsVerticalScrollIndicator={false}
+            >
+              <GradeTab grade={grade} />
+            </ScrollView>
+          )}
+          {view === 'plan' && (
+            <ScrollView
+              style={styles.content}
+              contentContainerStyle={[styles.contentInner, { paddingBottom: 16 }]}
               showsVerticalScrollIndicator={false}
             >
               {readiness.complete ? (
@@ -315,6 +355,13 @@ export default function PlannerScreen() {
               )}
             </ScrollView>
           )}
+
+          <PlannerTabBar
+            tabs={PLANNER_TABS}
+            active={view}
+            onChange={setView}
+            bottomInset={insets.bottom}
+          />
         </View>
       )}
 
@@ -358,9 +405,6 @@ const styles = StyleSheet.create({
 
   activeRoot: { flex: 1 },
   activeTop: { paddingHorizontal: 14, paddingTop: 10, gap: 10 },
-  segment: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, padding: 2 },
-  segBtn: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 8 },
-  segText: { fontSize: 13, fontWeight: '600' },
 
   publishBtn: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 13 },
   publishIcon: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
