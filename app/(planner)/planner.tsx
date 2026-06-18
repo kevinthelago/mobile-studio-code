@@ -10,6 +10,7 @@ import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
 import { Tag } from '../../src/components/ui/Tag';
 import { BlueprintPicker } from '../../src/components/planner/BlueprintPicker';
+import { BlueprintEditor } from '../../src/components/planner/BlueprintEditor';
 import { BlueprintStageBar } from '../../src/components/planner/BlueprintStageBar';
 import { PlanConversation } from '../../src/components/planner/PlanConversation';
 import { PlannerTabBar, type PlannerTabItem } from '../../src/components/planner/PlannerChrome';
@@ -92,6 +93,7 @@ export default function PlannerScreen() {
   const { connectionState } = useTunnel();
   const [view, setView] = useState<'chat' | 'plan' | 'preview' | 'grade'>('chat');
   const [showPublish, setShowPublish] = useState(false);
+  const [editingBlueprint, setEditingBlueprint] = useState<Blueprint | null | 'new'>(null);
   const readiness = useMemo(() => (active ? projectReadiness(active) : null), [active]);
   const publishPlan = useMemo(() => (active ? buildPublishPlan(active) : null), [active]);
   const grade = useMemo(() => (readiness ? deriveGrade(readiness) : null), [readiness]);
@@ -197,10 +199,21 @@ export default function PlannerScreen() {
                   ))}
                 </View>
               )}
-              <Text style={[styles.sectionHeading, { color: t.fgDim, marginTop: summaries.length ? 6 : 0 }]}>
-                NEW FROM A BLUEPRINT
-              </Text>
-              <BlueprintPicker onPick={startBlueprint} />
+              <View style={styles.blueprintHeader}>
+                <Text style={[styles.sectionHeading, { color: t.fgDim, marginTop: summaries.length ? 6 : 0 }]}>
+                  NEW FROM A BLUEPRINT
+                </Text>
+                <Pressable onPress={() => setEditingBlueprint('new')} style={[styles.customBtn, { borderColor: t.borderColor }]}>
+                  <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
+                    <Path d="M6 1v10M1 6h10" stroke={t.fgMuted} strokeWidth={1.6} strokeLinecap="round" />
+                  </Svg>
+                  <Text style={[styles.customText, { color: t.fgMuted }]}>Custom</Text>
+                </Pressable>
+              </View>
+              <BlueprintPicker
+                onPick={startBlueprint}
+                onEdit={(bp) => setEditingBlueprint(bp)}
+              />
             </>
           )}
         </ScrollView>
@@ -388,6 +401,16 @@ export default function PlannerScreen() {
       {active && showPublish && (
         <PublishSheet project={active} onClose={() => setShowPublish(false)} />
       )}
+
+      {editingBlueprint !== null && (
+        <View style={StyleSheet.absoluteFill}>
+          <BlueprintEditor
+            initialBlueprint={editingBlueprint === 'new' ? undefined : editingBlueprint}
+            onSave={(bp) => { setEditingBlueprint(null); void createProject(bp); }}
+            onCancel={() => setEditingBlueprint(null)}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -410,6 +433,9 @@ const styles = StyleSheet.create({
 
   loading: { paddingVertical: 40, alignItems: 'center' },
   sectionHeading: { fontSize: 10.5, letterSpacing: 1.2, fontWeight: '700' },
+  blueprintHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 0 },
+  customBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
+  customText: { fontSize: 12, fontWeight: '600' },
 
   syncBanner: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 13, marginBottom: 4 },
   syncBannerText: { flex: 1, minWidth: 0 },

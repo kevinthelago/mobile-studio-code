@@ -8,7 +8,12 @@ import { makeBlueprints, enabledSections, type Blueprint } from '../../lib/plann
 
 /** Pick a blueprint to start a local plan. The list is the ported makeBlueprints();
  *  each card previews the blueprint's enabled sections (glyphs) — fully data-driven. */
-export function BlueprintPicker({ onPick }: { onPick: (bp: Blueprint) => void }) {
+export function BlueprintPicker({
+  onPick, onEdit,
+}: {
+  onPick: (bp: Blueprint) => void;
+  onEdit?: (bp: Blueprint) => void;
+}) {
   const t = useTheme();
   const blueprints = useMemo(() => makeBlueprints(), []);
 
@@ -37,10 +42,20 @@ export function BlueprintPicker({ onPick }: { onPick: (bp: Blueprint) => void })
                 ))}
               </View>
               <View style={styles.cta}>
-                <Text style={[styles.ctaText, { color: t.accent }]}>Start planning</Text>
-                <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
-                  <Path d="M3.5 2.5l4 3.5-4 3.5" stroke={t.accent} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <Pressable onPress={() => onPick(bp)} style={styles.ctaBtn}>
+                  <Text style={[styles.ctaText, { color: t.accent }]}>Start planning</Text>
+                  <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
+                    <Path d="M3.5 2.5l4 3.5-4 3.5" stroke={t.accent} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                </Pressable>
+                {onEdit && (
+                  <Pressable onPress={() => onEdit(bp)} style={[styles.editBtn, { borderColor: t.borderColor }]}>
+                    <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
+                      <Path d="M8 2l2 2-6 6H2V8z" stroke={t.fgMuted} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                    <Text style={[styles.editText, { color: t.fgMuted }]}>Edit</Text>
+                  </Pressable>
+                )}
               </View>
             </Surface>
           </Pressable>
@@ -62,6 +77,9 @@ const styles = StyleSheet.create({
   glyphChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   glyph: { fontSize: 13 },
   glyphLabel: { fontSize: 11 },
-  cta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  cta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  ctaBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   ctaText: { fontSize: 13, fontWeight: '600' },
+  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  editText: { fontSize: 11.5, fontWeight: '500' },
 });
