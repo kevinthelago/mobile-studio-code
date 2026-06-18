@@ -126,6 +126,10 @@ export interface RepoPulseLive {
   kpis: PulseKpis;
   languages: Record<string, number>;
   partialDiffs: boolean;
+  /** Raw commit list for the default branch — used by the branch DAG chart. */
+  recentCommits: GhCommitItem[];
+  /** Ahead-of-default-branch commits per feature branch — used by branch DAG. */
+  branchGraphComps: BranchGraphComp[];
 }
 
 // ── GitHub payload shapes (subset of fields used) ────────────────────────────
@@ -149,6 +153,12 @@ export interface GhCommitFile {
 export interface GhCommitDetail extends GhCommitItem {
   stats?: { additions: number; deletions: number; total: number };
   files?: GhCommitFile[];
+}
+
+export interface BranchGraphComp {
+  name: string;
+  mergeBaseSha: string;
+  commits: GhCommitItem[];
 }
 
 export interface GhPull {
@@ -181,7 +191,12 @@ export interface GhRun {
   workflow_id: number;
 }
 
-export interface GhCompare { ahead_by: number; behind_by: number }
+export interface GhCompare {
+  ahead_by: number;
+  behind_by: number;
+  merge_base_commit?: { sha: string };
+  commits?: GhCommitItem[];
+}
 
 // ── Bot detection (GitHub's own signal) ──────────────────────────────────────
 
@@ -767,6 +782,20 @@ export async function fetchRepoPulse(
   const { ci, workflows } = mapCI(runResp.workflow_runs, wfResp.workflows);
   const contributors = mapContributors(commits, details, colors);
 
+  // Build branch graph comps from compare data (commits are included in the
+  // /compare response — we capture them via the extended GhCompare type).
+  const branchGraphComps: BranchGraphComp[] = compareTargets
+    .map((b, i) => {
+      const cmp = compareResults[i]?.[1];
+      if (!cmp?.merge_base_commit || !cmp.commits?.length) return null;
+      return {
+        name: b.name,
+        mergeBaseSha: cmp.merge_base_commit.sha,
+        commits: cmp.commits,
+      };
+    })
+    .filter((c): c is BranchGraphComp => c !== null);
+
   return {
     repo: {
       name: repoFullName,
@@ -786,5 +815,7 @@ export async function fetchRepoPulse(
     kpis: deriveKpis(velocity, ci, pulls, contributors, now),
     languages,
     partialDiffs: commits.length > DETAIL_CAP,
+    recentCommits: commits.slice(0, 20),
+    branchGraphComps,
   };
 }

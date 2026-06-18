@@ -29,6 +29,8 @@ import {
   type Stat,
   type HBarItem,
 } from '../../src/components/github/charts';
+import { BranchGraph } from '../../src/components/github/BranchGraph';
+import { LanguageBar } from '../../src/components/github/LanguageBar';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -219,6 +221,8 @@ export default function GithubScreen() {
         <ChurnSection data={data} t={t} colors={colors} />
         <ContribSection data={data} t={t} />
         <BranchSection data={data} t={t} />
+        <BranchGraphSection data={data} t={t} colors={colors} />
+        <LanguageSection data={data} t={t} colors={colors} />
         <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
@@ -449,6 +453,36 @@ function BranchSection({
           )}
         </View>
       ))}
+    </Card>
+  );
+}
+
+function BranchGraphSection({
+  data, t, colors,
+}: { data: RepoPulseLive; t: ReturnType<typeof useTheme>; colors: PulseColors }) {
+  if (data.recentCommits.length === 0) return null;
+  return (
+    <Card>
+      <SectionHead title="Branch graph" sub={`${data.recentCommits.length} recent commits`} />
+      <BranchGraph
+        mainCommits={data.recentCommits}
+        defaultBranch={data.repo.branch}
+        branchComps={data.branchGraphComps}
+        width={CONTENT_W - 24}
+        colors={colors}
+      />
+    </Card>
+  );
+}
+
+function LanguageSection({
+  data, colors,
+}: { data: RepoPulseLive; t: ReturnType<typeof useTheme>; colors: PulseColors }) {
+  if (Object.keys(data.languages).length === 0) return null;
+  return (
+    <Card>
+      <SectionHead title="Languages" />
+      <LanguageBar languages={data.languages} colors={colors} />
     </Card>
   );
 }
