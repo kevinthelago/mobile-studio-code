@@ -70,7 +70,7 @@ export function PublishSheet({ project, onClose }: { project: PlanProject; onClo
     <View style={[StyleSheet.absoluteFill, styles.overlay]}>
       <Pressable style={StyleSheet.absoluteFill} onPress={publishing ? undefined : onClose} />
       <View style={[styles.sheetWrap, { paddingBottom: insets.bottom + 12 }]}>
-        <Surface style={styles.sheet} radius={20}>
+        <Surface style={styles.sheet} radius={10}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: t.fg }]}>Publish to GitHub</Text>
             <Pressable onPress={onClose} hitSlop={10} disabled={publishing}>
@@ -175,9 +175,9 @@ const styles = StyleSheet.create({
   body: { flexGrow: 0 },
   bodyInner: { gap: 10 },
   label: { fontSize: 10.5, letterSpacing: 1.2, fontWeight: '700' },
-  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
+  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
   previewRow: { flexDirection: 'row', gap: 8 },
-  pill: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
+  pill: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5 },
   pillText: { fontSize: 11.5 },
   note: { fontSize: 12, lineHeight: 17 },
   warnBox: { gap: 3 },

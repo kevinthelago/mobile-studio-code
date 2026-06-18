@@ -48,7 +48,7 @@ export function GradeTab({ grade }: { grade: Grade }) {
       {/* suggestions */}
       <Text style={[styles.eyebrow, { color: t.fgDim, fontFamily: t.fontMono }]}>Prioritized suggestions</Text>
       {grade.suggestions.map((s, i) => (
-        <Surface key={i} style={styles.sugg} radius={14}>
+        <Surface key={i} style={styles.sugg} radius={6}>
           <View style={[styles.suggDot, { backgroundColor: SEV_COLOR[s.severity] }]} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.suggTitle, { color: t.fg }]}>{s.title}</Text>

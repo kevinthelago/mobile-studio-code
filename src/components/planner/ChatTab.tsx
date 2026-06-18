@@ -74,7 +74,7 @@ export function GateCard({
         ))}
       </View>
       <View style={styles.gateActions}>
-        <Pressable onPress={onViewGrade} style={[styles.gateSoft, { backgroundColor: t.glass ? 'rgba(255,255,255,0.08)' : t.surface, borderColor: t.borderColor }]}>
+        <Pressable onPress={onViewGrade} style={[styles.gateSoft, { backgroundColor: t.surface, borderColor: t.borderColor }]}>
           <Text style={[styles.gateSoftText, { color: t.fg }]}>View grade</Text>
         </Pressable>
         <View style={styles.gateFix}>
@@ -99,7 +99,7 @@ export function ReadySummary({ plan }: { plan: Plan }) {
   return (
     <View style={styles.summaryGrid}>
       {cells.map(([n, label], i) => (
-        <Surface key={i} style={styles.summaryCell} radius={14}>
+        <Surface key={i} style={styles.summaryCell} radius={6}>
           <Text style={[styles.summaryNum, { color: t.accent, fontFamily: t.fontMono }]}>{n}</Text>
           <Text style={[styles.summaryLabel, { color: t.fgMuted }]}>{label}</Text>
         </Surface>
@@ -129,7 +129,7 @@ export function ChatEmptyBody({
         Describe what you want to build
       </Text>
       <View style={styles.indent}>
-        <Surface style={styles.pitchCard} radius={16}>
+        <Surface style={styles.pitchCard} radius={6}>
           <Text style={[styles.pitchText, { color: pitch ? t.fg : t.fgDim }]}>
             {pitch || 'A habit tracker where I log daily habits and see streaks…'}
           </Text>
@@ -197,7 +197,7 @@ export function ChatEmptyBody({
 const styles = StyleSheet.create({
   messages: { paddingTop: 12 },
 
-  gate: { marginLeft: 32, marginBottom: 16, borderWidth: 1, borderRadius: 14, overflow: 'hidden' },
+  gate: { marginLeft: 32, marginBottom: 16, borderWidth: 1, borderRadius: 6, overflow: 'hidden' },
   gateHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth },
   gateChecks: { paddingVertical: 6 },
   gateCheck: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 13, paddingVertical: 8 },
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
   gateBangText: { fontSize: 10, fontWeight: '700' },
   gateCheckText: { flex: 1, fontSize: 13 },
   gateActions: { flexDirection: 'row', gap: 8, paddingHorizontal: 13, paddingBottom: 13 },
-  gateSoft: { flex: 1, height: 34, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  gateSoft: { flex: 1, height: 34, borderRadius: 4, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   gateSoftText: { fontSize: 13, fontWeight: '600' },
   gateFix: { flex: 1.3 },
 
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   attachHint: { fontSize: 10.5 },
 
   blueprintRow: { gap: 10, paddingLeft: 32, paddingRight: 16, paddingBottom: 4 },
-  blueprint: { width: 150, padding: 13, borderRadius: 13, borderWidth: StyleSheet.hairlineWidth },
+  blueprint: { width: 150, padding: 13, borderRadius: 6, borderWidth: StyleSheet.hairlineWidth },
   blueprintHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   blueprintName: { fontSize: 14, fontWeight: '600' },
   blueprintDesc: { fontSize: 11.5, marginTop: 4, lineHeight: 16 },
