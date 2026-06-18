@@ -12,6 +12,7 @@ export type StageId =
   | "context"
   | "repos"
   | "ui"
+  | "features"
   | "structure"
   | "permissions"
   | "automations"
@@ -33,6 +34,8 @@ export interface PlanStageState {
   requiresUi: boolean;
   /** Required screens approved vs total (only meaningful when requiresUi). */
   ui: { approved: number; total: number };
+  /** Features: defined and confirmed by the user; writes features.json. */
+  features: { count: number; confirmed: boolean };
   /** Structure: the roadmap is confirmed and granular issues exist. */
   phasesConfirmed: boolean;
   issueCount: number;
@@ -118,6 +121,19 @@ export const PLAN_STAGES: Stage[] = [
     }),
   },
   {
+    id: "features",
+    label: "Features",
+    description: "Feature inventory decomposed for the agent fleet; writes features.json",
+    optional: true,
+    hasOutputFile: true,  // features.json
+    dependsOn: ["context"],
+    defaultEnabled: true,
+    gate: (s) => ({
+      done: s.features.count > 0 && s.features.confirmed,
+      fraction: s.features.count > 0 ? (s.features.confirmed ? 1 : 0.5) : 0,
+    }),
+  },
+  {
     id: "structure",
     label: "Structure",
     description: "Feature workshop: phases.json + agent-ready issues.json",
@@ -184,6 +200,7 @@ export function buildPlanStageState(p: Partial<PlanStageState> = {}): PlanStageS
     repoCount: p.repoCount ?? 0,
     requiresUi: p.requiresUi ?? false,
     ui: p.ui ?? { approved: 0, total: 0 },
+    features: p.features ?? { count: 0, confirmed: false },
     phasesConfirmed: p.phasesConfirmed ?? false,
     issueCount: p.issueCount ?? 0,
     fleet: p.fleet ?? { streams: 0, profilesComplete: false },
@@ -281,6 +298,7 @@ export interface StageOptionsMap {
   context?:     ContextStageOptions;
   repos?:       Record<string, never>;
   ui?:          UiStageOptions;
+  features?:    Record<string, never>;
   structure?:   StructureStageOptions;
   permissions?: PermissionsStageOptions;
   automations?: Record<string, never>;
@@ -312,7 +330,7 @@ export const BUILT_IN_BLUEPRINTS: Blueprint[] = [
   {
     id: "full-plan",
     name: "Full plan",
-    description: "All stages: context → repos → UI → structure → permissions → automations → skills",
+    description: "All stages: context → repos → UI → features → structure → permissions → automations → skills",
     enabledStages: [...DEFAULT_ENABLED_STAGES],
     custom: false,
   },
@@ -336,8 +354,8 @@ export const BUILT_IN_BLUEPRINTS: Blueprint[] = [
   {
     id: "ui-first",
     name: "UI first",
-    description: "Context → screen skeletons → structure → fleet",
-    enabledStages: ["context", "repos", "ui", "structure", "permissions"],
+    description: "Context → screen skeletons → features → structure → fleet",
+    enabledStages: ["context", "repos", "ui", "features", "structure", "permissions"],
     custom: false,
   },
 ];

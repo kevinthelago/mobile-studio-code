@@ -114,6 +114,20 @@ inventory the Render preview pipeline can visualize.
 
 Gate: every primary flow has its screens and states defined.`,
   },
+  features: {
+    name: "Features", glyph: "◇", gate: "features confirmed", deps: ["context"],
+    blurb: "Feature inventory — what the product does, decomposed for the agent fleet.",
+    gateRule: { require: [
+      { signal: "featuresCount", target: 1, label: "define at least one feature" },
+      { signal: "featuresConfirmed", target: true, label: "confirm the feature list" },
+    ] },
+    prompt:
+`Enumerate the complete set of user-visible features — not pages, not tasks, but
+capabilities the product must have. For each feature: a slug, one-line description,
+the stage it unlocks, and the primary agent stream that owns it. Write features.json.
+
+Gate: the feature list contains at least one entry and the user has confirmed it.`,
+  },
   structure: {
     name: "Structure", glyph: "⊞", gate: "phases + issues", deps: ["context", "repos", "ui"],
     gateRule: { require: [
@@ -216,6 +230,7 @@ export function makeBlueprints(): Blueprint[] {
         mkSection("context",     { pipelines: [["lint-plan", "on completion", true]] }),
         mkSection("repos",       { enabled: false, pipelines: [["index-repos", "on section enter", true]] }),
         mkSection("ui",          { pipelines: [["render-preview", "on artifact change", true], ["push-figma", "on completion", true]] }),
+        mkSection("features",    { pipelines: [] }),
         mkSection("structure",   { pipelines: [["generate-issues", "on completion", true], ["grade-plan", "on completion", false], ["sync-milestones", "on completion", false]] }),
         mkSection("permissions", { pipelines: [] }),
         mkSection("automations", { pipelines: [["arm-schedule", "on completion", true]] }),
@@ -226,6 +241,7 @@ export function makeBlueprints(): Blueprint[] {
       id: "fullstack", name: "Full-stack web app", desc: "Web client + API + DB",
       sections: [
         mkSection("context"), mkSection("repos"), mkSection("ui", { pipelines: [["render-preview", "on artifact change", true]] }),
+        mkSection("features"),
         mkSection("structure", { pipelines: [["generate-issues", "on completion", true], ["grade-plan", "on completion", false]] }),
         mkSection("testing"), mkSection("permissions", { pipelines: [["scope-streams", "on completion", true]] }),
         mkSection("automations"), mkSection("skills"),
@@ -235,6 +251,7 @@ export function makeBlueprints(): Blueprint[] {
       id: "mobile", name: "Mobile MVP", desc: "Single app, ship fast",
       sections: [
         mkSection("context"), mkSection("ui", { pipelines: [["render-preview", "on artifact change", true]] }),
+        mkSection("features"),
         mkSection("structure", { pipelines: [["generate-issues", "on completion", true], ["grade-plan", "on completion", false]] }),
         mkSection("permissions"), mkSection("skills"),
       ],

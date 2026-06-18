@@ -38,6 +38,7 @@ Use these exact KEYS (and no others):
 - Context (discovery topics, one each): ${CONTEXT_TOPICS.join(', ')}
 - Repos: repos.json  (a JSON array of { owner, repo, branch, role })
 - UI: screens.json  (a JSON array of { name, approved })
+- Features: features.json  (a JSON array of { slug, description, stage, stream })
 - Structure: phases.json (JSON array of milestones: { id, name, description }) and issues.json (JSON array of agent-ready issues: { id, title, acceptance, files, deps, labels, milestone, stream })
 - Permissions/fleet: fleet.json (JSON array of streams: { id, name, owns, issues, dependsOn, sessions, profile })
 - Automations: automations.md

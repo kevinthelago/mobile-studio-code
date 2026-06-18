@@ -27,6 +27,8 @@ export function planStateToSignals(s: PlanStageState): PlanSignals {
     requiresUi: s.requiresUi,
     screensApproved: s.ui.approved,
     screensTotal: s.ui.total,
+    featuresCount: s.features.count,
+    featuresConfirmed: s.features.confirmed,
     phasesConfirmed: s.phasesConfirmed,
     issueCount: s.issueCount,
     fleetStreams: s.fleet.streams,

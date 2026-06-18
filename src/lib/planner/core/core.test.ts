@@ -57,6 +57,7 @@ test('gateApplies: absent rule always applies', () => {
 const COMPLETE: PlanSignals = {
   coreConfirmed: true, topicsResolved: 3, topicsTotal: 3,
   requiresUi: false, // UI section -> N/A
+  featuresCount: 4, featuresConfirmed: true,
   phasesConfirmed: true, issueCount: 5,
   fleetStreams: 2, profilesComplete: true,
   automationsAck: true, skillsAck: true,
@@ -105,16 +106,42 @@ test('planStateToSignals flattens PlanStageState into the signal bag', () => {
   const st = buildPlanStageState({
     context: { resolved: 2, total: 3, coreConfirmed: true },
     repoCount: 1, requiresUi: true, ui: { approved: 1, total: 2 },
+    features: { count: 3, confirmed: false },
     phasesConfirmed: true, issueCount: 7,
     fleet: { streams: 2, profilesComplete: false },
   });
   assert.deepEqual(planStateToSignals(st), {
     coreConfirmed: true, topicsResolved: 2, topicsTotal: 3,
     repoCount: 1, requiresUi: true, screensApproved: 1, screensTotal: 2,
+    featuresCount: 3, featuresConfirmed: false,
     phasesConfirmed: true, issueCount: 7,
     fleetStreams: 2, profilesComplete: false,
     automationsAck: false, skillsAck: false,
   });
+});
+
+test('features section: locked until context done, in-progress with count, complete once confirmed', () => {
+  const bp = defaultBlueprint();
+  const feat = bp.sections.find((s) => s.key === 'features')!;
+  assert.ok(feat, 'default blueprint includes features section');
+
+  // context not satisfied → features locked
+  const empty: PlanSignals = {};
+  assert.equal(sectionStatus(feat, bp.sections, empty).status, 'locked');
+
+  // context done, no features yet → in-progress at fraction 0
+  const ctxDone: PlanSignals = { coreConfirmed: true, topicsResolved: 2, topicsTotal: 2 };
+  assert.equal(sectionStatus(feat, bp.sections, ctxDone).status, 'in-progress');
+
+  // some features added but not confirmed → in-progress with partial fraction
+  const withCount: PlanSignals = { ...ctxDone, featuresCount: 3, featuresConfirmed: false };
+  const partial = sectionStatus(feat, bp.sections, withCount);
+  assert.equal(partial.status, 'in-progress');
+  assert.ok(partial.fraction > 0 && partial.fraction < 1);
+
+  // features confirmed → complete
+  const confirmed: PlanSignals = { ...ctxDone, featuresCount: 3, featuresConfirmed: true };
+  assert.equal(sectionStatus(feat, bp.sections, confirmed).status, 'complete');
 });
 
 // ── pipeline engine ───────────────────────────────────────────────────────────
