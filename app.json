@@ -3,7 +3,7 @@
     "name": "Mobile Studio Code",
     "slug": "mobile-studio-code",
     "owner": "kevinthelago",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "icon": "./src/assets/icon-ios.png",
     "orientation": "portrait",
     "scheme": "mobilestudiocode",
@@ -12,6 +12,7 @@
     "newArchEnabled": true,
     "runtimeVersion": "1.0.0",
     "updates": {
+      "enabled": false,
       "url": "https://u.expo.dev/a11a7b6c-6d05-4b39-9ff1-ea694b914b66"
     },
     "ios": {
