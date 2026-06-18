@@ -25,6 +25,7 @@ import { buildPublishPlan } from '../../src/lib/planner/publish';
 import { usePlanner } from '../../src/lib/planner/PlannerContext';
 import { usePlannerSync } from '../../src/lib/planner/PlannerSyncContext';
 import { useTunnel } from '../../src/lib/TunnelContext';
+import { useTunnelPlanner } from '../../src/lib/planner/tunnelMirror';
 
 const STATUS_META: Record<SectionRenderStatus, { label: string; color: string }> = {
   'complete': { label: 'Complete', color: PLAN_COLORS.good },
@@ -91,6 +92,7 @@ export default function PlannerScreen() {
 
   const { conflicts: syncConflicts, status: syncStatus } = usePlannerSync();
   const { connectionState } = useTunnel();
+  const tunnelPlanner = useTunnelPlanner();
   const [view, setView] = useState<'chat' | 'plan' | 'preview' | 'grade'>('chat');
   const [showPublish, setShowPublish] = useState(false);
   const [editingBlueprint, setEditingBlueprint] = useState<Blueprint | null | 'new'>(null);
@@ -145,6 +147,23 @@ export default function PlannerScreen() {
           </View>
         )}
       </View>
+
+      {/* ── Tunnel mirror: live desktop plan status (PT3 scaffold) ── */}
+      {!active && tunnelPlanner.planStatus && (
+        <Surface style={[styles.mirrorBanner, { borderColor: PLAN_COLORS.info }]} radius={14}>
+          <View style={styles.mirrorRow}>
+            <View style={[styles.syncDot, { backgroundColor: PLAN_COLORS.info }]} />
+            <Text style={[styles.mirrorTitle, { color: t.fg }]}>
+              Live from base-studio-code
+            </Text>
+          </View>
+          <Text style={[styles.mirrorMeta, { color: t.fgMuted, fontFamily: t.fontMono }]}>
+            {tunnelPlanner.planStatus.phase}
+            {' · '}
+            {tunnelPlanner.planStatus.status}
+          </Text>
+        </Surface>
+      )}
 
       {/* ── Home: recent projects + new from a blueprint ── */}
       {!active && (
@@ -433,6 +452,10 @@ const styles = StyleSheet.create({
 
   loading: { paddingVertical: 40, alignItems: 'center' },
   sectionHeading: { fontSize: 10.5, letterSpacing: 1.2, fontWeight: '700' },
+  mirrorBanner: { marginHorizontal: 14, marginTop: 10, padding: 13, gap: 4 },
+  mirrorRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  mirrorTitle: { fontSize: 14, fontWeight: '600' },
+  mirrorMeta: { fontSize: 11.5 },
   blueprintHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 0 },
   customBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
   customText: { fontSize: 12, fontWeight: '600' },
