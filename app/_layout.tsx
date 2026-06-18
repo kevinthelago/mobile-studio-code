@@ -5,6 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import { SessionProvider, useSession } from '../src/lib/session';
 import { TunnelProvider, useTunnel } from '../src/lib/TunnelContext';
 import { ThemeProvider, useTheme } from '../src/theme';
+import { PlannerProvider } from '../src/lib/planner/PlannerContext';
+import { PlannerSyncProvider } from '../src/lib/planner/PlannerSyncContext';
 import { Orbs } from '../src/components/ui/Orbs';
 import {
   initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
@@ -104,6 +106,8 @@ function FcmBootstrap() {
 }
 
 function InnerStack() {
+  const t = useTheme();
+  const modal = { animation: 'slide_from_bottom' as const, contentStyle: { backgroundColor: t.bg } };
   return (
     <Stack
       screenOptions={{
@@ -117,7 +121,9 @@ function InnerStack() {
     >
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="setup" options={{ animation: 'fade' }} />
-      <Stack.Screen name="repo" options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="repo" options={modal} />
+      <Stack.Screen name="(planner)" options={modal} />
+      <Stack.Screen name="(sync)" options={modal} />
     </Stack>
   );
 }
@@ -127,12 +133,16 @@ export default function RootLayout() {
     <ThemeProvider>
       <SessionProvider>
         <TunnelProvider>
-          <FcmBootstrap />
-          <ThemedFrame>
-            <StageGate>
-              <InnerStack />
-            </StageGate>
-          </ThemedFrame>
+          <PlannerProvider>
+            <PlannerSyncProvider>
+              <FcmBootstrap />
+              <ThemedFrame>
+                <StageGate>
+                  <InnerStack />
+                </StageGate>
+              </ThemedFrame>
+            </PlannerSyncProvider>
+          </PlannerProvider>
         </TunnelProvider>
       </SessionProvider>
     </ThemeProvider>

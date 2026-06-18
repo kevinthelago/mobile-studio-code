@@ -225,3 +225,12 @@ export type AnthropicResponse = {
   content: ContentBlock[];
   stop_reason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence';
 };
+
+/** One project entry in the peer's sync manifest — sent over the Noise channel. */
+export type PlanSyncManifestEntry = {
+  projectId: string;
+  title: string;
+  updatedAt: number;
+  /** relpath → SHA-like hash; used to decide what to pull. */
+  files: Record<string, string>;
+};

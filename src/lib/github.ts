@@ -528,6 +528,70 @@ export async function getIssueComments(
   }));
 }
 
+// ── Milestone helpers (used by the planner publish flow) ─────────────────────
+
+export type GithubMilestone = { number: number; title: string; description: string | null };
+
+export async function listMilestones(pat: string, repo: string): Promise<GithubMilestone[]> {
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/milestones?state=open&per_page=100`,
+    { headers: { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github+json' } },
+  );
+  if (!res.ok) throw new Error(`listMilestones failed (${res.status})`);
+  const raw = (await res.json()) as { number: number; title: string; description: string | null }[];
+  return raw.map((m) => ({ number: m.number, title: m.title, description: m.description }));
+}
+
+export async function createMilestone(
+  pat: string, repo: string, title: string, description?: string,
+): Promise<GithubMilestone> {
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/milestones`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${pat}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ title, description: description ?? '' }),
+    },
+  );
+  if (!res.ok) throw new Error(`createMilestone failed (${res.status})`);
+  const m = (await res.json()) as { number: number; title: string; description: string | null };
+  return { number: m.number, title: m.title, description: m.description };
+}
+
+/** Create an issue with optional labels and milestone number. */
+export async function createIssueWithMeta(
+  pat: string,
+  repo: string,
+  opts: { title: string; body?: string; labels?: string[]; milestone?: number },
+): Promise<GithubIssue> {
+  const res = await fetch(
+    `https://api.github.com/repos/${repo}/issues`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${pat}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: opts.title,
+        body: opts.body ?? '',
+        labels: opts.labels ?? [],
+        milestone: opts.milestone ?? null,
+      }),
+    },
+  );
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(`createIssueWithMeta failed (${res.status}): ${errBody.slice(0, 200)}`);
+  }
+  return normalizeIssue((await res.json()) as IssueApiShape);
+}
+
 export async function createIssue(
   pat: string,
   repo: string,
