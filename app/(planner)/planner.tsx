@@ -23,6 +23,7 @@ import { projectReadiness, type ProjectReadiness } from '../../src/lib/planner/p
 import { buildPublishPlan } from '../../src/lib/planner/publish';
 import { usePlanner } from '../../src/lib/planner/PlannerContext';
 import { usePlannerSync } from '../../src/lib/planner/PlannerSyncContext';
+import { useTunnel } from '../../src/lib/TunnelContext';
 
 const STATUS_META: Record<SectionRenderStatus, { label: string; color: string }> = {
   'complete': { label: 'Complete', color: PLAN_COLORS.good },
@@ -87,7 +88,8 @@ export default function PlannerScreen() {
     createProject, openProject, closeProject, deleteProject, sendMessage, runSectionPipeline,
   } = usePlanner();
 
-  const { conflicts: syncConflicts } = usePlannerSync();
+  const { conflicts: syncConflicts, status: syncStatus } = usePlannerSync();
+  const { connectionState } = useTunnel();
   const [view, setView] = useState<'chat' | 'plan' | 'preview' | 'grade'>('chat');
   const [showPublish, setShowPublish] = useState(false);
   const readiness = useMemo(() => (active ? projectReadiness(active) : null), [active]);
@@ -247,8 +249,26 @@ export default function PlannerScreen() {
                 <Surface style={[styles.banner, { borderColor: PLAN_COLORS.good }]} radius={14}>
                   <Text style={[styles.bannerTitle, { color: PLAN_COLORS.good }]}>Plan complete</Text>
                   <Text style={[styles.bannerBody, { color: t.fgMuted }]}>
-                    Every applicable section is satisfied. Transfer to base-studio-code is coming soon.
+                    Every applicable section is satisfied. Publish to GitHub below, or open
+                    base-studio-code on your Mac to sync this plan automatically.
                   </Text>
+                  <View style={[styles.syncRow, { borderTopColor: t.borderColor }]}>
+                    <View style={[styles.syncDot, {
+                      backgroundColor:
+                        connectionState === 'connected' ? PLAN_COLORS.good
+                        : (connectionState === 'connecting' || connectionState === 'authenticating') ? PLAN_COLORS.info
+                        : '#8a8f9a',
+                    }]} />
+                    <Text style={[styles.syncLabel, { color: t.fgMuted }]}>
+                      {connectionState === 'connected'
+                        ? (syncStatus === 'syncing' ? 'Syncing to base-studio-code…'
+                          : syncStatus === 'done' ? 'Synced to base-studio-code'
+                          : 'Connected — will sync on change')
+                        : (connectionState === 'connecting' || connectionState === 'authenticating')
+                        ? 'Connecting to base-studio-code…'
+                        : 'base-studio-code not connected'}
+                    </Text>
+                  </View>
                 </Surface>
               ) : readiness.current ? (
                 <Surface style={styles.banner} radius={14}>
@@ -416,6 +436,9 @@ const styles = StyleSheet.create({
   bannerLabel: { fontSize: 10, letterSpacing: 1.2, fontWeight: '700' },
   bannerTitle: { fontSize: 15, fontWeight: '700' },
   bannerBody: { fontSize: 12.5, lineHeight: 18 },
+  syncRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 8, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  syncDot: { width: 7, height: 7, borderRadius: 4 },
+  syncLabel: { fontSize: 12, flex: 1 },
 
   sectionList: { gap: 8 },
   sectionCard: { padding: 13, gap: 8 },
