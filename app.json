@@ -16,6 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.mobilestudiocode.app",
+      "buildNumber": "2",
       "backgroundColor": "#0b0d14",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
