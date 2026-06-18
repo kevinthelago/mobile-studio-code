@@ -3,7 +3,7 @@
     "name": "Mobile Studio Code",
     "slug": "mobile-studio-code",
     "owner": "kevinthelago",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "icon": "./src/assets/icon-ios.png",
     "orientation": "portrait",
     "scheme": "mobilestudiocode",
