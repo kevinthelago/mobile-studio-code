@@ -3,7 +3,7 @@
     "name": "Mobile Studio Code",
     "slug": "mobile-studio-code",
     "owner": "kevinthelago",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "icon": "./src/assets/icon-ios.png",
     "orientation": "portrait",
     "scheme": "mobilestudiocode",
@@ -24,8 +24,13 @@
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Choose screenshots or images to send to Claude.",
         "NSCameraUsageDescription": "Scan a QR code to pair with base-studio-code.",
+        "NSLocalNetworkUsageDescription": "Connect to base-studio-code running on your local network to mirror its console sessions.",
         "ITSAppUsesNonExemptEncryption": false,
-        "UIUserInterfaceStyle": "Dark"
+        "UIUserInterfaceStyle": "Dark",
+        "UIBackgroundModes": ["remote-notification"],
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
       }
     },
     "android": {
