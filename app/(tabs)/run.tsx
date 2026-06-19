@@ -374,6 +374,9 @@ function PaneGridView() {
       <View style={styles.gridHeader}>
         <Text style={[styles.gridTitle, { color: t.fg }]}>Sessions</Text>
         <View style={styles.gridActions}>
+          <Pressable onPress={() => router.push('/(fleet)/fleet')} hitSlop={8}>
+            <Text style={[styles.disconnectText, { color: t.accent }]}>Fleet</Text>
+          </Pressable>
           <PlanShortcut />
           <Pressable onPress={disconnect} hitSlop={8}>
             <Text style={[styles.disconnectText, { color: t.fgMuted }]}>Disconnect</Text>
