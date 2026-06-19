@@ -126,11 +126,7 @@ export default function RootLayout() {
         <TunnelProvider>
           <PlannerProvider>
             <PlannerSyncProvider>
-              {/* TEMP: Firebase startup disabled to isolate the launch crash.
-                  FcmBootstrap calls @react-native-firebase/messaging at mount
-                  (network + void TurboModule), the prime suspect for the
-                  ObjCTurboModule::performVoidMethodInvocation abort. */}
-              {/* <FcmBootstrap /> */}
+              <FcmBootstrap />
               <ThemedFrame>
                 <StageGate>
                   <InnerStack />
