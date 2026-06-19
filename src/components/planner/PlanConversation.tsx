@@ -21,25 +21,28 @@ export function PlanConversation({
 }) {
   const t = useTheme();
   const [text, setText] = useState('');
-  const [kbHeight, setKbHeight] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
-  // Track the keyboard directly and pad the composer above it. More reliable than
-  // KeyboardAvoidingView, which mis-measures when it doesn't start at the screen top.
+  // Track only whether the keyboard is visible — NOT to offset by its height.
+  // The planner is a presented modal, which the system already lifts above the
+  // keyboard; adding the keyboard height here on top of that double-counted and
+  // floated the composer a full keyboard's height too high. So when the keyboard
+  // is up the composer just needs its base padding (the modal is already lifted);
+  // the home-indicator inset is only needed when the keyboard is down.
+  const [kbVisible, setKbVisible] = useState(false);
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvt, (e) => setKbHeight(e.endCoordinates.height));
-    const hideSub = Keyboard.addListener(hideEvt, () => setKbHeight(0));
+    const showSub = Keyboard.addListener(showEvt, () => setKbVisible(true));
+    const hideSub = Keyboard.addListener(hideEvt, () => setKbVisible(false));
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
-  }, [messages.length, sending, kbHeight]);
+  }, [messages.length, sending, kbVisible]);
 
-  // iOS keyboard height already includes the home-indicator inset.
-  const composerPad = kbHeight > 0 ? kbHeight + 8 : bottomInset + 8;
+  const composerPad = kbVisible ? 8 : bottomInset + 8;
 
   function send() {
     const v = text.trim();

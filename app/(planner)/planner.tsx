@@ -1,10 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
@@ -13,9 +13,12 @@ import { BlueprintPicker } from '../../src/components/planner/BlueprintPicker';
 import { BlueprintStageBar } from '../../src/components/planner/BlueprintStageBar';
 import { PlanConversation } from '../../src/components/planner/PlanConversation';
 import { PublishSheet } from '../../src/components/planner/PublishSheet';
+import { GradeTab } from '../../src/components/planner/GradeTab';
+import { OverflowMenu } from '../../src/components/planner/OverflowMenu';
 import { PLAN_COLORS } from '../../src/lib/planner/colors';
 import type { Blueprint, SectionRenderStatus } from '../../src/lib/planner/core';
-import { projectReadiness } from '../../src/lib/planner/project';
+import { projectReadiness, type ProjectReadiness } from '../../src/lib/planner/project';
+import type { Grade, GradeCategory, GradeSuggestion } from '../../src/lib/planner/types';
 import { buildPublishPlan } from '../../src/lib/planner/publish';
 import { usePlanner } from '../../src/lib/planner/PlannerContext';
 import { usePlannerSync } from '../../src/lib/planner/PlannerSyncContext';
@@ -45,6 +48,32 @@ function relativeTime(ts: number): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+/** Derive a live readiness "grade" from the project's section completion — feeds GradeTab.
+ *  (The blueprint-driven readiness model is the source of truth; no mock data.) */
+function buildGrade(readiness: ProjectReadiness): Grade {
+  const clamp = (n: number) => Math.max(0, Math.min(1, n));
+  const applicable = readiness.sections.filter((s) => s.status.status !== 'na');
+  const avg = applicable.length
+    ? applicable.reduce((sum, s) => sum + clamp(s.status.fraction), 0) / applicable.length
+    : 0;
+  const pct = Math.round(avg * 100);
+  const letter = pct >= 90 ? 'A' : pct >= 80 ? 'B' : pct >= 70 ? 'C' : pct >= 60 ? 'D' : 'F';
+  const done = applicable.filter((s) => s.status.status === 'complete').length;
+  const summary = readiness.complete
+    ? 'Every applicable section is satisfied — ready to publish.'
+    : `${done} of ${applicable.length} section${applicable.length === 1 ? '' : 's'} complete.`;
+  const categories: GradeCategory[] = applicable.map((s) => ({
+    name: s.section.name,
+    pct: Math.round(clamp(s.status.fraction) * 100),
+  }));
+  const suggestions: GradeSuggestion[] = readiness.incomplete.map((inc) => ({
+    severity: inc.status === 'locked' ? 'info' : 'warn',
+    title: inc.name,
+    detail: inc.reason,
+  }));
+  return { letter, pct, summary, categories, suggestions };
+}
+
 export default function PlannerScreen() {
   const t = useTheme();
   const router = useRouter();
@@ -55,10 +84,37 @@ export default function PlannerScreen() {
   } = usePlanner();
 
   const { conflicts: syncConflicts } = usePlannerSync();
-  const [view, setView] = useState<'chat' | 'plan'>('chat');
+  const [view, setView] = useState<'chat' | 'plan' | 'grade'>('chat');
   const [showPublish, setShowPublish] = useState(false);
+  const [showOverflow, setShowOverflow] = useState(false);
+  // Section the user jumped to from the stage stepper — highlighted + expanded in the plan pane.
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const planScrollRef = useRef<ScrollView>(null);
+  const sectionListY = useRef(0);                         // plan section list's y within the scroll content
+  const sectionOffsets = useRef<Record<string, number>>({}); // each card's y within the section list
+  const pendingScrollKey = useRef<string | null>(null);
   const readiness = useMemo(() => (active ? projectReadiness(active) : null), [active]);
+  const grade = useMemo(() => (readiness ? buildGrade(readiness) : null), [readiness]);
   const publishPlan = useMemo(() => (active ? buildPublishPlan(active) : null), [active]);
+
+  // Tapping a stage node jumps the project pane to that section. Switch to the plan
+  // view, then scroll once layout has settled (offsets are populated via onLayout).
+  useEffect(() => {
+    if (view !== 'plan' || !pendingScrollKey.current) return;
+    const key = pendingScrollKey.current;
+    const id = requestAnimationFrame(() => {
+      const y = sectionListY.current + (sectionOffsets.current[key] ?? 0);
+      planScrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+      pendingScrollKey.current = null;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [view, activeKey]);
+
+  function jumpToSection(key: string) {
+    setActiveKey(key);
+    pendingScrollKey.current = key;
+    setView('plan');
+  }
 
   function startBlueprint(bp: Blueprint) {
     setView('chat');
@@ -105,6 +161,15 @@ export default function PlannerScreen() {
                   + `/${readiness.sections.filter((s) => s.status.status !== 'na').length}`}
             </Text>
           </View>
+        )}
+        {active && (
+          <IconBtn onPress={() => setShowOverflow(true)}>
+            <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+              <Circle cx={8} cy={3.2} r={1.3} fill={t.fg} />
+              <Circle cx={8} cy={8} r={1.3} fill={t.fg} />
+              <Circle cx={8} cy={12.8} r={1.3} fill={t.fg} />
+            </Svg>
+          </IconBtn>
         )}
       </View>
 
@@ -174,16 +239,20 @@ export default function PlannerScreen() {
       {active && readiness && (
         <View style={styles.activeRoot}>
           <View style={styles.activeTop}>
-            <BlueprintStageBar readiness={readiness} />
+            <BlueprintStageBar
+              readiness={readiness}
+              activeKey={activeKey}
+              onSelectSection={jumpToSection}
+            />
             <View style={[styles.segment, { borderColor: t.borderColor }]}>
-              {(['chat', 'plan'] as const).map((v) => (
+              {(['chat', 'plan', 'grade'] as const).map((v) => (
                 <Pressable
                   key={v}
                   onPress={() => setView(v)}
                   style={[styles.segBtn, view === v && { backgroundColor: t.surface }]}
                 >
                   <Text style={[styles.segText, { color: view === v ? t.fg : t.fgMuted }]}>
-                    {v === 'chat' ? 'Chat' : 'Plan'}
+                    {{ chat: 'Chat', plan: 'Plan', grade: 'Grade' }[v]}
                   </Text>
                 </Pressable>
               ))}
@@ -197,8 +266,17 @@ export default function PlannerScreen() {
               onSend={sendMessage}
               bottomInset={insets.bottom}
             />
+          ) : view === 'grade' ? (
+            <ScrollView
+              style={styles.content}
+              contentContainerStyle={[styles.contentInner, { paddingBottom: insets.bottom + 24 }]}
+              showsVerticalScrollIndicator={false}
+            >
+              {grade && <GradeTab grade={grade} />}
+            </ScrollView>
           ) : (
             <ScrollView
+              ref={planScrollRef}
               style={styles.content}
               contentContainerStyle={[styles.contentInner, { paddingBottom: insets.bottom + 24 }]}
               showsVerticalScrollIndicator={false}
@@ -241,14 +319,25 @@ export default function PlannerScreen() {
                 </Pressable>
               )}
 
-              <View style={styles.sectionList}>
+              <View
+                style={styles.sectionList}
+                onLayout={(e) => { sectionListY.current = e.nativeEvent.layout.y; }}
+              >
                 {readiness.sections.map(({ section, status }) => {
                   const meta = status.blocked
                     ? { label: 'Blocked', color: PLAN_COLORS.warn }
                     : STATUS_META[status.status];
                   const content = active.sections[section.key]?.content;
+                  const isActive = section.key === activeKey;
                   return (
-                    <Surface key={section.key} style={styles.sectionCard} radius={6}>
+                    <View
+                      key={section.key}
+                      onLayout={(e) => { sectionOffsets.current[section.key] = e.nativeEvent.layout.y; }}
+                    >
+                    <Surface
+                      style={[styles.sectionCard, isActive && { borderColor: t.accent, borderWidth: 1 }]}
+                      radius={6}
+                    >
                       <View style={styles.sectionRow}>
                         <Text style={[styles.sectionGlyph, { color: meta.color }]}>{section.glyph}</Text>
                         <View style={styles.sectionMain}>
@@ -260,7 +349,7 @@ export default function PlannerScreen() {
                         <Tag color={meta.color} bg={`${meta.color}22`} border={false}>{meta.label}</Tag>
                       </View>
                       {content ? (
-                        <Text style={[styles.sectionContent, { color: t.fgMuted }]} numberOfLines={6}>{content}</Text>
+                        <Text style={[styles.sectionContent, { color: t.fgMuted }]} numberOfLines={isActive ? undefined : 6}>{content}</Text>
                       ) : null}
                       {section.pipelines.length > 0 && (
                         <View style={[styles.pipelineList, { borderTopColor: t.borderColor }]}>
@@ -295,6 +384,7 @@ export default function PlannerScreen() {
                         </View>
                       )}
                     </Surface>
+                    </View>
                   );
                 })}
               </View>
@@ -320,6 +410,16 @@ export default function PlannerScreen() {
 
       {active && showPublish && (
         <PublishSheet project={active} onClose={() => setShowPublish(false)} />
+      )}
+
+      {active && showOverflow && (
+        <OverflowMenu
+          onClose={() => setShowOverflow(false)}
+          onPublish={() => { setShowOverflow(false); setShowPublish(true); }}
+          onSaveExit={() => { setShowOverflow(false); closeProject(); router.back(); }}
+          onSwitchBlueprint={() => { setShowOverflow(false); closeProject(); }}
+          onClear={() => { setShowOverflow(false); void deleteProject(active.id); }}
+        />
       )}
     </View>
   );

@@ -10,7 +10,7 @@ import { Grade } from '../../lib/planner/types';
 
 const SEV_COLOR = { warn: PLAN_COLORS.warn, info: PLAN_COLORS.info, bad: PLAN_COLORS.bad };
 
-export function GradeTab({ grade }: { grade: Grade }) {
+export function GradeTab({ grade, onApply }: { grade: Grade; onApply?: () => void }) {
   const t = useTheme();
   const ringColor = GRADE_COLOR[grade.letter[0]] ?? PLAN_COLORS.good;
   return (
@@ -60,12 +60,14 @@ export function GradeTab({ grade }: { grade: Grade }) {
         </Surface>
       ))}
 
-      <View style={styles.applyWrap}>
-        <PrimaryButton onPress={() => {}}>
-          <ClaudeAvatar size={16} />
-          <Text style={styles.applyText}>Apply all suggestions</Text>
-        </PrimaryButton>
-      </View>
+      {onApply && (
+        <View style={styles.applyWrap}>
+          <PrimaryButton onPress={onApply}>
+            <ClaudeAvatar size={16} />
+            <Text style={styles.applyText}>Apply all suggestions</Text>
+          </PrimaryButton>
+        </View>
+      )}
     </View>
   );
 }
