@@ -4,6 +4,7 @@ import {
   Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Path } from 'react-native-svg';
@@ -19,7 +20,6 @@ import { fitTerminalFontSize, BASE_TERMINAL_FONT } from '../../src/lib/tunnel/pa
 import { encodeSubmit } from '../../src/lib/tunnel/input';
 import { parsePairingPayload } from '../../src/lib/tunnel/pairing';
 
-const TAB_BAR_HEIGHT = 60;
 const TERMINAL_LINE_LIMIT = 200;
 /** Horizontal padding (each side) of the terminal output content. */
 const TERM_CONTENT_PAD = 12;
@@ -369,7 +369,9 @@ function PaneGridView() {
     <View style={[styles.grid, {
       // Clear the SessionStrip when it's showing (i.e. there are panes).
       paddingTop: insets.top + (ordered.length > 0 ? SESSION_STRIP_HEIGHT : 0) + 8,
-      paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 8,
+      // The tab bar is in-flow (the navigator already reserves its space below
+      // this content), so we only need a small visual gap, not a tab-bar clearance.
+      paddingBottom: 16,
     }]}>
       <View style={styles.gridHeader}>
         <Text style={[styles.gridTitle, { color: t.fg }]}>Sessions</Text>
@@ -408,6 +410,7 @@ function PaneGridView() {
 function TerminalView({ paneId }: { paneId: string }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const { panes, sendInput, unfocusPane } = useTunnel();
   const [inputText, setInputText] = useState('');
   const [kbHeight, setKbHeight] = useState(0);
@@ -436,10 +439,7 @@ function TerminalView({ paneId }: { paneId: string }) {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  // Track the keyboard directly so the input bar sits just above it when up,
-  // and above the floating (absolute) tab bar when down. Manual tracking is
-  // more predictable than KeyboardAvoidingView's offset math, which double-
-  // stacked the tab-bar clearance on top of the keyboard lift.
+  // Track the keyboard directly so the input bar sits just above it when up.
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
@@ -448,9 +448,12 @@ function TerminalView({ paneId }: { paneId: string }) {
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
-  // iOS keyboard height already includes the home-indicator inset, so when the
-  // keyboard is up we don't add insets.bottom again.
-  const inputPadBottom = kbHeight > 0 ? kbHeight + 8 : insets.bottom + TAB_BAR_HEIGHT + 8;
+  // The tab bar is in-flow: the navigator already reserves its height below this
+  // screen, so when the keyboard is DOWN the input only needs a small base gap.
+  // When UP, the keyboard (measured from the screen bottom, includes the home
+  // indicator) overlaps the reserved tab-bar zone, so lift by the part of the
+  // keyboard that rises above the tab bar: keyboardHeight − tabBarHeight.
+  const inputPadBottom = kbHeight > 0 ? Math.max(8, kbHeight - tabBarHeight + 8) : 8;
 
   const pane = panes[paneId];
 
