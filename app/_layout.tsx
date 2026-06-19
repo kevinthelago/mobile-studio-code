@@ -127,6 +127,7 @@ function InnerStack() {
         <Stack.Screen name="repo" options={modal} />
         <Stack.Screen name="(planner)" options={modal} />
         <Stack.Screen name="(sync)" options={modal} />
+        <Stack.Screen name="(fleet)" options={modal} />
       </Stack>
     </NavThemeProvider>
   );
