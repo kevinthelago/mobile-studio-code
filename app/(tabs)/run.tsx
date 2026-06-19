@@ -139,7 +139,7 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
 
   return (
     <View style={[styles.pairing, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
-      <Surface style={styles.pairingCard} radius={20}>
+      <Surface style={styles.pairingCard} radius={10}>
         <View style={styles.pairingIconWrap}>
           <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
             <Path
@@ -239,8 +239,8 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
         <View style={[styles.dividerLine, { backgroundColor: t.borderColor }]} />
       </View>
       <Pressable onPress={onConnectModel}>
-        <Surface style={styles.standaloneCard} radius={16}>
-          <View style={[styles.standaloneIcon, { backgroundColor: t.glass ? 'rgba(192,132,252,0.18)' : 'rgba(192,132,252,0.12)' }]}>
+        <Surface style={styles.standaloneCard} radius={6}>
+          <View style={[styles.standaloneIcon, { backgroundColor: 'rgba(192,132,252,0.12)' }]}>
             <Svg width={17} height={17} viewBox="0 0 18 18" fill="none">
               <Path d="M5 13a3.2 3.2 0 010-6.4 4.3 4.3 0 018.2 1A3.1 3.1 0 0114.5 13H5z" stroke="#c084fc" strokeWidth={1.5} />
             </Svg>
@@ -257,8 +257,8 @@ function PairingView({ onConnectModel }: { onConnectModel: () => void }) {
 
       {/* Plan a project locally — no desktop/tunnel required. */}
       <Pressable onPress={() => router.push('/(planner)/planner')} style={styles.standaloneSecondary}>
-        <Surface style={styles.standaloneCard} radius={16}>
-          <View style={[styles.standaloneIcon, { backgroundColor: t.glass ? 'rgba(192,132,252,0.18)' : 'rgba(192,132,252,0.12)' }]}>
+        <Surface style={styles.standaloneCard} radius={6}>
+          <View style={[styles.standaloneIcon, { backgroundColor: 'rgba(192,132,252,0.12)' }]}>
             <Svg width={17} height={17} viewBox="0 0 16 16" fill="none">
               <Path d="M5 2.5h6M5 8h6M5 13.5h6M2.5 2.5h.01M2.5 8h.01M2.5 13.5h.01"
                 stroke="#c084fc" strokeWidth={1.6} strokeLinecap="round" />
@@ -347,7 +347,7 @@ function PlanShortcut() {
       hitSlop={8}
       style={[styles.planBtn, {
         borderColor: purple,
-        backgroundColor: t.glass ? 'rgba(192,132,252,0.18)' : 'rgba(192,132,252,0.12)',
+        backgroundColor: 'rgba(192,132,252,0.12)',
       }]}
     >
       <Svg width={13} height={13} viewBox="0 0 16 16" fill="none">
@@ -550,7 +550,7 @@ function TerminalView({ paneId }: { paneId: string }) {
             Not running? A new device is view-only — grant input control on the desktop.
           </Text>
         ) : null}
-        <Surface style={styles.termInputBar} radius={20}>
+        <Surface style={styles.termInputBar} radius={10}>
           <Text style={[styles.termPromptArrow, { color: t.accent, fontFamily: t.fontMono }]}>›</Text>
           <TextInput
             value={inputText}
@@ -601,13 +601,13 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   connectingText: { marginTop: 16, fontSize: 14 },
   cancelConnect: {
-    marginTop: 24, paddingHorizontal: 22, paddingVertical: 9, borderRadius: 20,
+    marginTop: 24, paddingHorizontal: 22, paddingVertical: 9, borderRadius: 4,
     borderWidth: StyleSheet.hairlineWidth,
   },
   cancelConnectText: { fontSize: 14, fontWeight: '600' },
   reconnectBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 18, paddingVertical: 11, borderRadius: 22,
+    paddingHorizontal: 18, paddingVertical: 11, borderRadius: 4,
     borderWidth: 1, marginTop: 4,
   },
   reconnectText: { fontSize: 14, fontWeight: '600', flexShrink: 1 },
@@ -632,21 +632,21 @@ const styles = StyleSheet.create({
   scanBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 24, paddingVertical: 13,
-    borderRadius: 24, marginTop: 4,
+    borderRadius: 4, marginTop: 4,
   },
   scanBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   manualToggle: { paddingVertical: 6 },
   manualToggleText: { fontSize: 12.5 },
   manualForm: { width: '100%', gap: 10 },
   manualInput: {
-    width: '100%', height: 44, borderRadius: 10,
+    width: '100%', height: 44, borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12, fontSize: 13,
   },
   manualJsonInput: { height: 88, paddingTop: 10, textAlignVertical: 'top' },
   manualConnectBtn: {
     alignSelf: 'flex-end',
-    borderWidth: 1, borderRadius: 8,
+    borderWidth: 1, borderRadius: 4,
     paddingHorizontal: 16, paddingVertical: 8,
   },
   manualConnectText: { fontSize: 13.5, fontWeight: '600' },
@@ -684,7 +684,7 @@ const styles = StyleSheet.create({
   cancelScan: {
     position: 'absolute', right: 20,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 4,
   },
   cancelScanText: { fontSize: 14, fontWeight: '600' },
 
@@ -698,7 +698,7 @@ const styles = StyleSheet.create({
   gridActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   planBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 11, paddingVertical: 6, borderRadius: 16, borderWidth: 1,
+    paddingHorizontal: 11, paddingVertical: 6, borderRadius: 4, borderWidth: 1,
   },
   planBtnText: { fontSize: 12.5, fontWeight: '600' },
   disconnectText: { fontSize: 13 },
@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 13, fontWeight: '600', flexShrink: 1 },
   requestBadge: {
     backgroundColor: 'rgba(251,191,36,0.2)',
-    borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2,
   },
   requestBadgeText: { fontSize: 10, color: '#fbbf24', fontWeight: '600' },
   cardTask: { fontSize: 12 },

@@ -100,7 +100,7 @@ export function ProvidersScreen({ onBack, onConnected }: Props) {
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: t.borderColor }]}>
-        <Pressable onPress={onBack} hitSlop={10} style={[styles.backBtn, { backgroundColor: t.glass ? 'rgba(255,255,255,0.10)' : t.surface }]}>
+        <Pressable onPress={onBack} hitSlop={10} style={[styles.backBtn, { backgroundColor: t.surface }]}>
           <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
             <Path d="M9 3L5 7l4 4" stroke={t.fg} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
@@ -124,7 +124,7 @@ export function ProvidersScreen({ onBack, onConnected }: Props) {
             const isConnected = !!connected[p.id];
             const isActive = activeProvider === p.id;
             return (
-              <Surface key={p.id} style={styles.card} radius={16}>
+              <Surface key={p.id} style={styles.card} radius={6}>
                 <Pressable
                   onPress={() => setOpenId(open ? null : p.id)}
                   style={styles.cardHead}
@@ -139,7 +139,7 @@ export function ProvidersScreen({ onBack, onConnected }: Props) {
                     </Text>
                   </View>
                   {isActive && (
-                    <View style={[styles.activeBadge, { backgroundColor: t.glass ? 'rgba(255,174,207,0.16)' : 'rgba(217,119,87,0.12)' }]}>
+                    <View style={[styles.activeBadge, { backgroundColor: 'rgba(217,119,87,0.12)' }]}>
                       <Text style={[styles.activeBadgeText, { color: t.accent }]}>Active</Text>
                     </View>
                   )}
@@ -168,7 +168,7 @@ export function ProvidersScreen({ onBack, onConnected }: Props) {
                                 {m.name}
                               </Text>
                               {m.recommended && (
-                                <View style={[styles.recTag, { backgroundColor: t.glass ? 'rgba(255,174,207,0.16)' : 'rgba(217,119,87,0.12)' }]}>
+                                <View style={[styles.recTag, { backgroundColor: 'rgba(217,119,87,0.12)' }]}>
                                   <Text style={[styles.recTagText, { color: t.accent }]}>Recommended</Text>
                                 </View>
                               )}
@@ -191,7 +191,7 @@ export function ProvidersScreen({ onBack, onConnected }: Props) {
                           autoCapitalize="none"
                           autoCorrect={false}
                           keyboardType="url"
-                          style={[styles.input, { color: t.fg, fontFamily: t.fontMono, borderColor: t.borderColor, backgroundColor: t.glass ? 'rgba(0,0,0,0.22)' : t.bg }]}
+                          style={[styles.input, { color: t.fg, fontFamily: t.fontMono, borderColor: t.borderColor, backgroundColor: t.bg }]}
                         />
                       ) : !isConnected ? (
                         <TextInput
@@ -202,7 +202,7 @@ export function ProvidersScreen({ onBack, onConnected }: Props) {
                           secureTextEntry
                           autoCapitalize="none"
                           autoCorrect={false}
-                          style={[styles.input, { color: t.fg, fontFamily: t.fontMono, borderColor: t.borderColor, backgroundColor: t.glass ? 'rgba(0,0,0,0.22)' : t.bg }]}
+                          style={[styles.input, { color: t.fg, fontFamily: t.fontMono, borderColor: t.borderColor, backgroundColor: t.bg }]}
                         />
                       ) : null}
 
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   cardHeadText: { flex: 1, minWidth: 0 },
   providerName: { fontSize: 14, fontWeight: '600' },
   modelCount: { fontSize: 10.5, marginTop: 1 },
-  activeBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  activeBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4 },
   activeBadgeText: { fontSize: 10, fontWeight: '700' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   pillDot: { width: 6, height: 6, borderRadius: 3 },
@@ -299,14 +299,14 @@ const styles = StyleSheet.create({
   modelText: { flex: 1, minWidth: 0 },
   modelNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   modelName: { fontSize: 13 },
-  recTag: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6 },
+  recTag: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
   recTagText: { fontSize: 9.5, fontWeight: '700' },
   modelId: { fontSize: 10.5, marginTop: 1 },
   ctx: { fontSize: 10.5 },
 
   footer: { paddingHorizontal: 14, paddingTop: 6, paddingBottom: 12, gap: 8 },
   input: {
-    height: 42, borderRadius: 11, borderWidth: StyleSheet.hairlineWidth,
+    height: 42, borderRadius: 6, borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12, fontSize: 13,
   },
   replaceBtn: { alignItems: 'center', paddingVertical: 2 },

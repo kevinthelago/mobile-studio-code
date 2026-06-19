@@ -121,7 +121,7 @@ export default function PlannerScreen() {
             <>
               {syncConflicts.length > 0 && (
                 <Pressable onPress={() => router.push(`/(sync)/sync?projectId=${syncConflicts[0].projectId}`)}>
-                  <Surface style={[styles.syncBanner, { borderColor: PLAN_COLORS.warn }]} radius={14}>
+                  <Surface style={[styles.syncBanner, { borderColor: PLAN_COLORS.warn }]} radius={6}>
                     <Svg width={18} height={18} viewBox="0 0 16 16" fill="none">
                       <Path d="M8 5v3.5M8 11h.01M8 1.5l6.5 11h-13z" stroke={PLAN_COLORS.warn} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
                     </Svg>
@@ -144,7 +144,7 @@ export default function PlannerScreen() {
                   <Text style={[styles.sectionHeading, { color: t.fgDim }]}>RECENT PLANS</Text>
                   {summaries.map((s) => (
                     <Pressable key={s.id} onPress={() => { void openProject(s.id); }}>
-                      <Surface style={styles.recentCard} radius={14}>
+                      <Surface style={styles.recentCard} radius={6}>
                         <View style={styles.recentMain}>
                           <Text style={[styles.recentTitle, { color: t.fg }]} numberOfLines={1}>{s.title}</Text>
                           <Text style={[styles.recentMeta, { color: t.fgDim }]} numberOfLines={1}>
@@ -180,7 +180,7 @@ export default function PlannerScreen() {
                 <Pressable
                   key={v}
                   onPress={() => setView(v)}
-                  style={[styles.segBtn, view === v && { backgroundColor: t.glass ? 'rgba(255,255,255,0.1)' : t.surface }]}
+                  style={[styles.segBtn, view === v && { backgroundColor: t.surface }]}
                 >
                   <Text style={[styles.segText, { color: view === v ? t.fg : t.fgMuted }]}>
                     {v === 'chat' ? 'Chat' : 'Plan'}
@@ -204,14 +204,14 @@ export default function PlannerScreen() {
               showsVerticalScrollIndicator={false}
             >
               {readiness.complete ? (
-                <Surface style={[styles.banner, { borderColor: PLAN_COLORS.good }]} radius={14}>
+                <Surface style={[styles.banner, { borderColor: PLAN_COLORS.good }]} radius={6}>
                   <Text style={[styles.bannerTitle, { color: PLAN_COLORS.good }]}>Plan complete</Text>
                   <Text style={[styles.bannerBody, { color: t.fgMuted }]}>
                     Every applicable section is satisfied. Transfer to base-studio-code is coming soon.
                   </Text>
                 </Surface>
               ) : readiness.current ? (
-                <Surface style={styles.banner} radius={14}>
+                <Surface style={styles.banner} radius={6}>
                   <Text style={[styles.bannerLabel, { color: t.fgDim }]}>UP NEXT</Text>
                   <Text style={[styles.bannerTitle, { color: t.fg }]}>
                     {readiness.current.glyph}  {readiness.current.name}
@@ -222,8 +222,8 @@ export default function PlannerScreen() {
 
               {publishPlan && publishPlan.issues.length > 0 && (
                 <Pressable onPress={() => setShowPublish(true)}>
-                  <Surface style={styles.publishBtn} radius={14}>
-                    <View style={[styles.publishIcon, { backgroundColor: t.glass ? 'rgba(126,226,196,0.16)' : 'rgba(126,226,196,0.1)' }]}>
+                  <Surface style={styles.publishBtn} radius={6}>
+                    <View style={[styles.publishIcon, { backgroundColor: 'rgba(126,226,196,0.1)' }]}>
                       <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
                         <Path d="M8 11V4M5 7l3-3 3 3M3 12.5h10" stroke={PLAN_COLORS.good} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
                       </Svg>
@@ -248,7 +248,7 @@ export default function PlannerScreen() {
                     : STATUS_META[status.status];
                   const content = active.sections[section.key]?.content;
                   return (
-                    <Surface key={section.key} style={styles.sectionCard} radius={14}>
+                    <Surface key={section.key} style={styles.sectionCard} radius={6}>
                       <View style={styles.sectionRow}>
                         <Text style={[styles.sectionGlyph, { color: meta.color }]}>{section.glyph}</Text>
                         <View style={styles.sectionMain}>
@@ -300,7 +300,7 @@ export default function PlannerScreen() {
               </View>
 
               {!readiness.complete && readiness.incomplete.length > 0 && (
-                <Surface style={styles.incompleteCard} radius={14}>
+                <Surface style={styles.incompleteCard} radius={6}>
                   <Text style={[styles.incompleteTitle, { color: t.fg }]}>What's left</Text>
                   {readiness.incomplete.map((s) => (
                     <View key={s.key} style={styles.incompleteRow}>
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
   headerText: { flex: 1, minWidth: 0 },
   title: { fontSize: 16, fontWeight: '700' },
   subtitle: { fontSize: 11.5, marginTop: 1 },
-  readyPill: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 9, paddingVertical: 4 },
+  readyPill: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 9, paddingVertical: 4 },
   readyText: { fontSize: 11, fontWeight: '600' },
 
   content: { flex: 1 },
@@ -358,8 +358,8 @@ const styles = StyleSheet.create({
 
   activeRoot: { flex: 1 },
   activeTop: { paddingHorizontal: 14, paddingTop: 10, gap: 10 },
-  segment: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, padding: 2 },
-  segBtn: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 8 },
+  segment: { flexDirection: 'row', borderWidth: StyleSheet.hairlineWidth, borderRadius: 4, padding: 2 },
+  segBtn: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 4 },
   segText: { fontSize: 13, fontWeight: '600' },
 
   publishBtn: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 13 },
@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
   pipelineMain: { flex: 1, minWidth: 0 },
   pipelineName: { fontSize: 12.5, fontWeight: '500' },
   pipelineMeta: { fontSize: 11, marginTop: 1 },
-  runBtn: { borderWidth: 1, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 5, minWidth: 50, alignItems: 'center' },
+  runBtn: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 12, paddingVertical: 5, minWidth: 50, alignItems: 'center' },
   runText: { fontSize: 12.5, fontWeight: '600' },
 
   incompleteCard: { padding: 14, gap: 8 },

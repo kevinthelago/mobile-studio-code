@@ -20,8 +20,8 @@ export function BlueprintStageBar({
     switch (status) {
       case 'complete': return PLAN_COLORS.good;
       case 'in-progress': return t.accent;
-      case 'locked': return t.glass ? 'rgba(255,255,255,0.18)' : t.borderColor;
-      case 'na': return t.glass ? 'rgba(255,255,255,0.08)' : t.borderColor;
+      case 'locked': return t.borderColor;
+      case 'na': return t.borderColor;
     }
   }
 
@@ -38,7 +38,7 @@ export function BlueprintStageBar({
             style={styles.seg}
             hitSlop={4}
           >
-            <View style={[styles.track, { backgroundColor: t.glass ? 'rgba(255,255,255,0.07)' : t.surface }]}>
+            <View style={[styles.track, { backgroundColor: t.surface }]}>
               <View style={[styles.fill, {
                 width: `${Math.round(Math.max(0, Math.min(1, status.fraction)) * 100)}%`,
                 backgroundColor: c,

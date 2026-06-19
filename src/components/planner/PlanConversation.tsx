@@ -72,9 +72,7 @@ export function PlanConversation({
             <View
               key={i}
               style={[styles.bubble, mine ? styles.mine : styles.theirs, {
-                backgroundColor: mine
-                  ? (t.glass ? `${t.accent}26` : `${t.accent}1f`)
-                  : (t.glass ? 'rgba(255,255,255,0.06)' : t.surface),
+                backgroundColor: mine ? `${t.accent}1f` : t.surface,
                 borderColor: t.borderColor,
               }]}
             >
@@ -83,7 +81,7 @@ export function PlanConversation({
           );
         })}
         {sending && (
-          <View style={[styles.bubble, styles.theirs, { backgroundColor: t.glass ? 'rgba(255,255,255,0.06)' : t.surface }]}>
+          <View style={[styles.bubble, styles.theirs, { backgroundColor: t.surface }]}>
             <ActivityIndicator color={t.fgMuted} size="small" />
           </View>
         )}
@@ -95,7 +93,7 @@ export function PlanConversation({
           onChangeText={setText}
           placeholder="Message the planner…"
           placeholderTextColor={t.fgDim}
-          style={[styles.input, { color: t.fg, backgroundColor: t.glass ? 'rgba(255,255,255,0.06)' : t.surface }]}
+          style={[styles.input, { color: t.fg, backgroundColor: t.surface }]}
           multiline
           editable={!sending}
         />
@@ -114,7 +112,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollInner: { padding: 14, gap: 10 },
   empty: { fontSize: 13, lineHeight: 19, textAlign: 'center', paddingVertical: 24, paddingHorizontal: 16 },
-  bubble: { maxWidth: '88%', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 9, borderWidth: StyleSheet.hairlineWidth },
+  bubble: { maxWidth: '88%', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 9, borderWidth: StyleSheet.hairlineWidth },
   mine: { alignSelf: 'flex-end' },
   theirs: { alignSelf: 'flex-start' },
   bubbleText: { fontSize: 13.5, lineHeight: 19 },
@@ -124,7 +122,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   input: {
-    flex: 1, maxHeight: 120, minHeight: 40, borderRadius: 18,
+    flex: 1, maxHeight: 120, minHeight: 40, borderRadius: 6,
     paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, fontSize: 14,
   },
 });

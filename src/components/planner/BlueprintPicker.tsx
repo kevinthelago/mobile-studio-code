@@ -18,7 +18,7 @@ export function BlueprintPicker({ onPick }: { onPick: (bp: Blueprint) => void })
         const sections = enabledSections(bp.sections);
         return (
           <Pressable key={bp.id} onPress={() => onPick(bp)}>
-            <Surface style={styles.card} radius={16}>
+            <Surface style={styles.card} radius={6}>
               <View style={styles.headerRow}>
                 <Text style={[styles.name, { color: t.fg }]}>{bp.name}</Text>
                 <View style={[styles.countPill, { borderColor: t.borderColor }]}>
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   card: { padding: 16, gap: 8 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   name: { fontSize: 16, fontWeight: '700', flexShrink: 1 },
-  countPill: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+  countPill: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },
   countText: { fontSize: 10.5 },
   desc: { fontSize: 13, lineHeight: 18 },
   glyphRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },

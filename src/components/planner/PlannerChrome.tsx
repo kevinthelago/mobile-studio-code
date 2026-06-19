@@ -108,7 +108,7 @@ export function PlannerHeader({
   const t = useTheme();
   const sc = statusColor ?? t.accent;
   return (
-    <View style={[styles.header, { paddingTop: topInset + 4, borderBottomColor: t.borderColor, backgroundColor: t.glass ? 'rgba(10,12,19,0.6)' : t.surface }]}>
+    <View style={[styles.header, { paddingTop: topInset + 4, borderBottomColor: t.borderColor, backgroundColor: t.bg }]}>
       <View style={styles.headerTop}>
         <IconBtn onPress={onBack}>
           <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
@@ -178,7 +178,7 @@ export function PlannerTabBar({
           <Pressable
             key={tb.id}
             onPress={() => onChange(tb.id)}
-            style={[styles.tabBtn, on && { backgroundColor: t.glass ? 'rgba(255,255,255,0.14)' : 'rgba(217,119,87,0.16)' }]}
+            style={[styles.tabBtn, on && { backgroundColor: `${t.accent}22` }]}
           >
             <View>
               <Svg width={19} height={19} viewBox="0 0 18 18" fill="none" stroke={tint} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
   header: { paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTop: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8 },
   headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
-  statusTag: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 20, paddingHorizontal: 8, borderRadius: 7, borderWidth: StyleSheet.hairlineWidth },
+  statusTag: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 20, paddingHorizontal: 8, borderRadius: 4, borderWidth: StyleSheet.hairlineWidth },
   statusDot: { width: 5, height: 5, borderRadius: 3 },
   statusText: { fontSize: 10, fontWeight: '500', letterSpacing: 0.3, textTransform: 'uppercase' },
   headerSub: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 50, paddingRight: 16, paddingTop: 3 },
@@ -250,16 +250,16 @@ const styles = StyleSheet.create({
 
   // Tab bar
   tabBar: {
-    marginHorizontal: 14, height: 60, borderRadius: 30,
+    marginHorizontal: 14, height: 60, borderRadius: 6,
     borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6,
   },
-  tabBtn: { flex: 1, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  tabBtn: { flex: 1, height: 48, borderRadius: 4, alignItems: 'center', justifyContent: 'center', gap: 3 },
   tabBadge: { position: 'absolute', top: -3, right: -5, width: 7, height: 7, borderRadius: 4, borderWidth: 1.5 },
   tabLabel: { fontSize: 9, letterSpacing: 0.2, textTransform: 'uppercase' },
 
   // Composer
   composer: {
-    height: 48, borderRadius: 24, borderWidth: StyleSheet.hairlineWidth,
+    height: 48, borderRadius: 6, borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 8, paddingRight: 6,
   },
   composerPlaceholder: { flex: 1, fontSize: 14 },
