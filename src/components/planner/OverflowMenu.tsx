@@ -3,22 +3,24 @@ import {
   Pressable, StyleSheet, Text, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, G, Circle } from 'react-native-svg';
+import Svg, { Path, G } from 'react-native-svg';
 import { useTheme } from '../../theme';
 import { PLAN_COLORS, PLAN_GRADIENT } from '../../lib/planner/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const ROWS: { icon: React.ReactNode; title: string; detail: string }[] = [
-  { icon: <G><Circle cx={9} cy={9} r={6.5} /><Path d="M9 6v3l2 2" /></G>, title: 'Triage', detail: 'Review flagged issues' },
-  { icon: <G><Path d="M4 3h7l3 3v9H4z" /><Path d="M4 8h10" /></G>, title: 'Save & exit', detail: 'Keep draft, leave session' },
-  { icon: <G><Path d="M3 5h12M7 5V3.5h4V5M5 5l.7 9h6.6L13 5" /></G>, title: 'Switch blueprint', detail: 'Full app · 7 stages' },
+const ROWS: { key: 'save' | 'switch'; icon: React.ReactNode; title: string; detail: string }[] = [
+  { key: 'save', icon: <G><Path d="M4 3h7l3 3v9H4z" /><Path d="M4 8h10" /></G>, title: 'Save & exit', detail: 'Keep draft, leave session' },
+  { key: 'switch', icon: <G><Path d="M3 5h12M7 5V3.5h4V5M5 5l.7 9h6.6L13 5" /></G>, title: 'Switch blueprint', detail: 'Pick a different blueprint' },
 ];
 
 export function OverflowMenu({
-  onClose, onPublish,
+  onClose, onPublish, onSaveExit, onSwitchBlueprint, onClear,
 }: {
   onClose: () => void;
   onPublish?: () => void;
+  onSaveExit?: () => void;
+  onSwitchBlueprint?: () => void;
+  onClear?: () => void;
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -47,7 +49,11 @@ export function OverflowMenu({
         </Pressable>
 
         {ROWS.map((r) => (
-          <Pressable key={r.title} onPress={onClose} style={[styles.row, { backgroundColor: t.surface, borderColor: t.borderColor }]}>
+          <Pressable
+            key={r.title}
+            onPress={() => { (r.key === 'save' ? onSaveExit : onSwitchBlueprint)?.(); }}
+            style={[styles.row, { backgroundColor: t.surface, borderColor: t.borderColor }]}
+          >
             <Svg width={17} height={17} viewBox="0 0 18 18" fill="none" stroke={t.fgMuted} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">{r.icon}</Svg>
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowTitle, { color: t.fg }]}>{r.title}</Text>
@@ -59,7 +65,7 @@ export function OverflowMenu({
         <View style={[styles.divider, { backgroundColor: t.borderColor }]} />
 
         <Pressable
-          onPress={() => (confirmClear ? onClose() : setConfirmClear(true))}
+          onPress={() => (confirmClear ? onClear?.() : setConfirmClear(true))}
           style={[styles.clear, {
             borderColor: confirmClear ? PLAN_COLORS.bad : 'rgba(248,113,113,0.35)',
             backgroundColor: confirmClear ? 'rgba(248,113,113,0.12)' : 'transparent',
