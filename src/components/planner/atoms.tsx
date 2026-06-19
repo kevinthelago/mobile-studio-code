@@ -53,7 +53,7 @@ export function UserMsg({ children }: { children: React.ReactNode }) {
   return (
     <View style={styles.userRow}>
       <View style={[styles.userBubble, {
-        backgroundColor: t.glass ? 'rgba(255,255,255,0.07)' : t.surface,
+        backgroundColor: t.surface,
         borderColor: t.borderColor,
       }]}>
         <Text style={[styles.userText, { color: t.fg }]}>{children}</Text>
@@ -118,7 +118,7 @@ export function SectionCard({
           </View>
         ) : (
           <View style={styles.sectionActions}>
-            <Pressable onPress={onReview} style={[styles.softBtn, { backgroundColor: t.glass ? 'rgba(255,255,255,0.08)' : t.surface, borderColor: t.borderColor }]}>
+            <Pressable onPress={onReview} style={[styles.softBtn, { backgroundColor: t.surface, borderColor: t.borderColor }]}>
               <Text style={[styles.softBtnText, { color: t.fg }]}>Review</Text>
             </Pressable>
             <Pressable onPress={onConfirm} style={[styles.confirmBtn, { backgroundColor: t.accent }]}>
@@ -212,13 +212,13 @@ const styles = StyleSheet.create({
   userRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 16 },
   userBubble: {
     maxWidth: '82%', borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14, borderBottomRightRadius: 4, paddingHorizontal: 13, paddingVertical: 9,
+    borderRadius: 6, borderBottomRightRadius: 2, paddingHorizontal: 13, paddingVertical: 9,
   },
   userText: { fontSize: 14, lineHeight: 20 },
   sysLine: { textAlign: 'center', fontSize: 11, marginTop: 4, marginBottom: 16, letterSpacing: 0.2 },
 
   section: {
-    marginBottom: 16, marginLeft: 32, borderWidth: 1, borderRadius: 14, overflow: 'hidden',
+    marginBottom: 16, marginLeft: 32, borderWidth: 1, borderRadius: 6, overflow: 'hidden',
   },
   sectionHead: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -235,24 +235,24 @@ const styles = StyleSheet.create({
   confirmedText: { fontSize: 11.5 },
   sectionActions: { flexDirection: 'row', gap: 8, marginTop: 13 },
   softBtn: {
-    flex: 1, height: 34, borderRadius: 17, borderWidth: StyleSheet.hairlineWidth,
+    flex: 1, height: 34, borderRadius: 4, borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center', justifyContent: 'center',
   },
   softBtnText: { fontSize: 13, fontWeight: '600' },
   confirmBtn: {
-    flex: 1.4, height: 34, borderRadius: 17, flexDirection: 'row', gap: 7,
+    flex: 1.4, height: 34, borderRadius: 4, flexDirection: 'row', gap: 7,
     alignItems: 'center', justifyContent: 'center',
   },
   confirmBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 
   quickRow: { gap: 8, paddingHorizontal: 14, alignItems: 'center' },
   quickChip: {
-    height: 34, paddingHorizontal: 13, borderRadius: 17,
+    height: 34, paddingHorizontal: 13, borderRadius: 4,
     borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center',
   },
   quickText: { fontSize: 13, fontWeight: '500' },
 
-  collapsible: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, overflow: 'hidden', marginBottom: 10 },
+  collapsible: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 6, overflow: 'hidden', marginBottom: 10 },
   collapsibleHead: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 13 },
   collapsibleTitle: { flex: 1, fontSize: 14.5, fontWeight: '600' },
   collapsibleBody: { paddingHorizontal: 14, paddingBottom: 14, borderTopWidth: StyleSheet.hairlineWidth },

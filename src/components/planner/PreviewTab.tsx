@@ -36,13 +36,13 @@ export function PreviewTab() {
         </View>
       </View>
 
-      <Surface style={styles.commandBar} radius={14}>
+      <Surface style={styles.commandBar} radius={6}>
         {[
           <Path key="p" d="M9 3L4 7.5 9 12" />,
           <Path key="n" d="M5 3l5 4.5L5 12" />,
           <G key="r"><Path d="M3 7.5a4.5 4.5 0 104.5-4.5" /><Path d="M7.5 0.5L7.5 3 5 3" /></G>,
         ].map((ic, i) => (
-          <Pressable key={i} style={[styles.cmdBtn, { backgroundColor: t.glass ? 'rgba(255,255,255,0.07)' : t.surface, borderColor: t.borderColor }]}>
+          <Pressable key={i} style={[styles.cmdBtn, { backgroundColor: t.surface, borderColor: t.borderColor }]}>
             <Svg width={15} height={15} viewBox="0 0 14 14" fill="none" stroke={t.fg} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">{ic}</Svg>
           </Pressable>
         ))}
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
   dot: { height: 6, borderRadius: 3 },
 
   commandBar: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8, marginTop: 18, width: '100%' },
-  cmdBtn: { flex: 1, height: 38, borderRadius: 9, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
-  cmdConfirm: { flex: 2, height: 38, borderRadius: 9, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' },
+  cmdBtn: { flex: 1, height: 38, borderRadius: 4, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  cmdConfirm: { flex: 2, height: 38, borderRadius: 4, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' },
   cmdConfirmText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 });

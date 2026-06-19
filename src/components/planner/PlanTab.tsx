@@ -41,7 +41,7 @@ export function PlanTab({ plan, onGrade }: { plan: Plan; onGrade: () => void }) 
           <View style={styles.toolRow}>
             <View style={[styles.segment, { backgroundColor: 'rgba(0,0,0,0.25)', borderColor: t.borderColor }]}>
               {(['phases', 'repos'] as const).map((m) => (
-                <Pressable key={m} onPress={() => setMode(m)} style={[styles.segBtn, mode === m && { backgroundColor: t.glass ? 'rgba(255,255,255,0.07)' : t.surface }]}>
+                <Pressable key={m} onPress={() => setMode(m)} style={[styles.segBtn, mode === m && { backgroundColor: t.surface }]}>
                   <Text style={[styles.segText, { color: mode === m ? t.fg : t.fgDim, fontFamily: t.fontMono }]}>{m}</Text>
                 </Pressable>
               ))}

@@ -47,7 +47,7 @@ export function OverflowMenu({
         </Pressable>
 
         {ROWS.map((r) => (
-          <Pressable key={r.title} onPress={onClose} style={[styles.row, { backgroundColor: t.glass ? 'rgba(255,255,255,0.07)' : t.surface, borderColor: t.borderColor }]}>
+          <Pressable key={r.title} onPress={onClose} style={[styles.row, { backgroundColor: t.surface, borderColor: t.borderColor }]}>
             <Svg width={17} height={17} viewBox="0 0 18 18" fill="none" stroke={t.fgMuted} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">{r.icon}</Svg>
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowTitle, { color: t.fg }]}>{r.title}</Text>
@@ -79,16 +79,16 @@ export function OverflowMenu({
 
 const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end', zIndex: 50 },
-  sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingTop: 10 },
+  sheet: { borderTopLeftRadius: 10, borderTopRightRadius: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingTop: 10 },
   grabber: { width: 40, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 14 },
   publishWrap: { marginBottom: 12 },
-  publish: { height: 52, borderRadius: 13, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 },
+  publish: { height: 52, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 },
   publishTitle: { color: '#fff', fontSize: 14.5, fontWeight: '700' },
   publishSub: { color: 'rgba(255,255,255,0.7)', fontSize: 10.5, marginTop: 1 },
-  row: { height: 52, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, marginBottom: 8 },
+  row: { height: 52, borderRadius: 6, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, marginBottom: 8 },
   rowTitle: { fontSize: 14, fontWeight: '600' },
   rowDetail: { fontSize: 10.5, marginTop: 1 },
   divider: { height: StyleSheet.hairlineWidth, marginVertical: 10 },
-  clear: { height: 50, borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' },
+  clear: { height: 50, borderRadius: 6, borderWidth: 1, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' },
   clearText: { fontSize: 14, fontWeight: '600' },
 });

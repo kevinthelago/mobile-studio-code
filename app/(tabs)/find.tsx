@@ -12,7 +12,6 @@ import { repoDir, readText } from '../../src/lib/fs';
 import { grepInText, GrepMatch } from '../../src/lib/syntax';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
-import { SectionLabel } from '../../src/components/ui/SectionLabel';
 
 type FileResult = { file: string; matches: GrepMatch[] };
 
@@ -133,22 +132,18 @@ export default function FindScreen() {
     );
   }
 
-  const matchHi = t.glass
-    ? 'rgba(255, 174, 207, 0.25)'
-    : t.light
-      ? 'rgba(247,196,38,0.45)'
-      : 'rgba(255,174,207,0.18)';
+  const matchHi = t.light ? 'rgba(217,119,6,0.22)' : 'rgba(245,158,11,0.28)';
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <SectionLabel>Search</SectionLabel>
+          <Text style={[styles.eyebrow, { color: t.fgDim }]}>Search</Text>
           <Text style={[styles.headerTitle, { color: t.fg }]}>Find in workspace</Text>
         </View>
 
         <View style={styles.searchWrap}>
-          <Surface style={styles.searchPill} radius={24}>
+          <Surface style={styles.searchPill} radius={6}>
             <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
               <Circle cx={6} cy={6} r={4} stroke={t.fgMuted} strokeWidth={1.6} />
               <Path d="M9.5 9.5L13 13"
@@ -191,11 +186,9 @@ export default function FindScreen() {
                 style={[
                   styles.chip,
                   {
-                    backgroundColor: active
-                      ? t.accent
-                      : t.glass ? 'rgba(255,255,255,0.06)' : t.surface,
+                    backgroundColor: active ? t.accent : t.surface,
                     borderColor: t.borderColor,
-                    borderRadius: t.sharp ? 4 : 16,
+                    borderRadius: 4,
                   },
                 ]}
               >
@@ -293,6 +286,9 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 14 },
 
   header: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 },
+  eyebrow: {
+    fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', fontWeight: '600',
+  },
   headerTitle: {
     fontSize: 28, fontWeight: '700', letterSpacing: -0.6, marginTop: 2,
   },

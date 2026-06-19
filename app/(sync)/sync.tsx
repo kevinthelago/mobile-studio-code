@@ -64,7 +64,7 @@ function SideCard({ side, selected, onPress, children }: {
     <Pressable
       onPress={onPress}
       style={[styles.sideCard, {
-        backgroundColor: selected ? s.soft : (t.glass ? 'rgba(255,255,255,0.03)' : t.surface),
+        backgroundColor: selected ? s.soft : t.surface,
         borderColor: selected ? s.line : t.borderColor,
       }]}
     >
@@ -170,7 +170,7 @@ function ByIdResolver({ action, onResolve }: { action: ConflictAction; onResolve
           {conflicts.length} item{conflicts.length === 1 ? '' : 's'} changed differently on both devices — resolve each by id.
         </Text>
         {conflicts.map((c) => (
-          <Surface key={c.id} style={styles.idCard} radius={14}>
+          <Surface key={c.id} style={styles.idCard} radius={6}>
             <View style={styles.idHead}>
               <Text style={[styles.idText, { color: t.fg, fontFamily: t.fontMono }]}>id: {c.id}</Text>
               <Tag color={PLAN_COLORS.warn} bg={`${PLAN_COLORS.warn}22`} border={false}>same id</Tag>
@@ -319,7 +319,7 @@ export default function SyncScreen() {
             const resolved = a.path in resolutions;
             return (
               <Pressable key={a.path} onPress={() => { setActivePath(a.path); setView('resolve'); }}>
-                <Surface style={[styles.fileRow, resolved && { borderColor: 'rgba(126,226,196,0.4)' }]} radius={14}>
+                <Surface style={[styles.fileRow, resolved && { borderColor: 'rgba(126,226,196,0.4)' }]} radius={6}>
                   <View style={[styles.fileIcon, { backgroundColor: resolved ? 'rgba(126,226,196,0.16)' : `${PLAN_COLORS.warn}22` }]}>
                     {resolved
                       ? <Svg width={15} height={15} viewBox="0 0 15 15" fill="none"><Path d="M3 7.5l3 3 6-7" stroke={PLAN_COLORS.good} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></Svg>
@@ -355,12 +355,12 @@ export default function SyncScreen() {
       <View style={styles.flex}>
         <Header title="Push merged plan" sub="base-studio-code" onBack={() => setView('list')} />
         <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 90 }]} showsVerticalScrollIndicator={false}>
-          <Surface style={styles.banner} radius={14}>
+          <Surface style={styles.banner} radius={6}>
             <Text style={[styles.bannerTitle, { color: PLAN_COLORS.good }]}>All {conflictActions.length} conflicts resolved</Text>
             <Text style={[styles.bannerBody, { color: t.fgMuted }]}>Pushing the full canonical map for this project.</Text>
           </Surface>
           <Text style={[styles.section, { color: t.fgDim }]}>WHAT PUSH DOES</Text>
-          <Surface style={styles.infoCard} radius={14}>
+          <Surface style={styles.infoCard} radius={6}>
             {[
               'Replaces synced files on base-studio-code',
               'Sets the new base on both devices (idempotent)',
@@ -392,7 +392,7 @@ export default function SyncScreen() {
       <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 90 }]} showsVerticalScrollIndicator={false}>
         <View style={styles.statRow}>
           {([[actions.length, 'compared', t.fgMuted], [merged.length, 'auto-merged', PLAN_COLORS.good], [conflictActions.length, 'to resolve', PLAN_COLORS.warn]] as const).map((s, i) => (
-            <Surface key={i} style={styles.statCard} radius={14}>
+            <Surface key={i} style={styles.statCard} radius={6}>
               <Text style={[styles.statNum, { color: s[2], fontFamily: t.fontMono }]}>{s[0]}</Text>
               <Text style={[styles.statLabel, { color: t.fgMuted }]}>{s[1]}</Text>
             </Surface>
@@ -402,7 +402,7 @@ export default function SyncScreen() {
         {conflictActions.length > 0 && (
           <>
             <Text style={[styles.section, { color: PLAN_COLORS.warn }]}>NEEDS YOUR DECISION</Text>
-            <Surface style={[styles.listCard, { borderColor: `${PLAN_COLORS.warn}4d` }]} radius={14}>
+            <Surface style={[styles.listCard, { borderColor: `${PLAN_COLORS.warn}4d` }]} radius={6}>
               {conflictActions.map((a, i) => (
                 <View key={a.path} style={[styles.miniRow, i > 0 && { borderTopColor: t.borderColor, borderTopWidth: StyleSheet.hairlineWidth }]}>
                   <Text style={[styles.miniName, { color: t.fg, fontFamily: t.fontMono }]}>{a.path}</Text>
@@ -416,7 +416,7 @@ export default function SyncScreen() {
         {merged.length > 0 && (
           <>
             <Text style={[styles.section, { color: PLAN_COLORS.good }]}>AUTO-MERGED · NO ACTION</Text>
-            <Surface style={styles.listCard} radius={14}>
+            <Surface style={styles.listCard} radius={6}>
               {merged.map((a, i) => (
                 <View key={a.path} style={[styles.miniRow, i > 0 && { borderTopColor: t.borderColor, borderTopWidth: StyleSheet.hairlineWidth }]}>
                   <Svg width={13} height={13} viewBox="0 0 14 14" fill="none"><Path d="M2.5 7.5l3 3 6-7" stroke={PLAN_COLORS.good} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /></Svg>
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
   fileName: { fontSize: 14, fontWeight: '600' },
   fileMeta: { fontSize: 11.5, marginTop: 2 },
 
-  sideCard: { borderWidth: 1.5, borderRadius: 12, padding: 11 },
+  sideCard: { borderWidth: 1.5, borderRadius: 6, padding: 11 },
   sideHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   sideLabel: { fontSize: 10.5, fontWeight: '600', letterSpacing: 0.3, flex: 1 },
   radio: { width: 16, height: 16, borderRadius: 9, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
 
   hunk: { gap: 8 },
   hunkLabel: { fontSize: 10, letterSpacing: 0.6, fontWeight: '700' },
-  bothBtn: { height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  bothBtn: { height: 36, borderRadius: 4, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   bothText: { fontSize: 12.5, fontWeight: '500' },
 
   idCard: { padding: 13, gap: 8 },
@@ -490,7 +490,7 @@ const styles = StyleSheet.create({
   idText: { fontSize: 13, fontWeight: '600', flex: 1 },
   fieldLabel: { fontSize: 11, fontWeight: '600' },
   row: { flexDirection: 'row', gap: 8 },
-  choice: { flex: 1, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  choice: { flex: 1, height: 36, borderRadius: 4, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   choiceText: { fontSize: 12.5, fontWeight: '600' },
 
   banner: { padding: 14, gap: 4 },

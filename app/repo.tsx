@@ -127,8 +127,8 @@ export default function RepoScreen() {
           </View>
 
           <Pressable onPress={() => router.push('/(planner)/planner')}>
-            <Surface style={styles.plannerEntry} radius={18}>
-              <View style={[styles.plannerIcon, { backgroundColor: t.glass ? 'rgba(192,132,252,0.18)' : 'rgba(192,132,252,0.12)' }]}>
+            <Surface style={styles.plannerEntry} radius={6}>
+              <View style={[styles.plannerIcon, { backgroundColor: 'rgba(192,132,252,0.12)' }]}>
                 <Svg width={18} height={18} viewBox="0 0 18 18" fill="none">
                   <Path d="M4 3h10M4 7h10M4 11h6" stroke="#c084fc" strokeWidth={1.6} strokeLinecap="round" />
                 </Svg>
@@ -145,7 +145,7 @@ export default function RepoScreen() {
             </Surface>
           </Pressable>
 
-          <Surface style={styles.card} radius={20}>
+          <Surface style={styles.card} radius={10}>
             <View style={styles.cardHeader}>
               <Text style={[styles.cardTitle, { color: t.fg }]}>GitHub</Text>
               {pat && (
@@ -205,7 +205,7 @@ export default function RepoScreen() {
             )}
           </Surface>
 
-          <Surface style={styles.card} radius={20}>
+          <Surface style={styles.card} radius={10}>
             <Text style={[styles.label, { color: t.fgDim }]}>Repository</Text>
             <TextInput
               value={repo}
@@ -263,7 +263,7 @@ export default function RepoScreen() {
           {recents.length > 0 && (
             <View style={styles.recentsBlock}>
               <Text style={[styles.recentsLabel, { color: t.fgDim }]}>Recent</Text>
-              <Surface style={styles.recentsCard} radius={20}>
+              <Surface style={styles.recentsCard} radius={10}>
                 {recents.map((r, i) => (
                   <Pressable
                     key={`${r.repo}#${r.branch}`}
@@ -291,7 +291,7 @@ export default function RepoScreen() {
             </View>
           )}
 
-          <Surface style={styles.card} radius={20}>
+          <Surface style={styles.card} radius={10}>
             <ThemePicker />
           </Surface>
 
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
   },
   labelTopGap: { marginTop: 14 },
   input: {
-    borderWidth: StyleSheet.hairlineWidth, borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth, borderRadius: 6,
     paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 13, marginBottom: 12,
   },

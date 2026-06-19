@@ -141,7 +141,7 @@ function ChatTurnView({ turn }: { turn: ChatTurn }) {
   }
   return (
     <View style={[styles.toolCard, {
-      backgroundColor: t.glass ? 'rgba(255,255,255,0.05)' : t.surface,
+      backgroundColor: t.surface,
       borderColor: t.borderColor,
     }]}>
       <Text style={[styles.toolTitle, { color: t.fgMuted, fontFamily: t.fontMono }]}>
@@ -358,7 +358,7 @@ export default function EditScreen() {
           )}
 
           <View style={styles.claudeChipWrapper}>
-            <Surface style={styles.claudeChip} radius={14}>
+            <Surface style={styles.claudeChip} radius={6}>
               <ClaudeAvatar size={14} />
               <Text style={[styles.claudeChipText, { color: t.fg }]}>
                 {modelLabel}
@@ -371,7 +371,7 @@ export default function EditScreen() {
           </View>
 
           <View style={styles.claudePanelWrap}>
-            <Surface style={styles.claudePanel} radius={28}>
+            <Surface style={styles.claudePanel} radius={10}>
               <ScrollView
                 ref={chatScrollRef}
                 style={styles.flex1}
@@ -401,7 +401,7 @@ export default function EditScreen() {
               <ImagePreviewStrip images={pendingImages} onRemove={handleRemoveImage} />
 
               <View style={[styles.inputBar, {
-                backgroundColor: t.glass ? 'rgba(0,0,0,0.25)' : t.bg,
+                backgroundColor: t.bg,
                 borderColor: t.borderColor,
               }]}>
                 {/* Image attach button */}
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: 6 },
   emptySub: { fontSize: 13, textAlign: 'center', marginBottom: 14 },
-  emptyBtn: { paddingVertical: 10, paddingHorizontal: 22, borderRadius: 22 },
+  emptyBtn: { paddingVertical: 10, paddingHorizontal: 22, borderRadius: 6 },
   emptyBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 
   breadcrumb: { flexDirection: 'row', alignItems: 'center', gap: 4 },
