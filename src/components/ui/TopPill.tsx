@@ -1,6 +1,5 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Surface } from './Surface';
 import { useTheme } from '../../theme';
 
 type Props = {
@@ -10,53 +9,46 @@ type Props = {
   right?: React.ReactNode;
 };
 
-// Shared top header pill. Edit + Run pages render this above their content.
 export function TopPill({ left, center, sub, right }: Props) {
   const t = useTheme();
   return (
-    <View style={styles.wrap}>
-      <Surface
-        style={styles.surface}
-        radius={t.radius}
-      >
-        {left}
-        <View style={styles.centerCol}>
-          {typeof center === 'string' ? (
-            <Text style={[styles.centerText, { color: t.fg }]} numberOfLines={1}>
-              {center}
-            </Text>
-          ) : (
-            center
-          )}
-          {sub ? (
-            <Text
-              style={[styles.subText, {
-                color: t.fgDim,
-                fontFamily: t.fontMono,
-              }]}
-              numberOfLines={1}
-            >
-              {sub}
-            </Text>
-          ) : null}
-        </View>
-        {right}
-      </Surface>
+    <View
+      style={[
+        styles.bar,
+        { backgroundColor: t.bg, borderBottomColor: t.borderColor },
+      ]}
+    >
+      {left}
+      <View style={styles.centerCol}>
+        {typeof center === 'string' ? (
+          <Text style={[styles.centerText, { color: t.fg }]} numberOfLines={1}>
+            {center}
+          </Text>
+        ) : (
+          center
+        )}
+        {sub ? (
+          <Text
+            style={[styles.subText, { color: t.fgMuted, fontFamily: t.fontMono }]}
+            numberOfLines={1}
+          >
+            {sub}
+          </Text>
+        ) : null}
+      </View>
+      {right}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  surface: {
+  bar: {
     height: 48,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   centerCol: {
     flex: 1,

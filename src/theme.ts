@@ -30,6 +30,7 @@ export interface Theme {
   surfaceSolid: string;
   borderColor: string;
   radius: number;
+  font: string;
   fontMono: string;
   code: CodePalette;
   statusFg: string;
@@ -39,117 +40,55 @@ export interface Theme {
   light?: boolean;
 }
 
-export type ThemeId = 'glass' | 'dawn' | 'terminal' | 'paper' | 'basic';
+export type ThemeId = 'dark' | 'light';
 
 export const THEMES: Record<ThemeId, Theme> = {
-  glass: {
-    name: 'iOS Liquid Glass',
-    bg: '#0b0d14',
-    fg: '#e6e9f2',
-    fgMuted: 'rgba(255,255,255,0.55)',
-    fgDim: 'rgba(255,255,255,0.32)',
-    accent: '#ffaecf',
-    accent2: '#c084fc',
-    surface: 'rgba(28,32,46,0.55)',
-    surfaceSolid: '#13161e',
-    borderColor: 'rgba(255,255,255,0.10)',
-    radius: 24,
-    fontMono: 'Menlo',
-    code: {
-      kw: '#c084fc', fn: '#67d3ff', st: '#f0a37e', nm: '#ffd479',
-      cm: 'rgba(160,170,200,0.55)', ty: '#7ee2c4', op: '#cdd2e0',
-      pn: 'rgba(220,225,240,0.5)', pa: '#ffaecf', id: '#e6e9f2', sp: '#e6e9f2',
-    },
-    statusFg: '#fff',
-    glass: true,
-    orbs: true,
-  },
-  dawn: {
-    name: 'Soft Dark',
-    bg: '#1a1612',
-    fg: '#e8e2d8',
-    fgMuted: '#a8a095',
-    fgDim: '#7a736b',
-    accent: '#d97757',
-    accent2: '#ffaecf',
-    surface: '#13100d',
-    surfaceSolid: '#13100d',
-    borderColor: '#2a241f',
-    radius: 18,
-    fontMono: 'Menlo',
-    code: {
-      kw: '#e0a3ff', fn: '#9bd9ff', st: '#ffb088', nm: '#ffd479',
-      cm: '#5a5550', ty: '#a8e6c4', op: '#a8a095',
-      pn: '#6a655f', pa: '#ffaecf', id: '#e8e2d8', sp: '#e8e2d8',
-    },
-    statusFg: '#e8e2d8',
-  },
-  terminal: {
-    name: 'Terminal',
-    bg: '#08090d',
-    fg: '#d4d4d8',
-    fgMuted: '#6b7280',
-    fgDim: '#3f4651',
-    accent: '#a3e635',
-    accent2: '#7dd3fc',
-    surface: '#0a0c11',
-    surfaceSolid: '#0d0f15',
-    borderColor: '#1f2430',
-    radius: 4,
-    fontMono: 'Menlo',
-    code: {
-      kw: '#7dd3fc', fn: '#a3e635', st: '#fbbf77', nm: '#fcd34d',
-      cm: '#525866', ty: '#86efac', op: '#9ca3af',
-      pn: '#6b7280', pa: '#f0a3c0', id: '#d4d4d8', sp: '#d4d4d8',
-    },
-    statusFg: '#d4d4d8',
-    sharp: true,
-  },
-  paper: {
-    name: 'Paper',
-    bg: '#f6f3ec',
-    fg: '#1a1612',
-    fgMuted: '#a8a095',
-    fgDim: '#cdc4b6',
-    accent: '#c96442',
-    accent2: '#9b3d2e',
-    surface: '#fbf8f1',
-    surfaceSolid: '#fbf8f1',
-    borderColor: '#e6dfd0',
+  dark: {
+    name: 'Dark',
+    bg: '#0d0d0d',
+    fg: '#e5e5e5',
+    fgMuted: '#737373',
+    fgDim: '#404040',
+    accent: '#f59e0b',
+    accent2: '#f59e0b',
+    surface: '#171717',
+    surfaceSolid: '#171717',
+    borderColor: '#262626',
     radius: 6,
-    fontMono: 'Menlo',
+    font: 'Inter_400Regular',
+    fontMono: 'JetBrainsMono_400Regular',
     code: {
-      kw: '#9b3d2e', fn: '#5a4a2a', st: '#7a6a3a', nm: '#b67d3a',
-      cm: '#a8a095', ty: '#5a6a4a', op: '#5a4a3a',
-      pn: '#b8aea0', pa: '#7a4a2a', id: '#3a3530', sp: '#3a3530',
+      kw: '#c084fc', fn: '#60a5fa', st: '#86efac', nm: '#fcd34d',
+      cm: '#52525b', ty: '#34d399', op: '#a1a1aa',
+      pn: '#52525b', pa: '#fb923c', id: '#e5e5e5', sp: '#e5e5e5',
     },
-    statusFg: '#1a1612',
-    light: true,
+    statusFg: '#e5e5e5',
   },
-  basic: {
-    name: 'Basic',
-    bg: '#fff',
-    fg: '#24292f',
-    fgMuted: '#57606a',
-    fgDim: '#8c959f',
-    accent: '#0969da',
-    accent2: '#1a7f37',
-    surface: '#f6f8fa',
-    surfaceSolid: '#f6f8fa',
-    borderColor: '#d0d7de',
+  light: {
+    name: 'Light',
+    bg: '#ffffff',
+    fg: '#171717',
+    fgMuted: '#737373',
+    fgDim: '#a3a3a3',
+    accent: '#d97706',
+    accent2: '#d97706',
+    surface: '#f5f5f5',
+    surfaceSolid: '#f5f5f5',
+    borderColor: '#e5e5e5',
     radius: 6,
-    fontMono: 'Menlo',
+    font: 'Inter_400Regular',
+    fontMono: 'JetBrainsMono_400Regular',
     code: {
-      kw: '#0550ae', fn: '#5d3eb2', st: '#0a7d4a', nm: '#b35b00',
-      cm: '#6a737d', ty: '#0a7d4a', op: '#24292f',
-      pn: '#6a737d', pa: '#953800', id: '#24292f', sp: '#24292f',
+      kw: '#7c3aed', fn: '#1d4ed8', st: '#15803d', nm: '#92400e',
+      cm: '#6b7280', ty: '#0f766e', op: '#374151',
+      pn: '#9ca3af', pa: '#b45309', id: '#171717', sp: '#171717',
     },
-    statusFg: '#000',
+    statusFg: '#171717',
     light: true,
   },
 };
 
-export const DEFAULT_THEME_ID: ThemeId = 'glass';
+export const DEFAULT_THEME_ID: ThemeId = 'dark';
 export const DEFAULT_THEME = THEMES[DEFAULT_THEME_ID];
 
 const THEME_KEY = 'ui_theme_id';
