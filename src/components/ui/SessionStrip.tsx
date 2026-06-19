@@ -3,7 +3,6 @@ import {
   Platform, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTunnel } from '../../lib/TunnelContext';
@@ -99,20 +98,6 @@ export function SessionStrip() {
         {/* bottom hairline border */}
         <View style={[styles.bottomBorder, { backgroundColor: t.borderColor }]} />
 
-        {/* Leading tunnel glyph — signals "mirroring a desktop over the tunnel" */}
-        <View style={styles.tunnelGlyph}>
-          <Svg width={14} height={14} viewBox="0 0 13 13" fill="none">
-            <Path
-              d="M1 6.5h11M3 4l-2 2.5L3 9M10 4l2 2.5L10 9"
-              stroke={t.code.ty}
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
-          <View style={[styles.glyphDivider, { backgroundColor: t.borderColor }]} />
-        </View>
-
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -151,11 +136,6 @@ const styles = StyleSheet.create({
   bottomBorder: {
     position: 'absolute', bottom: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth,
   },
-  tunnelGlyph: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingLeft: 12, paddingRight: 2,
-  },
-  glyphDivider: { width: StyleSheet.hairlineWidth, height: 16, marginLeft: 8 },
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 10, gap: 6, alignItems: 'center',
