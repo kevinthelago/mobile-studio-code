@@ -24,10 +24,16 @@
         "NSCameraUsageDescription": "Scan a QR code to pair with base-studio-code.",
         "NSLocalNetworkUsageDescription": "Connect to base-studio-code running on your local network to mirror its console sessions.",
         "UIUserInterfaceStyle": "Dark",
-        "UIBackgroundModes": ["remote-notification"],
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
-        }
+        },
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "aps-environment": "development"
       }
     },
     "android": {
