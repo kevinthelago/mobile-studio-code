@@ -97,7 +97,7 @@ Errors should be actionable, not technical.
 │       ├── index.tsx           # Files tab — collapsible folder tree, search, recents
 │       ├── find.tsx            # Find tab — full-text search across repo files
 │       ├── edit.tsx            # Edit tab — code viewer/editor for the currently open file
-│       ├── run.tsx             # Run tab — placeholder (no terminal; reserved for future use)
+│       ├── run.tsx             # Run tab — tunnel terminal: mirrors desktop PTY panes (view + input) over the relay; QR pairing
 │       ├── git.tsx             # Git tab — pull/push, changed files list, AI commit message draft
 │       ├── files.tsx           # Hidden route (href: null) — legacy/unused
 │       └── settings.tsx        # Hidden route (href: null) — surfaced via SettingsScreen
@@ -216,8 +216,10 @@ Switching tasks gives the agent a completely fresh context window. Tasks persist
   tab navigation.
 - **Legacy ThemeContext**: `src/ThemeContext.tsx` is a parallel theme system only used
   by `ChatScreen.tsx`. Everything else uses `src/theme.ts`.
-- **Run tab is a placeholder**: `app/(tabs)/run.tsx` exists in the tab bar but there is
-  no terminal or code execution capability (and cannot be — no shell on iOS).
+- **Run tab = the tunnel terminal**: `app/(tabs)/run.tsx` mirrors the desktop's PTY panes
+  over the relay (Noise IK E2E) — live pane output (view) + keystroke input, a session
+  strip, terminal-font fitting, and QR scan-to-pair. There is no on-device shell (none is
+  possible on iOS); execution runs on the paired desktop and is streamed here.
 - **Workflow filename duplication**: Both `expo_preview.yml` / `expo-preview.yml` and
   `issue_branch_check.yml` / `issue-branch-check.yml` exist. The underscore versions
   should be removed; only the hyphenated versions are canonical.
