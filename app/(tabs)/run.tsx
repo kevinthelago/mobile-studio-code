@@ -10,6 +10,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
 import { useTunnel } from '../../src/lib/TunnelContext';
+import { useLivePlan } from '../../src/lib/tunnel/LivePlanContext';
 import { PaneState, PaneStatus, TunnelConnectionState } from '../../src/lib/types';
 import { Surface } from '../../src/components/ui/Surface';
 import { IconBtn } from '../../src/components/ui/IconBtn';
@@ -359,6 +360,19 @@ function PlanShortcut() {
   );
 }
 
+/** Shortcut to the read-only mirror of the desktop's live planning session (#1245).
+ *  Only shown once a plan_state/plan_status frame has arrived for some project. */
+function LiveShortcut() {
+  const t = useTheme();
+  const { hasLiveSession } = useLivePlan();
+  if (!hasLiveSession) return null;
+  return (
+    <Pressable onPress={() => router.push('/(live)/live')} hitSlop={8}>
+      <Text style={[styles.disconnectText, { color: t.accent }]}>Live</Text>
+    </Pressable>
+  );
+}
+
 function PaneGridView() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -379,6 +393,7 @@ function PaneGridView() {
           <Pressable onPress={() => router.push('/(fleet)/fleet')} hitSlop={8}>
             <Text style={[styles.disconnectText, { color: t.accent }]}>Fleet</Text>
           </Pressable>
+          <LiveShortcut />
           <PlanShortcut />
           <Pressable onPress={disconnect} hitSlop={8}>
             <Text style={[styles.disconnectText, { color: t.fgMuted }]}>Disconnect</Text>
