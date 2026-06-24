@@ -15,6 +15,7 @@ import { TunnelProvider, useTunnel } from '../src/lib/TunnelContext';
 import { ThemeProvider, useTheme } from '../src/theme';
 import { Orbs } from '../src/components/ui/Orbs';
 import { PlannerSyncProvider } from '../src/lib/planner/PlannerSyncContext';
+import { LivePlanProvider } from '../src/lib/tunnel/LivePlanContext';
 import {
   initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
 } from '../src/lib/fcm';
@@ -128,6 +129,7 @@ function InnerStack() {
         <Stack.Screen name="(planner)" options={modal} />
         <Stack.Screen name="(sync)" options={modal} />
         <Stack.Screen name="(fleet)" options={modal} />
+        <Stack.Screen name="(live)" options={modal} />
       </Stack>
     </NavThemeProvider>
   );
@@ -146,12 +148,14 @@ export default function RootLayout() {
       <SessionProvider>
         <TunnelProvider>
           <PlannerSyncProvider>
-            <FcmBootstrap />
-            <ThemedFrame>
-              <StageGate>
-                <InnerStack />
-              </StageGate>
-            </ThemedFrame>
+            <LivePlanProvider>
+              <FcmBootstrap />
+              <ThemedFrame>
+                <StageGate>
+                  <InnerStack />
+                </StageGate>
+              </ThemedFrame>
+            </LivePlanProvider>
           </PlannerSyncProvider>
         </TunnelProvider>
       </SessionProvider>

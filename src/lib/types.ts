@@ -146,6 +146,45 @@ export type PaneSessionState = {
   prompt: string | null; // populated when status === 'awaiting_input'
 };
 
+// ── Live planning session (PT1, #934 / #985 / #986 / #987; mobile #1245) ──
+//
+// Distinct from the async `plan_sync_*` file-reconciliation path (which is
+// unchanged). The desktop is the single source of truth: it emits `plan_state`
+// (full snapshot, replayed on connect), `plan_status` (cheap header, replayed),
+// and `plan_event` (transient deltas, fire-and-forget, NOT replayed). The phone
+// MIRRORS these read-only and DRIVES via `plan_advance`/`plan_confirm`/`plan_chat`.
+// Wire shapes are pinned in src/lib/tunnel/tunnelProtocol.fixtures.json (byte-identical
+// to the desktop's copy) and exercised by tunnelProtocol.fixtures.test.ts. Field names
+// are camelCase; the `type` discriminator is snake_case.
+
+/** One canonical section file in a planning snapshot (`plan_state.files`). */
+export type PlanFile = {
+  relpath: string;
+  content: string;
+};
+
+/** One chat turn in the live planning session. Tool blocks are dropped desktop-side. */
+export type PlanMessage = {
+  role: 'user' | 'assistant';
+  text: string;
+  /** Epoch ms. */
+  at: number;
+};
+
+/** A pipeline run's live state, projected to the phone. */
+export type PlanPipelineRun = {
+  id: string;
+  stage: string;
+  status: string;
+};
+
+/** The four `plan_event` delta kinds; the matching detail field is set per kind. */
+export type PlanEventKind =
+  | 'section_confirmed'
+  | 'stage_advanced'
+  | 'message_appended'
+  | 'pipeline_run';
+
 /** Messages sent from base-studio-code desktop → mobile */
 export type TunnelServerMessage =
   | { type: 'auth_ok' }
@@ -168,7 +207,34 @@ export type TunnelServerMessage =
   // ── Planner sync (see docs/planner-sync-protocol.md) ──
   | { type: 'plan_sync_manifest'; projects: PlanSyncManifestEntry[] }
   | { type: 'plan_sync_files'; projectId: string; files: Record<string, string> }
-  | { type: 'plan_sync_ack'; projectId: string };
+  | { type: 'plan_sync_ack'; projectId: string }
+  // ── Live planning session (read-only mirror; replayed on connect) ──
+  | {
+      type: 'plan_state';
+      projectId: string;
+      currentStage: string;
+      confirmedSections: string[];
+      files: PlanFile[];
+      messages: PlanMessage[];
+      pipelineRuns: PlanPipelineRun[];
+    }
+  // Transient delta — fire-and-forget, NOT replayed. The detail field set per `kind`.
+  | {
+      type: 'plan_event';
+      projectId: string;
+      kind: PlanEventKind;
+      at: number;
+      /** kind === 'section_confirmed'. */
+      section?: string;
+      /** kind === 'stage_advanced'. */
+      stage?: string;
+      /** kind === 'message_appended'. */
+      message?: PlanMessage;
+      /** kind === 'pipeline_run'. */
+      run?: PlanPipelineRun;
+    }
+  // Cheap header update (active stage + a short status label). Replayed on connect.
+  | { type: 'plan_status'; projectId: string; currentStage: string; status: string };
 
 /** One project's manifest in a plan_sync_manifest frame (relpath → content hash). */
 export type PlanSyncManifestEntry = {
@@ -181,6 +247,9 @@ export type PlanSyncManifestEntry = {
 /** Messages sent from mobile → base-studio-code desktop */
 export type TunnelClientMessage =
   | { type: 'auth'; token: string; fcmToken?: string }
+  // Refreshed FCM registration token (tokens rotate); updates the desktop's push
+  // target mid-session. Allowed even while view-only.
+  | { type: 'set_fcm_token'; fcmToken: string }
   | { type: 'pane_set_state'; paneId: string; state: PaneStreamingState }
   | { type: 'pane_focus'; paneId: string }
   | { type: 'pane_input'; paneId: string; data: string }
@@ -188,7 +257,32 @@ export type TunnelClientMessage =
   // ── Planner sync (mobile is the merge authority) ──
   | { type: 'plan_sync_manifest_request' }
   | { type: 'plan_sync_pull'; projectId: string; paths: string[] }
-  | { type: 'plan_sync_push'; projectId: string; title: string; files: Record<string, string> };
+  | { type: 'plan_sync_push'; projectId: string; title: string; files: Record<string, string> }
+  // ── Live planning drive frames (steer the desktop's live session) ──
+  // Honored only when the desktop has granted input (same gate as pane_input);
+  // dropped otherwise. The phone reconciles optimistic UI on the next plan_state.
+  | { type: 'plan_advance'; projectId: string; stageKey: string }
+  | { type: 'plan_confirm'; projectId: string; section: string }
+  | { type: 'plan_chat'; projectId: string; text: string };
+
+/**
+ * The mirrored live-planning state the phone holds for one project, reduced from
+ * the replayed `plan_state` + `plan_status` snapshot and incremental `plan_event`
+ * deltas. A reconnecting client rebuilds this purely from the replayed snapshot —
+ * it never assumes it saw earlier events. See src/lib/tunnel/livePlan.ts.
+ */
+export type LivePlanState = {
+  projectId: string;
+  currentStage: string;
+  /** Short status label from plan_status (empty until the first header arrives). */
+  status: string;
+  confirmedSections: string[];
+  files: PlanFile[];
+  messages: PlanMessage[];
+  pipelineRuns: PlanPipelineRun[];
+  /** Epoch ms of the last frame applied (snapshot or delta); 0 before any. */
+  updatedAt: number;
+};
 
 /** Per-pane runtime state held in memory on the mobile side */
 export type PaneState = {

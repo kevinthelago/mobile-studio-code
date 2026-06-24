@@ -3,6 +3,9 @@ import {
   PaneSize, PaneState, PaneStreamingState, PairingPayload, PlanSyncManifestEntry,
   TunnelClientMessage, TunnelConnectionState, TunnelServerMessage,
 } from './types';
+
+/** A server→phone frame narrowed to one `type` (e.g. PlanFrame<'plan_state'>). */
+type PlanFrame<T extends TunnelServerMessage['type']> = Extract<TunnelServerMessage, { type: T }>;
 import { NoiseSession } from './tunnel/noise';
 import { attachPaneSize, createPaneState } from './tunnel/paneSize';
 import { buildPaneInput } from './tunnel/input';
@@ -13,6 +16,13 @@ export type TunnelCallbacks = {
   onUserRequest: (paneId: string, prompt: string) => void;
   /** A planner-sync manifest arrived from the desktop (reconcile-on-connect). */
   onSyncManifest?: (projects: PlanSyncManifestEntry[]) => void;
+  // ── Live planning session (read-only mirror; replayed on connect, #1245) ──
+  /** Full live-planning snapshot — replaces the mirrored project state wholesale. */
+  onPlanState?: (frame: PlanFrame<'plan_state'>) => void;
+  /** Cheap header (active stage + status label) — replayed on connect. */
+  onPlanStatus?: (frame: PlanFrame<'plan_status'>) => void;
+  /** Transient planning delta — fire-and-forget, applied incrementally. */
+  onPlanEvent?: (frame: PlanFrame<'plan_event'>) => void;
 };
 
 type PendingRequest<T> = { resolve: (v: T) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> };
@@ -155,6 +165,16 @@ export class TunnelClient {
 
     const base = this.payload.relayUrl.replace(/\/+$/, '');
     const url = `${base}/connect?room=${encodeURIComponent(this.payload.room)}&role=guest`;
+    // Diagnostics: validate the QR encoding at runtime — hostPubKey must decode to
+    // 32 bytes (standard base64) and psk must be 32 bytes (64 hex chars). A wrong
+    // base64 variant or psk encoding shows up here before the handshake even runs.
+    try {
+      const pk = b64decode(this.payload.hostPubKey);
+      const pskBytes = this.payload.psk.replace(/[^0-9a-fA-F]/g, '').length / 2;
+      console.log(`tunnel pairing: relay=${base} room.len=${this.payload.room.length} hostPubKey=${pk.length}B psk=${this.payload.psk.length}hex(${pskBytes}B) → dial ${url}`);
+      if (pk.length !== 32) console.log(`tunnel WARN: hostPubKey decoded to ${pk.length}B (expected 32) — wrong base64 variant?`);
+      if (pskBytes !== 32) console.log(`tunnel WARN: psk is ${pskBytes}B (expected 32 / 64 hex chars)`);
+    } catch (e) { console.log('tunnel pairing decode check failed:', (e as Error)?.message); }
     let ws: WebSocket;
     try {
       ws = new WebSocket(url);
@@ -167,7 +187,7 @@ export class TunnelClient {
     // Bound the handshake/auth: a stale room (host not present) never answers.
     this.connectTimer = setTimeout(() => {
       if (ws === this.ws && this.connectionState !== 'connected') {
-        this.failConnection('timed out waiting for the desktop (saved pairing may be stale — rescan the QR)');
+        void this.failWithDiagnosis(ws);
       }
     }, CONNECT_TIMEOUT_MS);
 
@@ -179,7 +199,9 @@ export class TunnelClient {
         // hostPubKey is standard (padded) base64 of the desktop's X25519 key.
         const rs = b64decode(this.payload.hostPubKey);
         this.noise = new NoiseSession(rs);
-        ws.send(toArrayBuffer(this.noise.startHandshake()));
+        const msg1 = this.noise.startHandshake();
+        ws.send(toArrayBuffer(msg1));
+        console.log(`tunnel→ handshake msg1 sent (${msg1.length}B), awaiting msg2`);
       } catch {
         this.failConnection('handshake init failed');
       }
@@ -269,6 +291,30 @@ export class TunnelClient {
     });
   }
 
+  // ── Live planning drive frames (steer the desktop's live session, #1245) ──
+  // The desktop is the source of truth and gates these the same as pane_input;
+  // a dropped frame reconciles on the next plan_state, so they are fire-and-forget.
+  /** Advance / jump the live planner to a stage. */
+  planAdvance(projectId: string, stageKey: string) {
+    this.send({ type: 'plan_advance', projectId, stageKey });
+  }
+
+  /** Confirm a plan section in the live planner. */
+  planConfirm(projectId: string, section: string) {
+    this.send({ type: 'plan_confirm', projectId, section });
+  }
+
+  /** Send a chat turn into the live planner session. */
+  planChat(projectId: string, text: string) {
+    this.send({ type: 'plan_chat', projectId, text });
+  }
+
+  /** Push a refreshed FCM registration token mid-session (tokens rotate). */
+  refreshFcmToken(fcmToken: string) {
+    this.fcmToken = fcmToken;
+    this.send({ type: 'set_fcm_token', fcmToken });
+  }
+
   /** Detach handlers from and close the current socket without emitting state. */
   private closeSocket() {
     this.rejectPendingSync('tunnel disconnected');
@@ -299,6 +345,47 @@ export class TunnelClient {
     if (!this.destroyed) this.setConnectionState('error');
   }
 
+  /**
+   * On a connect timeout, probe the relay's /health so the error tells the user
+   * WHICH leg failed: relay unreachable vs. relay-OK-but-desktop-never-joined vs.
+   * reached-desktop-but-auth-stalled. (Distinguishes "couldn't reach the relay"
+   * from "the desktop isn't running / paired" — they need different fixes.)
+   */
+  private async failWithDiagnosis(ws: WebSocket) {
+    if (ws !== this.ws || !this.payload) return;
+    const url = this.payload.relayUrl;
+    const room = this.payload.room;
+    const healthy = await this.probeRelayHealth(url);
+    if (ws !== this.ws) return; // superseded while probing
+    let reason: string;
+    if (!healthy) {
+      reason = `Couldn't reach the relay at ${url}. Check the relay URL and your network, then rescan the QR.`;
+    } else if (!this.handshakeDone) {
+      reason = `Reached the relay, but the desktop never joined room ${room}. Make sure base-studio-code is running and showing this pairing, then rescan the QR.`;
+    } else {
+      reason = 'Reached the desktop but pairing didn’t complete (the secret may be stale). Rescan the QR.';
+    }
+    this.failConnection(reason);
+  }
+
+  /** GET <relay>/health (ws→http). Returns true iff it responds as the MSC relay. */
+  private async probeRelayHealth(wsUrl: string): Promise<boolean> {
+    const httpUrl = wsUrl.replace(/^wss:/i, 'https:').replace(/^ws:/i, 'http:').replace(/\/+$/, '') + '/health';
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 4000);
+      const res = await fetch(httpUrl, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (!res.ok) { console.log(`tunnel /health ${httpUrl} → HTTP ${res.status}`); return false; }
+      const j = await res.json().catch(() => null) as { ok?: boolean; service?: string } | null;
+      console.log('tunnel /health:', JSON.stringify(j));
+      return !!(j && (j.ok === true || j.service === 'msc-tunnel-relay'));
+    } catch (e) {
+      console.log(`tunnel /health ${httpUrl} failed:`, (e as Error)?.message);
+      return false;
+    }
+  }
+
   /** Diagnostics: summarise every inbound (server→client) frame. */
   private logInbound(msg: TunnelServerMessage) {
     switch (msg.type) {
@@ -320,6 +407,12 @@ export class TunnelClient {
         console.log(`tunnel← plan_sync_files ${msg.projectId} files=${Object.keys(msg.files).length}`); break;
       case 'plan_sync_ack':
         console.log(`tunnel← plan_sync_ack ${msg.projectId}`); break;
+      case 'plan_state':
+        console.log(`tunnel← plan_state ${msg.projectId} stage=${msg.currentStage} sections=${msg.confirmedSections.length} files=${msg.files.length} msgs=${msg.messages.length} runs=${msg.pipelineRuns.length}`); break;
+      case 'plan_event':
+        console.log(`tunnel← plan_event ${msg.projectId} kind=${msg.kind}`); break;
+      case 'plan_status':
+        console.log(`tunnel← plan_status ${msg.projectId} stage=${msg.currentStage} status=${msg.status}`); break;
     }
   }
 
@@ -440,6 +533,19 @@ export class TunnelClient {
         if (p) { clearTimeout(p.timer); this.pendingPushes.delete(msg.projectId); p.resolve(); }
         break;
       }
+
+      // Live planning session — forwarded to the LivePlan reducer (read-only mirror).
+      case 'plan_state':
+        this.cb.onPlanState?.(msg);
+        break;
+
+      case 'plan_status':
+        this.cb.onPlanStatus?.(msg);
+        break;
+
+      case 'plan_event':
+        this.cb.onPlanEvent?.(msg);
+        break;
     }
   }
 
