@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../src/theme';
 import { MirrorScaffold } from '../../src/components/shell/MirrorScaffold';
+import { AutomationsSegment } from '../../src/components/automations/AutomationsSegment';
+import { McpSegment } from '../../src/components/automations/McpSegment';
 
 type Segment = 'automations' | 'mcp';
 
@@ -11,9 +13,10 @@ const SEGMENTS: ReadonlyArray<{ key: Segment; label: string }> = [
 ];
 
 /**
- * Automations tab (#218 scaffold) — a segmented read-only page hosting both
- * the desktop's automations and its MCP servers (folded in per the epic's tab
- * plan). Each segment reads its own mirror domain.
+ * Automations tab (#218 scaffold · #223 content) — a segmented read-only page
+ * hosting both the desktop's automations (schedules + run history + hooks)
+ * and its MCP servers. Each segment reads its own mirror domain; display only
+ * throughout (mutations happen via chat).
  */
 export default function AutomationsTab() {
   const t = useTheme();
@@ -52,7 +55,9 @@ export default function AutomationsTab() {
       subtitle="Scheduled rules · read-only mirror"
       blurb="Automations mirrors the desktop's cron-triggered rules and their run history."
       toolbar={toolbar}
-    />
+    >
+      {(data) => <AutomationsSegment data={data} />}
+    </MirrorScaffold>
   ) : (
     <MirrorScaffold
       domain="mcp"
@@ -60,7 +65,9 @@ export default function AutomationsTab() {
       subtitle="MCP servers · read-only mirror"
       blurb="MCP mirrors the desktop's configured MCP servers and their status."
       toolbar={toolbar}
-    />
+    >
+      {(data) => <McpSegment data={data} />}
+    </MirrorScaffold>
   );
 }
 
