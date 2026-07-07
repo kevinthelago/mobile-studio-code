@@ -5,6 +5,8 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme';
 import { useTunnel } from '../../lib/TunnelContext';
+import { useAlerts } from '../../lib/alerts/AlertsContext';
+import { openAlertsInbox } from '../../lib/alerts/nav';
 
 function connectionColor(state: string, accent: string): string {
   switch (state) {
@@ -31,6 +33,7 @@ export function ScreenHeader({ title, subtitle, action }: {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { connectionState } = useTunnel();
+  const { unread } = useAlerts();
   const connected = connectionState === 'connected';
   const dot = connected || connectionState === 'connecting' || connectionState === 'authenticating' || connectionState === 'error'
     ? connectionColor(connectionState, t.accent)
@@ -65,6 +68,27 @@ export function ScreenHeader({ title, subtitle, action }: {
         style={styles.dotWrap}
       >
         <View style={[styles.dot, { backgroundColor: dot }]} />
+      </Pressable>
+
+      <Pressable
+        onPress={openAlertsInbox}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={unread > 0 ? `Alerts, ${unread} unread` : 'Alerts'}
+        style={[styles.gear, { borderColor: t.borderColor }]}
+      >
+        <Svg width={16} height={16} viewBox="0 0 20 20" fill="none">
+          <Path
+            d="M10 3a4 4 0 0 0-4 4c0 3-1 4.5-2 5.5h12c-1-1-2-2.5-2-5.5a4 4 0 0 0-4-4Z"
+            stroke={t.fgMuted} strokeWidth={1.5} strokeLinejoin="round"
+          />
+          <Path d="M8.5 15.5a1.5 1.5 0 0 0 3 0" stroke={t.fgMuted} strokeWidth={1.5} strokeLinecap="round" />
+        </Svg>
+        {unread > 0 && (
+          <View style={[styles.badge, { backgroundColor: '#f87171', borderColor: t.bg }]}>
+            <Text style={styles.badgeText} numberOfLines={1}>{unread > 99 ? '99+' : unread}</Text>
+          </View>
+        )}
       </Pressable>
 
       <Pressable
@@ -110,4 +134,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center', justifyContent: 'center',
   },
+  badge: {
+    position: 'absolute', top: -4, right: -4,
+    minWidth: 16, height: 16, borderRadius: 8, borderWidth: 1.5,
+    paddingHorizontal: 3,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  badgeText: { color: '#fff', fontSize: 9.5, fontWeight: '700' },
 });

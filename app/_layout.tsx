@@ -18,9 +18,24 @@ import { PlannerSyncProvider } from '../src/lib/planner/PlannerSyncContext';
 import { LivePlanProvider } from '../src/lib/tunnel/LivePlanContext';
 import { MirrorProvider } from '../src/lib/mirror/MirrorContext';
 import {
-  initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
+  initFcm, subscribeFcm, getInitialNotificationTap, onNotificationOpened,
 } from '../src/lib/fcm';
 import { openSessionChat } from '../src/lib/sessions/nav';
+import { AlertsProvider, useAlerts } from '../src/lib/alerts/AlertsContext';
+import { alertTarget, type PushTap } from '../src/lib/alerts/model';
+import { openAlertTarget } from '../src/lib/alerts/nav';
+
+// One place both tap paths (cold-start + background) route through: a
+// `user_request` tap deep-links into that session's chat (#219); an #2498
+// alert tap follows its resolved target (that session's chat, the Planner tab,
+// or the inbox).
+function routeTap(tap: PushTap) {
+  if (tap.type === 'user_request') {
+    openSessionChat(tap.paneId);
+  } else {
+    openAlertTarget(alertTarget({ kind: tap.kind, paneId: tap.paneId }));
+  }
+}
 
 // Dark navigation theme with a transparent background so the ThemedFrame (theme
 // bg + ambient Orbs) shows through behind every screen rather than React
@@ -65,6 +80,7 @@ function ThemedFrame({ children }: { children: React.ReactNode }) {
  */
 function FcmBootstrap() {
   const { setFcmToken } = useTunnel();
+  const { recordFcmAlert } = useAlerts();
 
   useEffect(() => {
     let cleanupSub: (() => void) | undefined;
@@ -74,33 +90,30 @@ function FcmBootstrap() {
       if (token) setFcmToken(token);
 
       // Handle taps on notifications while the app was quit (cold start):
-      // deep-link straight into that session's chat (#219). SessionChat's
-      // mount effect asserts focus, so no separate focusPane is needed.
-      const initialPaneId = await getInitialNotificationPaneId();
-      if (initialPaneId) {
-        openSessionChat(initialPaneId);
-      }
+      // route by kind (#219 user_request → chat; #2498 alert → its target).
+      // SessionChat's mount effect asserts focus, so no separate focusPane.
+      const initialTap = await getInitialNotificationTap();
+      if (initialTap) routeTap(initialTap);
 
       cleanupSub = subscribeFcm(
         // Token refresh — keep the desktop in sync
         (newToken) => setFcmToken(newToken),
         // Foreground user_request — pane state is already updated by
-        // TunnelClient, and TunnelContext surfaces the signal to the
-        // UserRequestToast (#219); nothing more to do here.
+        // TunnelClient; TunnelContext surfaces the signal to the AlertToast.
         (_paneId, _prompt) => {},
+        // Foreground #2498 alert push — fold into the inbox + raise the toast.
+        (kind, title, body, paneId) => recordFcmAlert(kind, title, body, paneId),
       );
     })();
 
     // Handle taps while the app was backgrounded (not quit)
-    const cleanupOpened = onNotificationOpened((paneId) => {
-      openSessionChat(paneId);
-    });
+    const cleanupOpened = onNotificationOpened((tap) => routeTap(tap));
 
     return () => {
       cleanupSub?.();
       cleanupOpened();
     };
-  }, [setFcmToken]);
+  }, [setFcmToken, recordFcmAlert]);
 
   return null;
 }
@@ -132,6 +145,7 @@ function InnerStack() {
         <Stack.Screen name="(sync)" options={modal} />
         <Stack.Screen name="(more)" options={modal} />
         <Stack.Screen name="(sessions)" options={modal} />
+        <Stack.Screen name="(alerts)" options={modal} />
       </Stack>
     </NavThemeProvider>
   );
@@ -152,12 +166,14 @@ export default function RootLayout() {
           <PlannerSyncProvider>
             <LivePlanProvider>
               <MirrorProvider>
-                <FcmBootstrap />
-                <ThemedFrame>
-                  <StageGate>
-                    <InnerStack />
-                  </StageGate>
-                </ThemedFrame>
+                <AlertsProvider>
+                  <FcmBootstrap />
+                  <ThemedFrame>
+                    <StageGate>
+                      <InnerStack />
+                    </StageGate>
+                  </ThemedFrame>
+                </AlertsProvider>
               </MirrorProvider>
             </LivePlanProvider>
           </PlannerSyncProvider>

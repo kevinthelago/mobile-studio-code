@@ -11,6 +11,8 @@ export const KEYS = {
   /** JSON-encoded PairingPayload from the desktop QR (relay + Noise pairing). */
   TUNNEL_PAIRING: 'tunnel_pairing',
   FCM_TOKEN: 'fcm_token',
+  /** JSON AlertReadState — the alerts inbox's local read/cleared watermarks (#222). */
+  ALERTS_READ: 'alerts_read_state',
   // Multi-provider (M1g). Per-provider API keys use the `provider_key_` prefix
   // via providers/storage.ts; Anthropic keeps its legacy ANTHROPIC_KEY slot.
   SELECTED_PROVIDER: 'selected_provider',
