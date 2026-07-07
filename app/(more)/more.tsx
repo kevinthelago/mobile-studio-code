@@ -43,9 +43,8 @@ const ROWS: readonly Row[] = [
   {
     key: 'security',
     title: 'Security',
-    detail: 'Audit & activity · read-only, coming later',
+    detail: 'Audit & activity · read-only mirror',
     href: '/(more)/security',
-    soon: true,
   },
 ];
 
