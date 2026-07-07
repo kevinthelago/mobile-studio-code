@@ -9,9 +9,14 @@ type PlanFrame<T extends TunnelServerMessage['type']> = Extract<TunnelServerMess
 import { NoiseSession } from './tunnel/noise';
 import { attachPaneSize, createPaneState } from './tunnel/paneSize';
 import { buildPaneInput } from './tunnel/input';
+import {
+  TunnelLifecycleStatus, decideReconnect, deriveLifecycleStatus,
+} from './tunnel/reconnect';
 
 export type TunnelCallbacks = {
   onConnectionStateChange: (state: TunnelConnectionState) => void;
+  /** Coarse derived status for the UI banner: connecting/connected/reconnecting/offline (#217). */
+  onLifecycleChange?: (status: TunnelLifecycleStatus) => void;
   onPanesChange: (panes: Record<string, PaneState>) => void;
   onUserRequest: (paneId: string, prompt: string) => void;
   /** A planner-sync manifest arrived from the desktop (reconcile-on-connect). */
@@ -86,10 +91,19 @@ export class TunnelClient {
   private ws: WebSocket | null = null;
   private payload: PairingPayload | null = null;
   private fcmToken: string | undefined;
+  // `destroyed` doubles as the deliberate-disconnect flag: disconnect() sets it,
+  // connect() clears it, and the reconnect policy never redials while it's set.
   private destroyed = false;
   private noise: NoiseSession | null = null;
   private handshakeDone = false;
   private connectTimer: ReturnType<typeof setTimeout> | null = null;
+  // ── Auto-reconnect bookkeeping (#217; policy lives in tunnel/reconnect.ts) ──
+  /** auth_ok reached at least once this connect() session → drops auto-redial. */
+  private everConnected = false;
+  /** Retries burned since the last successful auth (drives the backoff). */
+  private reconnectAttempt = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastLifecycle: TunnelLifecycleStatus | null = null;
 
   private connectionState: TunnelConnectionState = 'disconnected';
   private panes: Record<string, PaneState> = {};
@@ -113,13 +127,38 @@ export class TunnelClient {
     this.destroyed = false;
     this.noise = null;
     this.handshakeDone = false;
+    this.everConnected = false;
+    this.reconnectAttempt = 0;
+    this.clearReconnectTimer();
     this.openSocket();
   }
 
   disconnect() {
     this.destroyed = true;
+    this.clearReconnectTimer();
     this.closeSocket();
     this.setConnectionState('disconnected');
+  }
+
+  /**
+   * Redial immediately if a session dropped (e.g. on app foreground, where a
+   * backgrounded iOS app's armed backoff timer may never have fired). No-op
+   * when the user disconnected, the session never established, or a socket
+   * attempt is already in flight — a socket that silently died in the
+   * background still reports 'connected' here; its onclose fires shortly after
+   * resume and takes the normal drop path instead.
+   */
+  reconnectNow() {
+    if (this.destroyed || !this.payload) return;
+    if (this.reconnectTimer != null) {
+      this.clearReconnectTimer();
+      this.openSocket();
+      return;
+    }
+    const inFlight = this.connectionState === 'connected'
+      || this.connectionState === 'connecting'
+      || this.connectionState === 'authenticating';
+    if (!inFlight && this.everConnected) this.openSocket();
   }
 
   focusPane(paneId: string) {
@@ -246,11 +285,47 @@ export class TunnelClient {
       console.log(`tunnel ws closed code=${c?.code ?? '?'} reason=${c?.reason || '(none)'}`);
       this.clearConnectTimeout();
       this.ws = null;
+      this.handshakeDone = false;
+      this.noise = null;
       if (this.destroyed) return;
-      // No auto-reconnect — drop to disconnected so the user can choose to
-      // reconnect from the pairing screen.
-      this.setConnectionState('disconnected');
+      // An established session auto-reconnects with backoff; a first connect
+      // that never established drops to disconnected so the user can choose to
+      // reconnect from the pairing screen (see decideReconnect).
+      this.handleDrop('disconnected');
     };
+  }
+
+  /**
+   * Common drop path: schedule an auto-reconnect when the policy allows it,
+   * otherwise settle on `fallback` ('disconnected' for a plain close, 'error'
+   * for a failed handshake/transport) and leave reconnecting to the user.
+   */
+  private handleDrop(fallback: 'disconnected' | 'error') {
+    const decision = decideReconnect({
+      userClosed: this.destroyed,
+      everConnected: this.everConnected,
+      attempt: this.reconnectAttempt,
+    });
+    if (!decision.reconnect) {
+      this.setConnectionState(fallback);
+      return;
+    }
+    this.reconnectAttempt = decision.attempt;
+    console.log(`tunnel reconnect: attempt ${decision.attempt} in ${decision.delayMs}ms`);
+    // Arm the timer BEFORE emitting state so the derived lifecycle reads
+    // 'reconnecting' (not a transient 'offline') in the same tick.
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.openSocket();
+    }, decision.delayMs);
+    this.setConnectionState('disconnected');
+  }
+
+  private clearReconnectTimer() {
+    if (this.reconnectTimer != null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
   }
 
   /** Fail any in-flight sync requests (e.g. on disconnect) so callers don't hang. */
@@ -336,13 +411,17 @@ export class TunnelClient {
     }
   }
 
-  /** Surface a handshake/transport failure and tear down (no auto-retry). */
+  /**
+   * Tear down after a handshake/transport failure. An established session
+   * auto-retries with backoff; a first connect that never established surfaces
+   * 'error' (with the diagnosis) and stays manual.
+   */
   private failConnection(reason: string) {
     console.log(`tunnel connect failed: ${reason}`);
     this.closeSocket();
     this.handshakeDone = false;
     this.noise = null;
-    if (!this.destroyed) this.setConnectionState('error');
+    if (!this.destroyed) this.handleDrop('error');
   }
 
   /**
@@ -421,8 +500,12 @@ export class TunnelClient {
     switch (msg.type) {
       case 'auth_ok': {
         this.clearConnectTimeout();
+        this.everConnected = true;
+        this.reconnectAttempt = 0; // fresh backoff schedule for the next drop
         this.setConnectionState('connected');
-        // Re-assert streaming state for the active pane after reconnect
+        // Re-assert streaming state for the active pane after reconnect. (The
+        // auth frame already re-carried the FCM token, and the desktop replays
+        // full state on connect — no incremental catch-up needed.)
         if (this.activePaneId) {
           this.send({ type: 'pane_set_state', paneId: this.activePaneId, state: 'streaming' });
           this.send({ type: 'pane_focus', paneId: this.activePaneId });
@@ -574,6 +657,25 @@ export class TunnelClient {
     if (this.connectionState !== state) console.log(`tunnel state=${state}`);
     this.connectionState = state;
     this.cb.onConnectionStateChange(state);
+    this.emitLifecycle();
+  }
+
+  /**
+   * Every lifecycle transition passes through setConnectionState (drops arm
+   * the retry timer before emitting; redials emit 'connecting'), so deriving
+   * here — deduped — is sufficient.
+   */
+  private emitLifecycle() {
+    const status = deriveLifecycleStatus({
+      wireState: this.connectionState,
+      everConnected: this.everConnected,
+      retryPending: this.reconnectTimer != null,
+      userClosed: this.destroyed,
+    });
+    if (status === this.lastLifecycle) return;
+    this.lastLifecycle = status;
+    console.log(`tunnel lifecycle=${status}`);
+    this.cb.onLifecycleChange?.(status);
   }
 
   private emitPanes() {
