@@ -124,15 +124,34 @@ export type CancelSignal = { cancelled: boolean };
 
 // ── Tunnel / base-studio-code protocol ──────────────────────────────────────
 
+/**
+ * Tunnel wire-contract version (base-studio-code#2497). Sent in the `auth` frame
+ * (`protocolVersion`) and echoed by the desktop in `auth_ok`.
+ *
+ * Mismatch policy: ACCEPT, but surface — neither side rejects on a version mismatch
+ * (unknown frame types are tolerated); the client compares the echoed desktop version
+ * against its own and warns that some frames may be missing/ignored.
+ *
+ * v1 (implicit — no version on the wire) → v2: adds `store_state`, the auth/auth_ok
+ * `protocolVersion`, the optional `PaneDescriptor.kind`, and pins the plan_sync frames
+ * to the desktop's Rust (bsc-tunnel) shapes.
+ */
+export const TUNNEL_PROTOCOL_VERSION = 2;
+
 export type PaneStatus = 'running' | 'idle' | 'awaiting_input' | 'error';
 
 export type PaneStreamingState = 'streaming' | 'minimized' | 'dormant';
+
+/** What kind of desktop session a pane is (contract v2). The fleet director rides as
+ *  `worker`. Optional on the wire — a pre-v2 desktop omits it (treat as `console`). */
+export type PaneKind = 'console' | 'worker' | 'planner' | 'designer' | 'triage';
 
 export type PaneDescriptor = {
   id: string;
   cwd: string;
   name: string;
   status: PaneStatus;
+  kind?: PaneKind;
 };
 
 /** The desktop PTY's grid dimensions for a pane (columns × rows of cells). */
@@ -185,9 +204,53 @@ export type PlanEventKind =
   | 'message_appended'
   | 'pipeline_run';
 
+// ── Generic store projections (contract v2, base-studio-code#2497) ──
+//
+// `store_state` is the desktop's generic projection frame: the last-written state of one
+// desktop store `domain` as an opaque JSON string, with a monotonically increasing
+// per-domain `rev` (stale/out-of-order frames are dropped). Replayed on connect (last
+// frame per domain) and broadcast on every change. The frame is domain-agnostic — the
+// constants below only name the projections the desktop currently publishes.
+
+/** The registered `store_state` domains (mirrors bsc-tunnel `store_domains::ALL`). */
+export const STORE_DOMAINS = [
+  'glance', 'plan', 'org', 'blueprints', 'skills',
+  'components', 'themes', 'automations', 'mcp', 'alerts',
+] as const;
+
+export type StoreDomain = (typeof STORE_DOMAINS)[number];
+
+/** The mirrored value the phone holds per store_state domain. */
+export type StoreStateEntry = {
+  /** Desktop's monotonically increasing revision for the domain. */
+  rev: number;
+  /** The opaque serialized projection (parse per domain). */
+  json: string;
+};
+
+// ── Hook telemetry (read-only projection; desktop M3/#937) ──
+
+/** One day's allow/block counts in the hook-telemetry projection. */
+export type HookDayBucket = { day: string; allows: number; blocks: number };
+
+/** Fires per hook in the projection. */
+export type HookCount = { hook: string; event: string; fires: number };
+
+/** Read-only aggregated hook-fire telemetry pushed by the desktop. */
+export type HookTelemetry = {
+  total: number;
+  blocks: number;
+  allows: number;
+  /** allows / (allows + blocks), 0–100. */
+  allowRate: number;
+  daily: HookDayBucket[];
+  perHook: HookCount[];
+};
+
 /** Messages sent from base-studio-code desktop → mobile */
 export type TunnelServerMessage =
-  | { type: 'auth_ok' }
+  // Echoes the desktop's protocol version (contract v2); absent from a pre-v2 desktop.
+  | { type: 'auth_ok'; protocolVersion?: number }
   | { type: 'pane_list'; panes: PaneDescriptor[] }
   | { type: 'pane_output'; paneId: string; data: string; coarse: boolean }
   // The desktop PTY's grid size for a pane. Sent on pairing replay (after
@@ -204,10 +267,17 @@ export type TunnelServerMessage =
       prompt: string | null;
     }
   | { type: 'user_request'; paneId: string; prompt: string }
-  // ── Planner sync (see docs/planner-sync-protocol.md) ──
-  | { type: 'plan_sync_manifest'; projects: PlanSyncManifestEntry[] }
-  | { type: 'plan_sync_files'; projectId: string; files: Record<string, string> }
-  | { type: 'plan_sync_ack'; projectId: string }
+  // Generic store projection (contract v2) — see StoreStateEntry above.
+  | { type: 'store_state'; domain: string; rev: number; json: string }
+  // Read-only hook-fire telemetry (desktop M3/#937).
+  | { type: 'hook_telemetry'; telemetry: HookTelemetry }
+  // ── Planner sync — the DESKTOP (Rust bsc-tunnel) shapes are authoritative (v2 drift
+  // fix, base-studio-code#2497): ONE project per manifest frame (relpath → content hash;
+  // the desktop replays one frame per project on connect), files as {relpath, content}
+  // arrays, and an explicit ack `applied` flag. ──
+  | { type: 'plan_sync_manifest'; projectId: string; files: Record<string, string> }
+  | { type: 'plan_sync_files'; projectId: string; files: PlanFile[] }
+  | { type: 'plan_sync_ack'; projectId: string; applied: boolean }
   // ── Live planning session (read-only mirror; replayed on connect) ──
   | {
       type: 'plan_state';
@@ -236,17 +306,19 @@ export type TunnelServerMessage =
   // Cheap header update (active stage + a short status label). Replayed on connect.
   | { type: 'plan_status'; projectId: string; currentStage: string; status: string };
 
-/** One project's manifest in a plan_sync_manifest frame (relpath → content hash). */
+/** One project's manifest (relpath → content hash), as the client accumulates the
+ *  per-project `plan_sync_manifest` frames. The v1 `title`/`updatedAt` fields never
+ *  existed on the desktop's wire and were dropped in the v2 drift fix. */
 export type PlanSyncManifestEntry = {
   projectId: string;
-  title: string;
-  updatedAt: number;
   files: Record<string, string>;
 };
 
 /** Messages sent from mobile → base-studio-code desktop */
 export type TunnelClientMessage =
-  | { type: 'auth'; token: string; fcmToken?: string }
+  // `protocolVersion` (contract v2): this client's TUNNEL_PROTOCOL_VERSION. Optional so
+  // the shape stays valid for a pre-v2 peer; the desktop accepts any version.
+  | { type: 'auth'; token: string; fcmToken?: string; protocolVersion?: number }
   // Refreshed FCM registration token (tokens rotate); updates the desktop's push
   // target mid-session. Allowed even while view-only.
   | { type: 'set_fcm_token'; fcmToken: string }
@@ -254,10 +326,13 @@ export type TunnelClientMessage =
   | { type: 'pane_focus'; paneId: string }
   | { type: 'pane_input'; paneId: string; data: string }
   | { type: 'pane_resize'; paneId: string; cols: number; rows: number }
-  // ── Planner sync (mobile is the merge authority) ──
-  | { type: 'plan_sync_manifest_request' }
+  // ── Planner sync — desktop (Rust) shapes are authoritative (v2 drift fix):
+  // manifest_request REQUIRES a projectId (the desktop replays every project's manifest
+  // on connect unprompted; this frame is a targeted refresh), push sends {relpath,
+  // content} arrays and carries NO title. ──
+  | { type: 'plan_sync_manifest_request'; projectId: string }
   | { type: 'plan_sync_pull'; projectId: string; paths: string[] }
-  | { type: 'plan_sync_push'; projectId: string; title: string; files: Record<string, string> }
+  | { type: 'plan_sync_push'; projectId: string; files: PlanFile[] }
   // ── Live planning drive frames (steer the desktop's live session) ──
   // Honored only when the desktop has granted input (same gate as pane_input);
   // dropped otherwise. The phone reconciles optimistic UI on the next plan_state.

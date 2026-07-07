@@ -35,7 +35,7 @@ export function usePlannerSync(): PlannerSyncValue {
 }
 
 export function PlannerSyncProvider({ children }: { children: React.ReactNode }) {
-  const { connectionState, syncRequestManifest, syncPull, syncPush, setSyncManifestHandler } = useTunnel();
+  const { syncPull, syncPush, setSyncManifestHandler } = useTunnel();
   const [status, setStatus] = useState<PlannerSyncStatus>('idle');
   const [report, setReport] = useState<SyncReport | null>(null);
   const [conflicts, setConflicts] = useState<PendingConflict[]>([]);
@@ -57,7 +57,9 @@ export function PlannerSyncProvider({ children }: { children: React.ReactNode })
       await writeIndex(upsertSummary(idx, summarizeProject(project)));
     },
     pull: (projectId, paths) => syncPull(projectId, paths),
-    push: ({ projectId, title, files }) => syncPush(projectId, title, files),
+    // v2 wire drops the title (the desktop never carried one) — the orchestration keeps
+    // it in SyncDeps for the local index; only the transport ignores it.
+    push: ({ projectId, files }) => syncPush(projectId, files),
     now: () => Date.now(),
   }), [syncPull, syncPush]);
 
@@ -79,10 +81,11 @@ export function PlannerSyncProvider({ children }: { children: React.ReactNode })
     return () => setSyncManifestHandler(null);
   }, [setSyncManifestHandler, deps]);
 
-  // Kick off a sync each time the tunnel reaches "connected".
-  useEffect(() => {
-    if (connectionState === 'connected') syncRequestManifest();
-  }, [connectionState, syncRequestManifest]);
+  // Reconcile-on-connect needs no request frame (v2 drift fix): the desktop replays
+  // every project's plan_sync_manifest right after auth_ok, and the tunnel client
+  // batches them into the single onSyncManifest delivery handled above. (The v1
+  // broadcast plan_sync_manifest_request no longer exists on the wire — the desktop
+  // requires a projectId, so the frame is a targeted per-project refresh now.)
 
   const resolveProject = useCallback(async (projectId: string, resolutions: Record<string, string>) => {
     const pending = conflicts.find((c) => c.projectId === projectId);
