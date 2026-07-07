@@ -17,6 +17,8 @@ type Props = {
   subtitle?: string;
   /** One line describing what this page will mirror once its content lands. */
   blurb: string;
+  /** Optional header action pill (passed through to ScreenHeader, #219). */
+  headerAction?: { label: string; onPress: () => void };
   /** Optional strip rendered between the header and the body (e.g. segments). */
   toolbar?: ReactNode;
   /** Render the synced payload. Omitted → a generic "synced" card (scaffold). */
@@ -31,7 +33,7 @@ type Props = {
  * States: disconnected → pair prompt · connecting → spinner ·
  * connected-but-unsynced → awaiting sync · synced → children (or a stub card).
  */
-export function MirrorScaffold({ domain, title, subtitle, blurb, toolbar, children }: Props) {
+export function MirrorScaffold({ domain, title, subtitle, blurb, headerAction, toolbar, children }: Props) {
   const t = useTheme();
   const { connectionState } = useTunnel();
   const { data, rev, synced } = useMirrorDomain(domain);
@@ -72,7 +74,7 @@ export function MirrorScaffold({ domain, title, subtitle, blurb, toolbar, childr
 
   return (
     <View style={styles.root}>
-      <ScreenHeader title={title} subtitle={subtitle} />
+      <ScreenHeader title={title} subtitle={subtitle} action={headerAction} />
       {toolbar}
       <View style={styles.body}>{body}</View>
     </View>
