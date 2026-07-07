@@ -1,7 +1,7 @@
 import { utf8ToBytes } from '@noble/hashes/utils.js';
 import {
   PaneSize, PaneState, PaneStreamingState, PairingPayload, PlanSyncManifestEntry,
-  TunnelClientMessage, TunnelConnectionState, TunnelServerMessage,
+  TUNNEL_PROTOCOL_VERSION, TunnelClientMessage, TunnelConnectionState, TunnelServerMessage,
 } from './types';
 
 /** A server→phone frame narrowed to one `type` (e.g. PlanFrame<'plan_state'>). */
@@ -9,12 +9,24 @@ type PlanFrame<T extends TunnelServerMessage['type']> = Extract<TunnelServerMess
 import { NoiseSession } from './tunnel/noise';
 import { attachPaneSize, createPaneState } from './tunnel/paneSize';
 import { buildPaneInput } from './tunnel/input';
+import { applyStoreState, type StoreStateMap } from './tunnel/storeState';
 
 export type TunnelCallbacks = {
   onConnectionStateChange: (state: TunnelConnectionState) => void;
   onPanesChange: (panes: Record<string, PaneState>) => void;
   onUserRequest: (paneId: string, prompt: string) => void;
-  /** A planner-sync manifest arrived from the desktop (reconcile-on-connect). */
+  /** The desktop's protocol version, echoed in auth_ok (contract v2, base-studio-code#2497).
+   *  `null` = a pre-v2 desktop that sent no version. A mismatch never disconnects — the
+   *  client just surfaces it so the UI can warn. */
+  onProtocolVersion?: (desktopVersion: number | null) => void;
+  /** A `store_state` projection changed (contract v2): the touched domain plus the full
+   *  domain → {rev, json} map after applying the frame. Stale (lower-rev) frames are
+   *  dropped before this fires. */
+  onStoreState?: (domain: string, storeState: StoreStateMap) => void;
+  /** The desktop's planner manifests (reconcile-on-connect). The desktop sends ONE
+   *  project per `plan_sync_manifest` frame (v2 drift fix); the client accumulates them
+   *  across the session and delivers the full known set, debounced, so the multi-project
+   *  reconcile semantics are preserved. */
   onSyncManifest?: (projects: PlanSyncManifestEntry[]) => void;
   // ── Live planning session (read-only mirror; replayed on connect, #1245) ──
   /** Full live-planning snapshot — replaces the mirrored project state wholesale. */
@@ -39,6 +51,14 @@ const CONNECT_TIMEOUT_MS = 12_000;
 
 /** How long to wait for a plan_sync reply (files / ack) before rejecting. */
 const SYNC_REQUEST_TIMEOUT_MS = 20_000;
+
+/**
+ * Quiet period before the accumulated per-project manifests are delivered to
+ * `onSyncManifest`. The desktop replays one `plan_sync_manifest` frame PER PROJECT
+ * back-to-back on connect (v2 shapes); batching them re-creates the multi-project
+ * manifest the reconcile coordinator expects.
+ */
+const MANIFEST_FLUSH_MS = 250;
 
 /** Copy a Uint8Array's exact bytes into a standalone ArrayBuffer for ws.send. */
 function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
@@ -101,6 +121,15 @@ export class TunnelClient {
   // In-flight planner-sync requests, keyed by projectId (resolved by files/ack frames).
   private pendingPulls = new Map<string, PendingRequest<Record<string, string>>>();
   private pendingPushes = new Map<string, PendingRequest<void>>();
+  // The desktop's protocol version from auth_ok (contract v2); null until connected /
+  // for a pre-v2 desktop.
+  private desktopProtocolVersion: number | null = null;
+  // Mirrored store projections: domain → last accepted {rev, json} (contract v2).
+  private storeState: StoreStateMap = {};
+  // Per-project planner manifests accumulated across the session (the desktop sends one
+  // frame per project); flushed to onSyncManifest as ONE array after a quiet period.
+  private manifests = new Map<string, PlanSyncManifestEntry>();
+  private manifestFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly cb: TunnelCallbacks;
 
   constructor(callbacks: TunnelCallbacks) {
@@ -113,6 +142,12 @@ export class TunnelClient {
     this.destroyed = false;
     this.noise = null;
     this.handshakeDone = false;
+    // A (re)connect may reach a different/restarted desktop whose per-domain revs and
+    // project set restart — drop the mirrored projections and accumulated manifests so
+    // the replay rebuilds them from scratch.
+    this.desktopProtocolVersion = null;
+    this.storeState = {};
+    this.manifests.clear();
     this.openSocket();
   }
 
@@ -151,6 +186,12 @@ export class TunnelClient {
   getActivePaneId() { return this.activePaneId; }
 
   getPanes() { return this.panes; }
+
+  /** The desktop's protocol version from auth_ok; null before connect / pre-v2 desktop. */
+  getDesktopProtocolVersion() { return this.desktopProtocolVersion; }
+
+  /** The mirrored store projections (contract v2): domain → last accepted {rev, json}. */
+  getStoreState() { return this.storeState; }
 
   private openSocket() {
     if (this.destroyed || !this.payload) return;
@@ -222,8 +263,13 @@ export class TunnelClient {
           // (the psk) as the first encrypted app frame.
           this.noise.finishHandshake(frame);
           this.handshakeDone = true;
-          console.log(`tunnel handshake complete (${frame.length}B msg2) → sending auth`);
-          this.send({ type: 'auth', token: this.payload!.psk, fcmToken: this.fcmToken });
+          console.log(`tunnel handshake complete (${frame.length}B msg2) → sending auth (protocol v${TUNNEL_PROTOCOL_VERSION})`);
+          this.send({
+            type: 'auth',
+            token: this.payload!.psk,
+            fcmToken: this.fcmToken,
+            protocolVersion: TUNNEL_PROTOCOL_VERSION,
+          });
         } else {
           const msg = JSON.parse(utf8Decode(this.noise.decrypt(frame))) as TunnelServerMessage;
           this.handleMessage(msg);
@@ -262,9 +308,14 @@ export class TunnelClient {
   }
 
   // ── Planner sync transport (mobile is the merge authority) ──
-  /** Ask the desktop for its planner manifest (kicks off reconcile-on-connect). */
-  syncRequestManifest() {
-    this.send({ type: 'plan_sync_manifest_request' });
+  /**
+   * Ask the desktop to re-send ONE project's manifest (targeted refresh). The desktop
+   * requires a projectId (v2 drift fix — the v1 client sent this frame without one,
+   * which the desktop could not even parse); reconcile-on-connect needs NO request at
+   * all, because the desktop replays every project's manifest right after auth_ok.
+   */
+  syncRequestManifest(projectId: string) {
+    this.send({ type: 'plan_sync_manifest_request', projectId });
   }
 
   /** Request specific files for a project; resolves with the desktop's contents. */
@@ -279,15 +330,21 @@ export class TunnelClient {
     });
   }
 
-  /** Push the agreed canonical map; resolves on the desktop's ack. */
-  syncPush(projectId: string, title: string, files: Record<string, string>): Promise<void> {
+  /** Push the agreed canonical map; resolves on the desktop's ack. The wire carries
+   *  {relpath, content} entries (the desktop's Rust shape — the v1 Record + title are
+   *  gone, v2 drift fix). */
+  syncPush(projectId: string, files: Record<string, string>): Promise<void> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingPushes.delete(projectId);
         reject(new Error(`plan_sync_push timed out (${projectId})`));
       }, SYNC_REQUEST_TIMEOUT_MS);
       this.pendingPushes.set(projectId, { resolve, reject, timer });
-      this.send({ type: 'plan_sync_push', projectId, title, files });
+      this.send({
+        type: 'plan_sync_push',
+        projectId,
+        files: Object.entries(files).map(([relpath, content]) => ({ relpath, content })),
+      });
     });
   }
 
@@ -319,6 +376,10 @@ export class TunnelClient {
   private closeSocket() {
     this.rejectPendingSync('tunnel disconnected');
     this.clearConnectTimeout();
+    if (this.manifestFlushTimer != null) {
+      clearTimeout(this.manifestFlushTimer);
+      this.manifestFlushTimer = null;
+    }
     const ws = this.ws;
     this.ws = null;
     if (!ws) return;
@@ -390,7 +451,7 @@ export class TunnelClient {
   private logInbound(msg: TunnelServerMessage) {
     switch (msg.type) {
       case 'auth_ok':
-        console.log('tunnel← auth_ok'); break;
+        console.log(`tunnel← auth_ok desktop-protocol=v${msg.protocolVersion ?? 1}`); break;
       case 'pane_list':
         console.log(`tunnel← pane_list ids=${msg.panes.map((p) => p.id).join(',') || '(none)'}`); break;
       case 'pane_output':
@@ -401,12 +462,16 @@ export class TunnelClient {
         console.log(`tunnel← session_state pane=${msg.paneId} status=${msg.status}`); break;
       case 'user_request':
         console.log(`tunnel← user_request pane=${msg.paneId}`); break;
+      case 'store_state':
+        console.log(`tunnel← store_state ${msg.domain} rev=${msg.rev} bytes=${msg.json.length}`); break;
+      case 'hook_telemetry':
+        console.log(`tunnel← hook_telemetry total=${msg.telemetry.total}`); break;
       case 'plan_sync_manifest':
-        console.log(`tunnel← plan_sync_manifest projects=${msg.projects.length}`); break;
+        console.log(`tunnel← plan_sync_manifest ${msg.projectId} files=${Object.keys(msg.files).length}`); break;
       case 'plan_sync_files':
-        console.log(`tunnel← plan_sync_files ${msg.projectId} files=${Object.keys(msg.files).length}`); break;
+        console.log(`tunnel← plan_sync_files ${msg.projectId} files=${msg.files.length}`); break;
       case 'plan_sync_ack':
-        console.log(`tunnel← plan_sync_ack ${msg.projectId}`); break;
+        console.log(`tunnel← plan_sync_ack ${msg.projectId} applied=${msg.applied}`); break;
       case 'plan_state':
         console.log(`tunnel← plan_state ${msg.projectId} stage=${msg.currentStage} sections=${msg.confirmedSections.length} files=${msg.files.length} msgs=${msg.messages.length} runs=${msg.pipelineRuns.length}`); break;
       case 'plan_event':
@@ -421,6 +486,17 @@ export class TunnelClient {
     switch (msg.type) {
       case 'auth_ok': {
         this.clearConnectTimeout();
+        // Contract v2: the desktop echoes its protocol version. A mismatch is accepted
+        // (unknown frames are tolerated both ways) but surfaced so the UI can warn.
+        this.desktopProtocolVersion = msg.protocolVersion ?? null;
+        const desktopV = msg.protocolVersion ?? 1;
+        if (desktopV !== TUNNEL_PROTOCOL_VERSION) {
+          console.log(
+            `tunnel WARN: protocol version mismatch — mobile v${TUNNEL_PROTOCOL_VERSION}, desktop v${desktopV}; ` +
+            'newer frames may be missing/ignored (update the older app)',
+          );
+        }
+        this.cb.onProtocolVersion?.(this.desktopProtocolVersion);
         this.setConnectionState('connected');
         // Re-assert streaming state for the active pane after reconnect
         if (this.activePaneId) {
@@ -518,19 +594,54 @@ export class TunnelClient {
         break;
       }
 
-      case 'plan_sync_manifest':
-        this.cb.onSyncManifest?.(msg.projects);
+      case 'store_state': {
+        // Contract v2: fold the projection into the domain map (stale revs dropped by
+        // the pure reducer); notify only when something actually changed.
+        const next = applyStoreState(this.storeState, msg);
+        if (next !== this.storeState) {
+          this.storeState = next;
+          this.cb.onStoreState?.(msg.domain, next);
+        }
         break;
+      }
+
+      case 'hook_telemetry':
+        // Recognized (byte-shape pinned in the shared fixture) but not yet surfaced in
+        // the mobile UI — logged by logInbound only.
+        break;
+
+      case 'plan_sync_manifest': {
+        // One project per frame (v2 shapes). Accumulate across the session and deliver
+        // the full known set after a quiet period, so the reconcile coordinator keeps
+        // its multi-project semantics (incl. pushing local-only projects exactly once).
+        this.manifests.set(msg.projectId, { projectId: msg.projectId, files: msg.files });
+        if (this.manifestFlushTimer != null) clearTimeout(this.manifestFlushTimer);
+        this.manifestFlushTimer = setTimeout(() => {
+          this.manifestFlushTimer = null;
+          this.cb.onSyncManifest?.([...this.manifests.values()]);
+        }, MANIFEST_FLUSH_MS);
+        break;
+      }
 
       case 'plan_sync_files': {
         const p = this.pendingPulls.get(msg.projectId);
-        if (p) { clearTimeout(p.timer); this.pendingPulls.delete(msg.projectId); p.resolve(msg.files); }
+        if (p) {
+          clearTimeout(p.timer);
+          this.pendingPulls.delete(msg.projectId);
+          // The wire carries {relpath, content} entries (Rust shape); callers consume a map.
+          p.resolve(Object.fromEntries(msg.files.map((f) => [f.relpath, f.content])));
+        }
         break;
       }
 
       case 'plan_sync_ack': {
         const p = this.pendingPushes.get(msg.projectId);
-        if (p) { clearTimeout(p.timer); this.pendingPushes.delete(msg.projectId); p.resolve(); }
+        if (p) {
+          clearTimeout(p.timer);
+          this.pendingPushes.delete(msg.projectId);
+          if (msg.applied) p.resolve();
+          else p.reject(new Error(`desktop did not apply the plan push (${msg.projectId})`));
+        }
         break;
       }
 

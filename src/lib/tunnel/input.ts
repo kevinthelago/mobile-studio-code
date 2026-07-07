@@ -16,9 +16,11 @@ export const ENTER = '\r';
 
 /**
  * The canonical `pane_input` frame (shared fixture clientToServer.pane_input).
- * `paneId` MUST be a live desktop pane id echoed from a received `pane_list`
- * (format `t{tab}p{pane}`, e.g. `t0p0`); any other id is silently dropped by
- * the desktop. `data` is forwarded verbatim — control/escape bytes are never
+ * `paneId` MUST be a live desktop pane id echoed from a received `pane_list` —
+ * the desktop's session-identity ids (contract v2): legacy positional `t0p0`,
+ * manual `man:<tabId>:p0`, fleet `<project>:<stream>`, planner `planning_<key>`,
+ * designer `design-studio:designer`. Any other id is silently dropped by the
+ * desktop. `data` is forwarded verbatim — control/escape bytes are never
  * stripped.
  */
 export function buildPaneInput(paneId: string, data: string): PaneInputMessage {

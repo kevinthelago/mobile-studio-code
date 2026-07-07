@@ -14,7 +14,7 @@ function proj(id: string, goal: string) {
   return p;
 }
 function entry(id: string, map: FileMap): PlanSyncManifestEntry {
-  return { projectId: id, title: id, updatedAt: 1, files: mapToManifest(map) };
+  return { projectId: id, files: mapToManifest(map) };
 }
 
 /** A mock deps that records writes/pushes and serves a fixed remote. */

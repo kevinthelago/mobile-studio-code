@@ -13,9 +13,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import type {
-  TunnelServerMessage, TunnelClientMessage, PaneStatus, PaneStreamingState,
-  PlanFile, PlanMessage, PlanPipelineRun,
+  TunnelServerMessage, TunnelClientMessage, PaneStatus, PaneStreamingState, PaneKind,
+  PlanFile, PlanMessage, PlanPipelineRun, HookTelemetry,
 } from '../types';
+import { TUNNEL_PROTOCOL_VERSION, STORE_DOMAINS } from '../types';
 
 const fx = JSON.parse(
   readFileSync('src/lib/tunnel/tunnelProtocol.fixtures.json', 'utf8'),
@@ -52,6 +53,21 @@ function arr(o: Raw, k: string): Raw[] {
 function copyOptStr(src: Raw, dst: Raw, k: string): void {
   if (k in src) dst[k] = str(src, k);
 }
+/** Conditionally copy an optional number field only when present. */
+function copyOptNum(src: Raw, dst: Raw, k: string): void {
+  if (k in src) dst[k] = num(src, k);
+}
+/** relpath → content-hash map (plan_sync_manifest.files). */
+function strRecord(o: Raw, k: string): Record<string, string> {
+  const v = o[k];
+  assert.ok(v !== null && typeof v === 'object' && !Array.isArray(v), `field "${k}" must be an object`);
+  const out: Record<string, string> = {};
+  for (const [key, val] of Object.entries(v as Record<string, unknown>)) {
+    assert.equal(typeof val, 'string', `field "${k}.${key}" must be a string`);
+    out[key] = val as string;
+  }
+  return out;
+}
 
 function decodeFile(o: Raw): PlanFile {
   return { relpath: str(o, 'relpath'), content: str(o, 'content') };
@@ -69,16 +85,49 @@ function decodeRun(o: Raw): PlanPipelineRun {
 function decodeServer(o: Raw): TunnelServerMessage {
   const type = str(o, 'type');
   switch (type) {
-    case 'auth_ok':
-      return { type };
+    case 'auth_ok': {
+      const out: Raw = { type };
+      copyOptNum(o, out, 'protocolVersion'); // optional: a pre-v2 desktop omits it
+      return out as unknown as TunnelServerMessage;
+    }
     case 'pane_list':
       return {
         type,
-        panes: arr(o, 'panes').map((p) => ({
-          id: str(p, 'id'), cwd: str(p, 'cwd'), name: str(p, 'name'),
-          status: str(p, 'status') as PaneStatus,
-        })),
+        panes: arr(o, 'panes').map((p) => {
+          const pane: Raw = {
+            id: str(p, 'id'), cwd: str(p, 'cwd'), name: str(p, 'name'),
+            status: str(p, 'status') as PaneStatus,
+          };
+          copyOptStr(p, pane, 'kind'); // optional session kind (contract v2)
+          if ('kind' in pane) {
+            assert.ok(
+              (['console', 'worker', 'planner', 'designer', 'triage'] satisfies PaneKind[])
+                .includes(pane.kind as PaneKind),
+              `pane kind drifted: ${pane.kind}`,
+            );
+          }
+          return pane;
+        }),
+      } as unknown as TunnelServerMessage;
+    case 'store_state':
+      return { type, domain: str(o, 'domain'), rev: num(o, 'rev'), json: str(o, 'json') };
+    case 'hook_telemetry': {
+      const t = o.telemetry as Raw;
+      assert.ok(t && typeof t === 'object', 'hook_telemetry.telemetry must be an object');
+      const telemetry: HookTelemetry = {
+        total: num(t, 'total'), blocks: num(t, 'blocks'), allows: num(t, 'allows'),
+        allowRate: num(t, 'allowRate'),
+        daily: arr(t, 'daily').map((d) => ({ day: str(d, 'day'), allows: num(d, 'allows'), blocks: num(d, 'blocks') })),
+        perHook: arr(t, 'perHook').map((h) => ({ hook: str(h, 'hook'), event: str(h, 'event'), fires: num(h, 'fires') })),
       };
+      return { type, telemetry };
+    }
+    case 'plan_sync_manifest':
+      return { type, projectId: str(o, 'projectId'), files: strRecord(o, 'files') };
+    case 'plan_sync_files':
+      return { type, projectId: str(o, 'projectId'), files: arr(o, 'files').map(decodeFile) };
+    case 'plan_sync_ack':
+      return { type, projectId: str(o, 'projectId'), applied: bool(o, 'applied') };
     case 'pane_output':
       return { type, paneId: str(o, 'paneId'), data: str(o, 'data'), coarse: bool(o, 'coarse') };
     case 'pane_size':
@@ -131,8 +180,22 @@ function decodeClient(o: Raw): TunnelClientMessage {
     case 'auth': {
       const out: Raw = { type, token: str(o, 'token') };
       copyOptStr(o, out, 'fcmToken');
+      copyOptNum(o, out, 'protocolVersion'); // optional: a pre-v2 client omits it
       return out as unknown as TunnelClientMessage;
     }
+    case 'plan_sync_manifest_request':
+      return { type, projectId: str(o, 'projectId') };
+    case 'plan_sync_pull':
+      return {
+        type, projectId: str(o, 'projectId'),
+        paths: arr(o, 'paths').map((_, i) => {
+          const v = (o.paths as unknown[])[i];
+          assert.equal(typeof v, 'string', 'paths[] must be strings');
+          return v as string;
+        }),
+      };
+    case 'plan_sync_push':
+      return { type, projectId: str(o, 'projectId'), files: arr(o, 'files').map(decodeFile) };
     case 'set_fcm_token':
       return { type, fcmToken: str(o, 'fcmToken') };
     case 'pane_set_state':
@@ -182,4 +245,57 @@ test('the live-planning frames are present in the fixtures (contract coverage)',
   for (const k of ['plan_advance', 'plan_confirm', 'plan_chat']) {
     assert.ok(k in fx.clientToServer, `clientToServer.${k} fixture missing — coverage gap`);
   }
+});
+
+// ── Contract v2 (base-studio-code#2497) ──
+
+test('v2 frames are present in the fixtures (contract coverage)', () => {
+  for (const k of ['store_state', 'plan_sync_manifest', 'plan_sync_files', 'plan_sync_ack', 'hook_telemetry']) {
+    assert.ok(k in fx.serverToClient, `serverToClient.${k} fixture missing — coverage gap`);
+  }
+  for (const k of ['plan_sync_manifest_request', 'plan_sync_pull', 'plan_sync_push']) {
+    assert.ok(k in fx.clientToServer, `clientToServer.${k} fixture missing — coverage gap`);
+  }
+});
+
+test('auth frame shape: fixture carries THIS client version; the no-fcm variant pins optionality', () => {
+  assert.equal(fx.clientToServer.auth.protocolVersion, TUNNEL_PROTOCOL_VERSION,
+    'the auth fixture must carry the current TUNNEL_PROTOCOL_VERSION');
+  assert.ok(!('protocolVersion' in fx.clientToServer.auth_no_fcm),
+    'auth_no_fcm must stay version-less (pins the optional field for pre-v2 peers)');
+  assert.ok(!('fcmToken' in fx.clientToServer.auth_no_fcm));
+});
+
+test('auth_ok echoes the desktop protocol version', () => {
+  assert.deepEqual(fx.serverToClient.auth_ok, { type: 'auth_ok', protocolVersion: TUNNEL_PROTOCOL_VERSION });
+});
+
+test('store_state is the domain-agnostic {domain, rev, json} projection frame', () => {
+  const f = fx.serverToClient.store_state;
+  assert.deepEqual(Object.keys(f).sort(), ['domain', 'json', 'rev', 'type']);
+  // The fixture's domain is one of the registered vocabulary (the frame accepts any string).
+  assert.ok((STORE_DOMAINS as readonly string[]).includes(f.domain as string));
+  assert.doesNotThrow(() => JSON.parse(f.json as string));
+});
+
+test('pane_list panes carry an OPTIONAL kind (v1 descriptors stay valid)', () => {
+  const panes = fx.serverToClient.pane_list.panes as Array<{ id: string; kind?: string }>;
+  assert.equal(panes.find((p) => p.id === 't0p0')?.kind, 'console');
+  assert.ok(!('kind' in panes.find((p) => p.id === 't0p1')!), 'a kind-less descriptor stays on the wire');
+  assert.equal(panes.find((p) => p.id === 'proj:api-core')?.kind, 'worker');
+  assert.equal(panes.find((p) => p.id === 'planning_proj')?.kind, 'planner');
+});
+
+test('plan_sync fixtures are pinned to the desktop (Rust) shapes — the v2 drift fix', () => {
+  // ONE project per manifest frame; relpath → hash map; NO title/updatedAt.
+  const manifest = fx.serverToClient.plan_sync_manifest;
+  assert.deepEqual(Object.keys(manifest).sort(), ['files', 'projectId', 'type']);
+  // Files travel as {relpath, content} arrays.
+  assert.deepEqual(fx.serverToClient.plan_sync_files.files, [{ relpath: 'goal.md', content: 'foobar' }]);
+  // The ack carries the applied flag.
+  assert.equal(fx.serverToClient.plan_sync_ack.applied, true);
+  // The manifest request REQUIRES a projectId; the push carries NO title.
+  assert.equal(typeof fx.clientToServer.plan_sync_manifest_request.projectId, 'string');
+  assert.ok(!('title' in fx.clientToServer.plan_sync_push));
+  assert.deepEqual(fx.clientToServer.plan_sync_push.files, [{ relpath: 'goal.md', content: 'foobar' }]);
 });

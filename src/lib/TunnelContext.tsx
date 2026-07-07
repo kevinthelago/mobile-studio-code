@@ -7,6 +7,7 @@ import {
 } from './types';
 import { KEYS, getSecret, setSecret } from './storage';
 import { parsePairingPayload } from './tunnel/pairing';
+import type { StoreStateMap } from './tunnel/storeState';
 
 /** A live-planning frame (server → phone): full snapshot, header, or transient delta. */
 export type PlanFrame =
@@ -20,6 +21,15 @@ export type TunnelValue = {
   activePaneId: string | null;
   /** Pane IDs ordered: awaiting_input (most recent first), then by last activity */
   orderedPaneIds: string[];
+  /** The desktop's tunnel protocol version from auth_ok (contract v2). `null` before a
+   *  connection / for a pre-v2 desktop; compare with TUNNEL_PROTOCOL_VERSION to warn. */
+  desktopProtocolVersion: number | null;
+  /** Mirrored desktop store projections (contract v2): domain → last {rev, json}.
+   *  Replayed on connect, updated on every store_state frame. */
+  storeState: StoreStateMap;
+  /** Register a handler fired on every accepted store_state frame (after `storeState`
+   *  updates), with the touched domain + the full map. */
+  setStoreStateHandler: (fn: ((domain: string, storeState: StoreStateMap) => void) | null) => void;
 
   connect: (payload: PairingPayload) => Promise<void>;
   disconnect: () => void;
@@ -34,9 +44,12 @@ export type TunnelValue = {
   setFcmToken: (fcmToken: string) => void;
 
   // ── Planner sync (reconcile-on-connect; see docs/planner-sync-protocol.md) ──
-  syncRequestManifest: () => void;
+  /** Targeted single-project manifest refresh (v2: the desktop REQUIRES a projectId).
+   *  Reconcile-on-connect needs no request — the desktop replays every manifest after auth. */
+  syncRequestManifest: (projectId: string) => void;
   syncPull: (projectId: string, paths: string[]) => Promise<Record<string, string>>;
-  syncPush: (projectId: string, title: string, files: Record<string, string>) => Promise<void>;
+  /** Push the agreed canonical map (v2 wire: {relpath, content} entries, no title). */
+  syncPush: (projectId: string, files: Record<string, string>) => Promise<void>;
   /** Register the handler for incoming desktop manifests (the sync hook uses this). */
   setSyncManifestHandler: (fn: ((projects: PlanSyncManifestEntry[]) => void) | null) => void;
 
@@ -64,10 +77,13 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const [panes, setPanes] = useState<Record<string, PaneState>>({});
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
   const [lastConnection, setLastConnection] = useState<PairingPayload | null>(null);
+  const [desktopProtocolVersion, setDesktopProtocolVersion] = useState<number | null>(null);
+  const [storeState, setStoreState] = useState<StoreStateMap>({});
   const fcmTokenRef = useRef<string | undefined>(undefined);
   const clientRef = useRef<TunnelClient | null>(null);
   const syncManifestHandlerRef = useRef<((projects: PlanSyncManifestEntry[]) => void) | null>(null);
   const planHandlerRef = useRef<((frame: PlanFrame) => void) | null>(null);
+  const storeStateHandlerRef = useRef<((domain: string, storeState: StoreStateMap) => void) | null>(null);
 
   useEffect(() => {
     const callbacks: TunnelCallbacks = {
@@ -76,6 +92,11 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
       onUserRequest: (_paneId, _prompt) => {
         // Desktop fires the FCM push; mobile only needs to update pane state,
         // which TunnelClient already does before calling this callback.
+      },
+      onProtocolVersion: setDesktopProtocolVersion,
+      onStoreState: (domain, map) => {
+        setStoreState(map);
+        storeStateHandlerRef.current?.(domain, map);
       },
       onSyncManifest: (projects) => syncManifestHandlerRef.current?.(projects),
       onPlanState: (frame) => planHandlerRef.current?.(frame),
@@ -147,19 +168,26 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     clientRef.current?.refreshFcmToken(fcmToken);
   }, []);
 
-  const syncRequestManifest = useCallback(() => { clientRef.current?.syncRequestManifest(); }, []);
+  const syncRequestManifest = useCallback(
+    (projectId: string) => { clientRef.current?.syncRequestManifest(projectId); },
+    [],
+  );
   const syncPull = useCallback(
     (projectId: string, paths: string[]) =>
       clientRef.current?.syncPull(projectId, paths) ?? Promise.reject(new Error('tunnel not connected')),
     [],
   );
   const syncPush = useCallback(
-    (projectId: string, title: string, files: Record<string, string>) =>
-      clientRef.current?.syncPush(projectId, title, files) ?? Promise.reject(new Error('tunnel not connected')),
+    (projectId: string, files: Record<string, string>) =>
+      clientRef.current?.syncPush(projectId, files) ?? Promise.reject(new Error('tunnel not connected')),
     [],
   );
   const setSyncManifestHandler = useCallback(
     (fn: ((projects: PlanSyncManifestEntry[]) => void) | null) => { syncManifestHandlerRef.current = fn; },
+    [],
+  );
+  const setStoreStateHandler = useCallback(
+    (fn: ((domain: string, storeState: StoreStateMap) => void) | null) => { storeStateHandlerRef.current = fn; },
     [],
   );
   const setPlanHandler = useCallback(
@@ -193,6 +221,9 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     panes,
     activePaneId,
     orderedPaneIds,
+    desktopProtocolVersion,
+    storeState,
+    setStoreStateHandler,
     connect,
     disconnect,
     lastConnection,

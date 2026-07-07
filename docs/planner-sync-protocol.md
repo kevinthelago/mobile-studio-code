@@ -68,22 +68,33 @@ Mobile reference: `canonical.ts`, `diff3.ts`, `jsonMerge.ts`, `merge.ts`, `recon
 
 ## 4. Wire protocol (frames inside Noise)
 
-MSC drives; desktop responds.
+Contract v2 (base-studio-code#2497) pinned these to the DESKTOP's Rust (`bsc-tunnel`)
+shapes — the desktop replays, mobile reconciles. Byte shapes are pinned in the shared
+`tunnelProtocol.fixtures.json`.
 
-1. **Manifest** (desktop→mobile, on connect or after `{ "type": "plan_sync_manifest_request" }`):
+1. **Manifest** (desktop→mobile): **one frame per project**, replayed unprompted right
+   after `auth_ok` (no request needed on connect) and re-broadcast when the desktop's
+   plan changes. A targeted single-project refresh can be requested with
+   `{ "type": "plan_sync_manifest_request", "projectId": "proj-…" }` (the projectId is
+   REQUIRED — the v1 broadcast request no longer exists on the wire):
    ```json
-   { "type": "plan_sync_manifest",
-     "projects": [ { "projectId": "proj-…", "title": "…", "updatedAt": 1234,
-                     "files": { "goal.md": "cd617b34", "plan.json": "…" } } ] }
+   { "type": "plan_sync_manifest", "projectId": "proj-…",
+     "files": { "goal.md": "cd617b34", "plan.json": "…" } }
    ```
-   `files` = relpath → canonical-content hash.
+   `files` = relpath → canonical-content hash. The tunnel client accumulates the
+   per-project frames and delivers the full known set to the reconcile coordinator
+   (debounced), preserving the multi-project semantics.
 2. **Pull** (mobile→desktop): `{ "type": "plan_sync_pull", "projectId": "…", "paths": [...] }`
-   → `{ "type": "plan_sync_files", "projectId": "…", "files": { "goal.md": "…\n" } }`
+   → `{ "type": "plan_sync_files", "projectId": "…",
+        "files": [ { "relpath": "goal.md", "content": "…\n" } ] }`
+   (files travel as `{relpath, content}` arrays; the client converts to a map).
 3. **Push** (mobile→desktop): the **full canonical merged map** for the project:
-   `{ "type": "plan_sync_push", "projectId": "…", "title": "…", "files": { … } }`.
+   `{ "type": "plan_sync_push", "projectId": "…",
+      "files": [ { "relpath": "…", "content": "…" } ] }` — **no title on the wire** (v2).
    Desktop replaces the project's synced files with exactly this map, reconstructs its
    hub state, sets **base = this map**, keeps device-local data, and acks:
-   `{ "type": "plan_sync_ack", "projectId": "…" }`. Mobile sets its base on ack.
+   `{ "type": "plan_sync_ack", "projectId": "…", "applied": true }`. Mobile sets its
+   base on an `applied: true` ack (an `applied: false` ack rejects the push promise).
 
 New-on-one-side projects flow the same way (pulled, then pushed back so both set base).
 Re-running a sync is idempotent (3-way handles a stale base). **No conflict frames** —
