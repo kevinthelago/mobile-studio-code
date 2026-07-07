@@ -91,15 +91,19 @@ Errors should be actionable, not technical.
 ├── app/                        # Expo Router file-based routing
 │   ├── _layout.tsx             # Root layout: theme, session, nav guards, ambient Orbs background
 │   ├── repo.tsx                # Repo picker: search GitHub repos, clone (download) selected repo
-│   └── (tabs)/                 # Main app — bottom tab navigator
-│       ├── _layout.tsx         # Tab definitions + custom BottomTabBar
-│       ├── index.tsx           # Files tab — collapsible folder tree, search, recents
-│       ├── find.tsx            # Find tab — full-text search across repo files
-│       ├── edit.tsx            # Edit tab — code viewer/editor for the currently open file
-│       ├── run.tsx             # Run tab — placeholder (no terminal; reserved for future use)
-│       ├── git.tsx             # Git tab — pull/push, changed files list, AI commit message draft
-│       ├── files.tsx           # Hidden route (href: null) — legacy/unused
-│       └── settings.tsx        # Hidden route (href: null) — surfaced via SettingsScreen
+│   ├── (tabs)/                 # Main app — bottom tab navigator
+│   │   ├── _layout.tsx         # Tab definitions + custom BottomTabBar
+│   │   ├── index.tsx           # Files tab — collapsible folder tree, search, recents
+│   │   ├── find.tsx            # Find tab — full-text search across repo files
+│   │   ├── edit.tsx            # Edit tab — code viewer/editor for the currently open file
+│   │   ├── run.tsx             # Run tab — tunnel mirror of base-studio-code's PTY sessions (pairing/QR)
+│   │   ├── git.tsx             # Git tab — pull/push, changed files list, AI commit message draft
+│   │   ├── files.tsx           # Hidden route (href: null) — legacy/unused
+│   │   └── settings.tsx        # Hidden route (href: null) — surfaced via SettingsScreen
+│   ├── (planner)/planner.tsx   # Local project planner (PlannerContext + aiLoop + pipelines)
+│   ├── (sync)/sync.tsx         # Planner file-reconcile conflict editor (plan_sync_* path)
+│   ├── (fleet)/fleet.tsx       # Fleet/coordination view over the tunnel
+│   └── (live)/live.tsx         # Read-only mirror of the desktop's LIVE planning session (#1245)
 │
 ├── src/
 │   ├── lib/                    # Core logic (no UI)
@@ -223,8 +227,9 @@ Switching tasks gives the agent a completely fresh context window. Tasks persist
   tab navigation.
 - **Legacy ThemeContext**: `src/ThemeContext.tsx` is a parallel theme system only used
   by `ChatScreen.tsx`. Everything else uses `src/theme.ts`.
-- **Run tab is a placeholder**: `app/(tabs)/run.tsx` exists in the tab bar but there is
-  no terminal or code execution capability (and cannot be — no shell on iOS).
+- **Run tab is the tunnel mirror**: `app/(tabs)/run.tsx` mirrors base-studio-code's PTY
+  sessions over the Noise relay (the phone has no shell of its own — there is nothing to
+  run locally). It also hosts the **Fleet** / **Live** / **Plan** shortcuts.
 - **Workflow filename duplication**: Both `expo_preview.yml` / `expo-preview.yml` and
   `issue_branch_check.yml` / `issue-branch-check.yml` exist. The underscore versions
   should be removed; only the hyphenated versions are canonical.

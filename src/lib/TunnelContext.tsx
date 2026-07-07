@@ -2,9 +2,17 @@ import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
 import { TunnelClient, TunnelCallbacks } from './tunnel';
-import { PaneState, PairingPayload, PlanSyncManifestEntry, TunnelConnectionState } from './types';
+import {
+  PaneState, PairingPayload, PlanSyncManifestEntry, TunnelConnectionState, TunnelServerMessage,
+} from './types';
 import { KEYS, getSecret, setSecret } from './storage';
 import { parsePairingPayload } from './tunnel/pairing';
+
+/** A live-planning frame (server → phone): full snapshot, header, or transient delta. */
+export type PlanFrame =
+  | Extract<TunnelServerMessage, { type: 'plan_state' }>
+  | Extract<TunnelServerMessage, { type: 'plan_status' }>
+  | Extract<TunnelServerMessage, { type: 'plan_event' }>;
 
 export type TunnelValue = {
   connectionState: TunnelConnectionState;
@@ -31,6 +39,16 @@ export type TunnelValue = {
   syncPush: (projectId: string, title: string, files: Record<string, string>) => Promise<void>;
   /** Register the handler for incoming desktop manifests (the sync hook uses this). */
   setSyncManifestHandler: (fn: ((projects: PlanSyncManifestEntry[]) => void) | null) => void;
+
+  // ── Live planning session (read-only mirror + drive; #1245) ──
+  /** Register the handler fed every plan_state / plan_status / plan_event frame. */
+  setPlanHandler: (fn: ((frame: PlanFrame) => void) | null) => void;
+  /** Drive: advance / jump the desktop's live planner to a stage. */
+  planAdvance: (projectId: string, stageKey: string) => void;
+  /** Drive: confirm a plan section in the desktop's live planner. */
+  planConfirm: (projectId: string, section: string) => void;
+  /** Drive: send a chat turn into the desktop's live planner session. */
+  planChat: (projectId: string, text: string) => void;
 };
 
 const TunnelContext = createContext<TunnelValue | null>(null);
@@ -49,6 +67,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const fcmTokenRef = useRef<string | undefined>(undefined);
   const clientRef = useRef<TunnelClient | null>(null);
   const syncManifestHandlerRef = useRef<((projects: PlanSyncManifestEntry[]) => void) | null>(null);
+  const planHandlerRef = useRef<((frame: PlanFrame) => void) | null>(null);
 
   useEffect(() => {
     const callbacks: TunnelCallbacks = {
@@ -59,6 +78,9 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
         // which TunnelClient already does before calling this callback.
       },
       onSyncManifest: (projects) => syncManifestHandlerRef.current?.(projects),
+      onPlanState: (frame) => planHandlerRef.current?.(frame),
+      onPlanStatus: (frame) => planHandlerRef.current?.(frame),
+      onPlanEvent: (frame) => planHandlerRef.current?.(frame),
     };
     const client = new TunnelClient(callbacks);
     clientRef.current = client;
@@ -120,6 +142,9 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const setFcmToken = useCallback((fcmToken: string) => {
     fcmTokenRef.current = fcmToken;
     setSecret(KEYS.FCM_TOKEN, fcmToken).catch(() => {});
+    // Push the refreshed token mid-session too; a no-op until the handshake is up,
+    // in which case the next connect's auth carries it from fcmTokenRef.
+    clientRef.current?.refreshFcmToken(fcmToken);
   }, []);
 
   const syncRequestManifest = useCallback(() => { clientRef.current?.syncRequestManifest(); }, []);
@@ -137,6 +162,19 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     (fn: ((projects: PlanSyncManifestEntry[]) => void) | null) => { syncManifestHandlerRef.current = fn; },
     [],
   );
+  const setPlanHandler = useCallback(
+    (fn: ((frame: PlanFrame) => void) | null) => { planHandlerRef.current = fn; },
+    [],
+  );
+  const planAdvance = useCallback((projectId: string, stageKey: string) => {
+    clientRef.current?.planAdvance(projectId, stageKey);
+  }, []);
+  const planConfirm = useCallback((projectId: string, section: string) => {
+    clientRef.current?.planConfirm(projectId, section);
+  }, []);
+  const planChat = useCallback((projectId: string, text: string) => {
+    clientRef.current?.planChat(projectId, text);
+  }, []);
 
   const orderedPaneIds = useMemo(() => {
     return Object.values(panes)
@@ -167,6 +205,10 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     syncPull,
     syncPush,
     setSyncManifestHandler,
+    setPlanHandler,
+    planAdvance,
+    planConfirm,
+    planChat,
   };
 
   return (

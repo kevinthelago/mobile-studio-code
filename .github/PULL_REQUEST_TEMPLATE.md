@@ -1,19 +1,24 @@
 ## Summary
+<!-- What does this PR do? -->
 
-<!-- What does this PR change and why? -->
-
+## Closes
+<!-- Link the issue this resolves — required to auto-close on merge -->
 Closes #
 
 ## Changes
+- 
+- 
 
--
-
-## Testing
-
-<!-- How was this verified? -->
+## How to test
+<!-- Steps to verify the change works -->
+1. 
+2. 
 
 ## Checklist
+- [ ] Branch follows `issue-{number}/short-slug` convention
+- [ ] `Closes #N` is filled in above
+- [ ] Tested on device / simulator
+- [ ] No console errors or warnings
 
-- [ ] Tests added/updated for the change
-- [ ] The full test suite passes locally
-- [ ] Documentation updated where relevant
+## Screenshots / notes
+<!-- Optional: attach before/after screenshots -->
