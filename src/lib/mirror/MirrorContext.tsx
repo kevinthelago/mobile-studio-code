@@ -4,7 +4,8 @@ import React, {
 import {
   EMPTY_MIRROR, applyMirrorFrame, type MirrorState,
 } from './state';
-import { subscribeMirrorFeed } from './feed';
+import { mirrorFramesFrom } from './feed';
+import { useTunnel } from '../TunnelContext';
 
 /** What a page sees for one domain. `synced` is false until a frame lands. */
 export type MirrorDomainView = {
@@ -18,15 +19,22 @@ const NOT_SYNCED: MirrorDomainView = { data: undefined, rev: -1, synced: false }
 const MirrorContext = createContext<MirrorState>(EMPTY_MIRROR);
 
 /**
- * Holds the domain → projection map for the whole app. The feed (`feed.ts`)
- * is the single wire attachment point; the provider itself never knows the
- * transport. Stale frames return the same state reference from the reducer,
- * so they cause no re-render.
+ * Holds the domain → projection map for the whole app. The tunnel's
+ * `store_state` map (contract v2, base-studio-code#2497) is the single wire
+ * source: every time it changes, `mirrorFramesFrom` (feed.ts) re-derives the
+ * per-domain frames and folds them in. The reducer is rev-deduped, so
+ * re-folding the whole map on each change is idempotent — already-seen domains
+ * return the same state reference and cause no re-render. This also covers the
+ * connect-time replay (frames the desktop replays land in the map before this
+ * provider mounts, and the first pass folds them all).
  */
 export function MirrorProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(applyMirrorFrame, EMPTY_MIRROR);
+  const { storeState } = useTunnel();
 
-  useEffect(() => subscribeMirrorFeed(dispatch), []);
+  useEffect(() => {
+    for (const frame of mirrorFramesFrom(storeState)) dispatch(frame);
+  }, [storeState]);
 
   return <MirrorContext.Provider value={state}>{children}</MirrorContext.Provider>;
 }
