@@ -11,9 +11,17 @@ import {
   AuthorizationStatus,
   FirebaseMessagingTypes,
 } from '@react-native-firebase/messaging';
+import { parsePushTap, type PushTap } from './alerts/model';
 
 export type FcmTokenCallback = (token: string) => void;
 export type UserRequestCallback = (paneId: string, prompt: string) => void;
+/** A #2498 alert push received while the app is foregrounded. */
+export type AlertPushCallback = (
+  kind: string,
+  title: string,
+  body: string,
+  paneId?: string,
+) => void;
 
 // Single messaging instance via the modular API (the namespaced `messaging()`
 // API is deprecated and removed in the next major).
@@ -56,17 +64,20 @@ export async function initFcm(): Promise<string | null> {
 }
 
 /**
- * Subscribes to FCM token refreshes and foreground messages.
+ * Subscribes to FCM token refreshes and foreground messages. Foreground
+ * messages fan out by `data.type`: `user_request` (#219) and `alert` (#2498 —
+ * banner title/body from the notification block, kind/paneId from data).
  * Returns a cleanup function to unsubscribe.
  */
 export function subscribeFcm(
   onToken: FcmTokenCallback,
   onUserRequest: UserRequestCallback,
+  onAlert: AlertPushCallback,
 ): () => void {
   const m = messaging();
   const unsubToken = onTokenRefresh(m, onToken);
   const unsubForeground = onMessage(m, async (remote) => {
-    handleRemoteMessage(remote, onUserRequest);
+    handleRemoteMessage(remote, onUserRequest, onAlert);
   });
 
   return () => {
@@ -76,15 +87,14 @@ export function subscribeFcm(
 }
 
 /**
- * Checks if the app was opened from a notification tap (cold start or
- * background). Returns the paneId from the payload if so, otherwise null.
+ * Checks if the app was opened from a notification tap (cold start). Returns
+ * the parsed tap (`user_request` or `alert`) if so, otherwise null — the
+ * caller routes it (see alerts/model.ts `alertTarget`).
  */
-export async function getInitialNotificationPaneId(): Promise<string | null> {
+export async function getInitialNotificationTap(): Promise<PushTap | null> {
   try {
     const initial = await getInitialNotification(messaging());
-    if (initial?.data?.type === 'user_request') {
-      return (initial.data.paneId as string) ?? null;
-    }
+    return parsePushTap(initial?.data);
   } catch (e) {
     console.warn('getInitialNotification failed:', e);
   }
@@ -96,22 +106,30 @@ export async function getInitialNotificationPaneId(): Promise<string | null> {
  * is backgrounded (not quit). Returns a cleanup function.
  */
 export function onNotificationOpened(
-  handler: (paneId: string) => void,
+  handler: (tap: PushTap) => void,
 ): () => void {
   return onNotificationOpenedApp(messaging(), (remote) => {
-    if (remote.data?.type === 'user_request' && remote.data?.paneId) {
-      handler(remote.data.paneId as string);
-    }
+    const tap = parsePushTap(remote.data);
+    if (tap) handler(tap);
   });
 }
 
 function handleRemoteMessage(
   remote: FirebaseMessagingTypes.RemoteMessage,
   onUserRequest: UserRequestCallback,
+  onAlert: AlertPushCallback,
 ) {
-  if (remote.data?.type === 'user_request' && remote.data?.paneId) {
-    const paneId = remote.data.paneId as string;
-    const prompt = (remote.data.prompt as string) ?? '';
-    onUserRequest(paneId, prompt);
+  const tap = parsePushTap(remote.data);
+  if (!tap) return;
+  if (tap.type === 'user_request') {
+    const prompt = (remote.data?.prompt as string) ?? '';
+    onUserRequest(tap.paneId, prompt);
+    return;
   }
+  onAlert(
+    tap.kind,
+    remote.notification?.title ?? '',
+    remote.notification?.body ?? '',
+    tap.paneId,
+  );
 }
