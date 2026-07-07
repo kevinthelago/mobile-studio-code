@@ -38,14 +38,16 @@ function statusColor(status: PaneStatus): string {
  *
  * Adapted from the deleted Run tab's TerminalView: same ansi strip + line
  * limit, same pane_size font fit, same direct keyboard tracking (c97cdce).
- * The desktop's view-only gate is honored via decideInputGate — the current
- * wire never broadcasts the grant, so the hint surfaces after an attempt.
+ * The desktop's view-only gate is honored via decideInputGate, fed the live
+ * grant off the wire (auth_ok.inputGranted + input_grant_changed,
+ * base-studio-code#2511); a pre-#2511 desktop never signals it (null), so the
+ * unknown-grant hint still surfaces only after an attempt.
  */
 export function SessionChat({ paneId }: { paneId: string }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const {
-    panes, activePaneId, connectionState, focusPane, unfocusPane, sendInput,
+    panes, activePaneId, connectionState, inputGranted, focusPane, unfocusPane, sendInput,
   } = useTunnel();
   const [inputText, setInputText] = useState('');
   const [kbHeight, setKbHeight] = useState(0);
@@ -86,11 +88,11 @@ export function SessionChat({ paneId }: { paneId: string }) {
     scrollRef.current?.scrollToEnd({ animated: false });
   }, [output]);
 
-  // The desktop never tells us the input grant on the current wire (null);
-  // the gate still handles an explicit false for when that frame lands.
+  // The desktop puts its input grant on the wire since base-studio-code#2511;
+  // null = an older desktop that never signals it (the gate stays honest).
   const gate = decideInputGate({
     connected: connectionState === 'connected',
-    inputGranted: null,
+    inputGranted,
     attempted,
   });
 
