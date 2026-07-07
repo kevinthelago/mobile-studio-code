@@ -34,6 +34,11 @@ export type TunnelValue = {
   /** The desktop's tunnel protocol version from auth_ok (contract v2). `null` before a
    *  connection / for a pre-v2 desktop; compare with TUNNEL_PROTOCOL_VERSION to warn. */
   desktopProtocolVersion: number | null;
+  /** The desktop's input grant (base-studio-code#2511): seeded by auth_ok.inputGranted,
+   *  live-updated by input_grant_changed. `null` before a connection / for a pre-#2511
+   *  desktop that never signals it — feed straight into decideInputGate (its `unknown`
+   *  branch keeps old desktops honest). */
+  inputGranted: boolean | null;
   /** Mirrored desktop store projections (contract v2): domain → last {rev, json}.
    *  Replayed on connect, updated on every store_state frame. */
   storeState: StoreStateMap;
@@ -94,6 +99,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
   const [lastConnection, setLastConnection] = useState<PairingPayload | null>(null);
   const [desktopProtocolVersion, setDesktopProtocolVersion] = useState<number | null>(null);
+  const [inputGranted, setInputGranted] = useState<boolean | null>(null);
   const [storeState, setStoreState] = useState<StoreStateMap>({});
   const [userRequestSignal, setUserRequestSignal] = useState<UserRequestSignal | null>(null);
   const fcmTokenRef = useRef<string | undefined>(undefined);
@@ -114,6 +120,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
         setUserRequestSignal({ paneId, prompt, at: Date.now() });
       },
       onProtocolVersion: setDesktopProtocolVersion,
+      onInputGrantChanged: setInputGranted,
       onStoreState: (domain, map) => {
         setStoreState(map);
         storeStateHandlerRef.current?.(domain, map);
@@ -255,6 +262,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     activePaneId,
     orderedPaneIds,
     desktopProtocolVersion,
+    inputGranted,
     storeState,
     setStoreStateHandler,
     userRequestSignal,

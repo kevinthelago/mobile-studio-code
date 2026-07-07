@@ -24,6 +24,11 @@ export type TunnelCallbacks = {
    *  `null` = a pre-v2 desktop that sent no version. A mismatch never disconnects — the
    *  client just surfaces it so the UI can warn. */
   onProtocolVersion?: (desktopVersion: number | null) => void;
+  /** The desktop's input grant changed (base-studio-code#2511): fired with the connect-time
+   *  snapshot from `auth_ok.inputGranted` and again on every mid-session
+   *  `input_grant_changed` toggle. `null` = a pre-#2511 desktop that never says (feed it to
+   *  decideInputGate, whose `unknown` branch stays honest for old desktops). */
+  onInputGrantChanged?: (granted: boolean | null) => void;
   /** A `store_state` projection changed (contract v2): the touched domain plus the full
    *  domain → {rev, json} map after applying the frame. Stale (lower-rev) frames are
    *  dropped before this fires. */
@@ -138,6 +143,10 @@ export class TunnelClient {
   // The desktop's protocol version from auth_ok (contract v2); null until connected /
   // for a pre-v2 desktop.
   private desktopProtocolVersion: number | null = null;
+  // The desktop's input grant (base-studio-code#2511): seeded by auth_ok.inputGranted,
+  // updated by input_grant_changed. null until connected / for a pre-#2511 desktop
+  // that never puts the grant on the wire.
+  private inputGranted: boolean | null = null;
   // Mirrored store projections: domain → last accepted {rev, json} (contract v2).
   private storeState: StoreStateMap = {};
   // Per-project planner manifests accumulated across the session (the desktop sends one
@@ -160,6 +169,7 @@ export class TunnelClient {
     // project set restart — drop the mirrored projections and accumulated manifests so
     // the replay rebuilds them from scratch.
     this.desktopProtocolVersion = null;
+    this.inputGranted = null;
     this.storeState = {};
     this.manifests.clear();
     this.everConnected = false;
@@ -228,6 +238,10 @@ export class TunnelClient {
 
   /** The desktop's protocol version from auth_ok; null before connect / pre-v2 desktop. */
   getDesktopProtocolVersion() { return this.desktopProtocolVersion; }
+
+  /** The desktop's input grant (base-studio-code#2511); null before connect / for a
+   *  pre-#2511 desktop that never signals it. Feed straight into decideInputGate. */
+  getInputGranted() { return this.inputGranted; }
 
   /** The mirrored store projections (contract v2): domain → last accepted {rev, json}. */
   getStoreState() { return this.storeState; }
@@ -530,7 +544,9 @@ export class TunnelClient {
   private logInbound(msg: TunnelServerMessage) {
     switch (msg.type) {
       case 'auth_ok':
-        console.log(`tunnel← auth_ok desktop-protocol=v${msg.protocolVersion ?? 1}`); break;
+        console.log(`tunnel← auth_ok desktop-protocol=v${msg.protocolVersion ?? 1} inputGranted=${msg.inputGranted ?? '(unsignalled)'}`); break;
+      case 'input_grant_changed':
+        console.log(`tunnel← input_grant_changed granted=${msg.granted}`); break;
       case 'pane_list':
         console.log(`tunnel← pane_list ids=${msg.panes.map((p) => p.id).join(',') || '(none)'}`); break;
       case 'pane_output':
@@ -576,6 +592,10 @@ export class TunnelClient {
           );
         }
         this.cb.onProtocolVersion?.(this.desktopProtocolVersion);
+        // Connect-time input grant (base-studio-code#2511). A pre-#2511 desktop omits
+        // the field → null (grant unknown), which the input gate treats honestly.
+        this.inputGranted = msg.inputGranted ?? null;
+        this.cb.onInputGrantChanged?.(this.inputGranted);
         this.everConnected = true;
         this.reconnectAttempt = 0; // fresh backoff schedule for the next drop
         this.setConnectionState('connected');
@@ -674,6 +694,14 @@ export class TunnelClient {
         };
         this.emitPanes();
         this.cb.onUserRequest(msg.paneId, msg.prompt);
+        break;
+      }
+
+      case 'input_grant_changed': {
+        // Mid-session grant toggle (base-studio-code#2511) — an explicit boolean, so a
+        // view-only phone can render its disabled input state accurately.
+        this.inputGranted = msg.granted;
+        this.cb.onInputGrantChanged?.(this.inputGranted);
         break;
       }
 

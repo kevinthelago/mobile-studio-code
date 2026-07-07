@@ -57,6 +57,10 @@ function copyOptStr(src: Raw, dst: Raw, k: string): void {
 function copyOptNum(src: Raw, dst: Raw, k: string): void {
   if (k in src) dst[k] = num(src, k);
 }
+/** Conditionally copy an optional boolean field only when present. */
+function copyOptBool(src: Raw, dst: Raw, k: string): void {
+  if (k in src) dst[k] = bool(src, k);
+}
 /** relpath → content-hash map (plan_sync_manifest.files). */
 function strRecord(o: Raw, k: string): Record<string, string> {
   const v = o[k];
@@ -88,8 +92,11 @@ function decodeServer(o: Raw): TunnelServerMessage {
     case 'auth_ok': {
       const out: Raw = { type };
       copyOptNum(o, out, 'protocolVersion'); // optional: a pre-v2 desktop omits it
+      copyOptBool(o, out, 'inputGranted'); // optional: a pre-#2511 desktop omits it
       return out as unknown as TunnelServerMessage;
     }
+    case 'input_grant_changed':
+      return { type, granted: bool(o, 'granted') };
     case 'pane_list':
       return {
         type,
@@ -266,8 +273,24 @@ test('auth frame shape: fixture carries THIS client version; the no-fcm variant 
   assert.ok(!('fcmToken' in fx.clientToServer.auth_no_fcm));
 });
 
-test('auth_ok echoes the desktop protocol version', () => {
-  assert.deepEqual(fx.serverToClient.auth_ok, { type: 'auth_ok', protocolVersion: TUNNEL_PROTOCOL_VERSION });
+test('auth_ok echoes the desktop protocol version + the connect-time input grant (#2511)', () => {
+  assert.deepEqual(fx.serverToClient.auth_ok, {
+    type: 'auth_ok', protocolVersion: TUNNEL_PROTOCOL_VERSION, inputGranted: false,
+  });
+});
+
+// ── Input grant on the wire (base-studio-code#2511; additive within v2) ──
+
+test('auth_ok_pre_grant pins inputGranted as OPTIONAL (a pre-#2511 desktop omits it)', () => {
+  assert.ok(!('inputGranted' in fx.serverToClient.auth_ok_pre_grant),
+    'auth_ok_pre_grant must stay grant-less (pins the optional field for old desktops)');
+  assert.deepEqual(fx.serverToClient.auth_ok_pre_grant, {
+    type: 'auth_ok', protocolVersion: TUNNEL_PROTOCOL_VERSION,
+  });
+});
+
+test('input_grant_changed carries the bare granted flag', () => {
+  assert.deepEqual(fx.serverToClient.input_grant_changed, { type: 'input_grant_changed', granted: true });
 });
 
 test('store_state is the domain-agnostic {domain, rev, json} projection frame', () => {

@@ -5,11 +5,12 @@
 
 /**
  * What the phone knows about the desktop's input grant.
- * - `true` / `false`: an explicit grant signal (a future wire frame — the
- *   current v2 contract does not broadcast it, but the desktop tracks it).
- * - `null`: unknown — the current wire never tells us, so input stays enabled
- *   and a hint surfaces only after an attempt (the desktop drops ungranted
- *   keystrokes without an error).
+ * - `true` / `false`: an explicit grant signal off the wire —
+ *   `auth_ok.inputGranted` (connect-time) + `input_grant_changed` (live
+ *   toggles), base-studio-code#2511.
+ * - `null`: unknown — a pre-#2511 desktop never signals it, so input stays
+ *   enabled and a hint surfaces only after an attempt (that desktop drops
+ *   ungranted keystrokes without an error).
  */
 export type InputGrant = boolean | null;
 

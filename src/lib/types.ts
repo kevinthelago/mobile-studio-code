@@ -135,6 +135,10 @@ export type CancelSignal = { cancelled: boolean };
  * v1 (implicit — no version on the wire) → v2: adds `store_state`, the auth/auth_ok
  * `protocolVersion`, the optional `PaneDescriptor.kind`, and pins the plan_sync frames
  * to the desktop's Rust (bsc-tunnel) shapes.
+ *
+ * Post-v2 additive changes ride WITHIN v2 (no bump — both sides ignore unknown fields /
+ * frame types, so an optional-field or new-frame addition breaks neither peer):
+ * `auth_ok.inputGranted` + the `input_grant_changed` frame (base-studio-code#2511).
  */
 export const TUNNEL_PROTOCOL_VERSION = 2;
 
@@ -250,7 +254,13 @@ export type HookTelemetry = {
 /** Messages sent from base-studio-code desktop → mobile */
 export type TunnelServerMessage =
   // Echoes the desktop's protocol version (contract v2); absent from a pre-v2 desktop.
-  | { type: 'auth_ok'; protocolVersion?: number }
+  // `inputGranted` (base-studio-code#2511) is the connect-time snapshot of the desktop's
+  // view-only gate; absent from a pre-#2511 desktop (⇒ grant unknown, keep the honest
+  // 'unconfirmed' input posture).
+  | { type: 'auth_ok'; protocolVersion?: number; inputGranted?: boolean }
+  // The desktop granted/revoked input control mid-session (base-studio-code#2511).
+  // Broadcast on every toggle; NOT replayed on connect (auth_ok carries that state).
+  | { type: 'input_grant_changed'; granted: boolean }
   | { type: 'pane_list'; panes: PaneDescriptor[] }
   | { type: 'pane_output'; paneId: string; data: string; coarse: boolean }
   // The desktop PTY's grid size for a pane. Sent on pairing replay (after
