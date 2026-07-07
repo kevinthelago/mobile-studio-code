@@ -48,6 +48,56 @@ export function GitIcon({ color }: { color: string }) {
   );
 }
 
+// ── Mirror-shell tab icons (#218) ────────────────────────────────────────────
+
+export function GlanceIcon({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 20 20" fill="none">
+      <Path d="M2.5 10S5.2 5 10 5s7.5 5 7.5 5-2.7 5-7.5 5-7.5-5-7.5-5z"
+        stroke={color} strokeWidth={1.6} strokeLinejoin="round" />
+      <Circle cx={10} cy={10} r={2.2} stroke={color} strokeWidth={1.6} />
+    </Svg>
+  );
+}
+
+export function PlannerIcon({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 20 20" fill="none">
+      <Path d="M7 4h9M7 10h9M7 16h9" stroke={color} strokeWidth={1.6} strokeLinecap="round" />
+      <Circle cx={3.6} cy={4} r={1.2} fill={color} />
+      <Circle cx={3.6} cy={10} r={1.2} stroke={color} strokeWidth={1.3} />
+      <Circle cx={3.6} cy={16} r={1.2} stroke={color} strokeWidth={1.3} />
+    </Svg>
+  );
+}
+
+export function SkillsIcon({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 20 20" fill="none">
+      <Path d="M10 2.5l1.8 4.4 4.7.4-3.6 3.1 1.1 4.6-4-2.5-4 2.5 1.1-4.6-3.6-3.1 4.7-.4L10 2.5z"
+        stroke={color} strokeWidth={1.5} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function UiIcon({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 20 20" fill="none">
+      <Rect x={3} y={3} width={14} height={14} rx={1.5} stroke={color} strokeWidth={1.6} />
+      <Path d="M3 7.5h14M8 7.5V17" stroke={color} strokeWidth={1.6} />
+    </Svg>
+  );
+}
+
+export function AutomationsIcon({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 20 20" fill="none">
+      <Path d="M11 2.5L4.5 11h4l-1 6.5L14.5 9h-4l.5-6.5z"
+        stroke={color} strokeWidth={1.5} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 export function GithubIcon({ color }: { color: string }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 20 20" fill="none">
