@@ -17,6 +17,12 @@ type Row = {
 
 const ROWS: readonly Row[] = [
   {
+    key: 'sessions',
+    title: 'Sessions',
+    detail: 'Every desktop session · chat with any agent',
+    href: '/(sessions)/roster',
+  },
+  {
     key: 'connection',
     title: 'Connection',
     detail: 'Pair with base-studio-code · QR / reconnect',

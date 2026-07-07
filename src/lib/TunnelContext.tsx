@@ -17,6 +17,9 @@ export type PlanFrame =
   | Extract<TunnelServerMessage, { type: 'plan_status' }>
   | Extract<TunnelServerMessage, { type: 'plan_event' }>;
 
+/** The latest `user_request` (a session paused for the user), for in-app surfacing. */
+export type UserRequestSignal = { paneId: string; prompt: string; at: number };
+
 export type TunnelValue = {
   connectionState: TunnelConnectionState;
   /**
@@ -37,6 +40,11 @@ export type TunnelValue = {
   /** Register a handler fired on every accepted store_state frame (after `storeState`
    *  updates), with the touched domain + the full map. */
   setStoreStateHandler: (fn: ((domain: string, storeState: StoreStateMap) => void) | null) => void;
+  /** The most recent user_request, so the app can toast a link to that session's
+   *  chat (#219 — the full alerts inbox is #222). Null until one fires / after dismiss. */
+  userRequestSignal: UserRequestSignal | null;
+  /** Dismiss the current user_request toast. */
+  clearUserRequestSignal: () => void;
 
   connect: (payload: PairingPayload) => Promise<void>;
   disconnect: () => void;
@@ -87,6 +95,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const [lastConnection, setLastConnection] = useState<PairingPayload | null>(null);
   const [desktopProtocolVersion, setDesktopProtocolVersion] = useState<number | null>(null);
   const [storeState, setStoreState] = useState<StoreStateMap>({});
+  const [userRequestSignal, setUserRequestSignal] = useState<UserRequestSignal | null>(null);
   const fcmTokenRef = useRef<string | undefined>(undefined);
   const clientRef = useRef<TunnelClient | null>(null);
   const syncManifestHandlerRef = useRef<((projects: PlanSyncManifestEntry[]) => void) | null>(null);
@@ -98,9 +107,11 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
       onConnectionStateChange: setConnectionState,
       onLifecycleChange: setLifecycleStatus,
       onPanesChange: setPanes,
-      onUserRequest: (_paneId, _prompt) => {
-        // Desktop fires the FCM push; mobile only needs to update pane state,
-        // which TunnelClient already does before calling this callback.
+      onUserRequest: (paneId, prompt) => {
+        // Desktop fires the FCM push (the OS-level alert); pane state is already
+        // updated by TunnelClient. Surface the signal so the app can show an
+        // in-app toast linking to that session's chat (#219).
+        setUserRequestSignal({ paneId, prompt, at: Date.now() });
       },
       onProtocolVersion: setDesktopProtocolVersion,
       onStoreState: (domain, map) => {
@@ -223,6 +234,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const planChat = useCallback((projectId: string, text: string) => {
     clientRef.current?.planChat(projectId, text);
   }, []);
+  const clearUserRequestSignal = useCallback(() => setUserRequestSignal(null), []);
 
   const orderedPaneIds = useMemo(() => {
     return Object.values(panes)
@@ -245,6 +257,8 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     desktopProtocolVersion,
     storeState,
     setStoreStateHandler,
+    userRequestSignal,
+    clearUserRequestSignal,
     connect,
     disconnect,
     lastConnection,

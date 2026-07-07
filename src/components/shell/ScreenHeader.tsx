@@ -17,12 +17,17 @@ function connectionColor(state: string, accent: string): string {
 }
 
 /**
- * Shared tab-page header: title + subtitle on the left, the connection dot and
- * the "More" corner (gear → pairing / providers / theme / security) on the
- * right. Every mirror tab renders this so the More corner is always one tap
- * away (#218).
+ * Shared tab-page header: title + subtitle on the left, an optional action
+ * pill, the connection dot and the "More" corner (gear → pairing / providers /
+ * theme / security) on the right. Every mirror tab renders this so the More
+ * corner is always one tap away (#218).
  */
-export function ScreenHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+export function ScreenHeader({ title, subtitle, action }: {
+  title: string;
+  subtitle?: string;
+  /** Optional header action pill (e.g. Glance's "Sessions" → the roster, #219). */
+  action?: { label: string; onPress: () => void };
+}) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { connectionState } = useTunnel();
@@ -39,6 +44,18 @@ export function ScreenHeader({ title, subtitle }: { title: string; subtitle?: st
           <Text style={[styles.subtitle, { color: t.fgDim }]} numberOfLines={1}>{subtitle}</Text>
         ) : null}
       </View>
+
+      {action && (
+        <Pressable
+          onPress={action.onPress}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={action.label}
+          style={[styles.actionPill, { borderColor: t.borderColor }]}
+        >
+          <Text style={[styles.actionLabel, { color: t.accent }]}>{action.label}</Text>
+        </Pressable>
+      )}
 
       <Pressable
         onPress={() => router.push('/(more)/connection')}
@@ -81,6 +98,11 @@ const styles = StyleSheet.create({
   text: { flex: 1, gap: 2 },
   title: { fontSize: 17, fontWeight: '600' },
   subtitle: { fontSize: 11.5 },
+  actionPill: {
+    paddingHorizontal: 11, paddingVertical: 6,
+    borderRadius: 15, borderWidth: StyleSheet.hairlineWidth,
+  },
+  actionLabel: { fontSize: 12.5, fontWeight: '600' },
   dotWrap: { padding: 2 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   gear: {

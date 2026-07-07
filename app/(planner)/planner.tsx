@@ -22,6 +22,9 @@ import type { Grade, GradeCategory, GradeSuggestion } from '../../src/lib/planne
 import { buildPublishPlan } from '../../src/lib/planner/publish';
 import { usePlanner } from '../../src/lib/planner/PlannerContext';
 import { usePlannerSync } from '../../src/lib/planner/PlannerSyncContext';
+import { useTunnel } from '../../src/lib/TunnelContext';
+import { findPlannerPane } from '../../src/lib/sessions/roster';
+import { openSessionChat } from '../../src/lib/sessions/nav';
 
 const STATUS_META: Record<SectionRenderStatus, { label: string; color: string }> = {
   'complete': { label: 'Complete', color: PLAN_COLORS.good },
@@ -96,6 +99,11 @@ export default function PlannerScreen() {
   const readiness = useMemo(() => (active ? projectReadiness(active) : null), [active]);
   const grade = useMemo(() => (readiness ? buildGrade(readiness) : null), [readiness]);
   const publishPlan = useMemo(() => (active ? buildPublishPlan(active) : null), [active]);
+  // The desktop's LIVE planning session (`planning_<key>`), when one is in the
+  // roster — the header chat glyph opens its SessionChat (#219). The local
+  // planner's own plan_chat path is untouched.
+  const { panes } = useTunnel();
+  const livePlannerPane = useMemo(() => findPlannerPane(panes), [panes]);
 
   // Tapping a stage node jumps the project pane to that section. Switch to the plan
   // view, then scroll once layout has settled (offsets are populated via onLayout).
@@ -147,6 +155,19 @@ export default function PlannerScreen() {
             {active ? 'Local plan · on this device' : 'Pick up a plan or start a new one'}
           </Text>
         </View>
+        {livePlannerPane && (
+          <IconBtn
+            onPress={() => openSessionChat(livePlannerPane.descriptor.id)}
+            style={{ marginRight: 2 }}
+          >
+            <Svg width={15} height={15} viewBox="0 0 16 16" fill="none">
+              <Path
+                d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"
+                stroke={t.accent} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round"
+              />
+            </Svg>
+          </IconBtn>
+        )}
         {readiness && (
           <View style={[styles.readyPill, {
             borderColor: readiness.complete ? PLAN_COLORS.good : t.borderColor,
