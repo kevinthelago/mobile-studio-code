@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { ThemeProvider as NavThemeProvider, DarkTheme } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -20,6 +20,7 @@ import { MirrorProvider } from '../src/lib/mirror/MirrorContext';
 import {
   initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
 } from '../src/lib/fcm';
+import { openSessionChat } from '../src/lib/sessions/nav';
 
 // Dark navigation theme with a transparent background so the ThemedFrame (theme
 // bg + ambient Orbs) shows through behind every screen rather than React
@@ -63,8 +64,7 @@ function ThemedFrame({ children }: { children: React.ReactNode }) {
  * and handles deep-link routing from notification taps.
  */
 function FcmBootstrap() {
-  const { setFcmToken, focusPane } = useTunnel();
-  const router = useRouter();
+  const { setFcmToken } = useTunnel();
 
   useEffect(() => {
     let cleanupSub: (() => void) | undefined;
@@ -73,35 +73,34 @@ function FcmBootstrap() {
       const token = await initFcm();
       if (token) setFcmToken(token);
 
-      // Handle taps on notifications while the app was quit (cold start)
+      // Handle taps on notifications while the app was quit (cold start):
+      // deep-link straight into that session's chat (#219). SessionChat's
+      // mount effect asserts focus, so no separate focusPane is needed.
       const initialPaneId = await getInitialNotificationPaneId();
       if (initialPaneId) {
-        focusPane(initialPaneId);
-        // The session surfaces are rebuilt by a later slice of the mirror epic;
-        // until then a notification tap lands on the Glance tab.
-        router.navigate('/(tabs)' as never);
+        openSessionChat(initialPaneId);
       }
 
       cleanupSub = subscribeFcm(
         // Token refresh — keep the desktop in sync
         (newToken) => setFcmToken(newToken),
-        // Foreground user_request — pane state is already updated by TunnelClient;
-        // no additional action needed here since the SessionStrip will highlight it.
+        // Foreground user_request — pane state is already updated by
+        // TunnelClient, and TunnelContext surfaces the signal to the
+        // UserRequestToast (#219); nothing more to do here.
         (_paneId, _prompt) => {},
       );
     })();
 
     // Handle taps while the app was backgrounded (not quit)
     const cleanupOpened = onNotificationOpened((paneId) => {
-      focusPane(paneId);
-      router.navigate('/(tabs)' as never);
+      openSessionChat(paneId);
     });
 
     return () => {
       cleanupSub?.();
       cleanupOpened();
     };
-  }, [setFcmToken, focusPane, router]);
+  }, [setFcmToken]);
 
   return null;
 }
@@ -132,6 +131,7 @@ function InnerStack() {
         <Stack.Screen name="(planner)" options={modal} />
         <Stack.Screen name="(sync)" options={modal} />
         <Stack.Screen name="(more)" options={modal} />
+        <Stack.Screen name="(sessions)" options={modal} />
       </Stack>
     </NavThemeProvider>
   );
