@@ -1,10 +1,12 @@
 import React, {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
+import { AppState } from 'react-native';
 import { TunnelClient, TunnelCallbacks } from './tunnel';
 import {
   PaneState, PairingPayload, PlanSyncManifestEntry, TunnelConnectionState, TunnelServerMessage,
 } from './types';
+import { TunnelLifecycleStatus } from './tunnel/reconnect';
 import { KEYS, getSecret, setSecret } from './storage';
 import { parsePairingPayload } from './tunnel/pairing';
 
@@ -16,6 +18,11 @@ export type PlanFrame =
 
 export type TunnelValue = {
   connectionState: TunnelConnectionState;
+  /**
+   * Coarse derived status for a connection banner (#217):
+   * connecting / connected / reconnecting (auto-retry in progress) / offline.
+   */
+  lifecycleStatus: TunnelLifecycleStatus;
   panes: Record<string, PaneState>;
   activePaneId: string | null;
   /** Pane IDs ordered: awaiting_input (most recent first), then by last activity */
@@ -61,6 +68,7 @@ export function useTunnel(): TunnelValue {
 
 export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const [connectionState, setConnectionState] = useState<TunnelConnectionState>('disconnected');
+  const [lifecycleStatus, setLifecycleStatus] = useState<TunnelLifecycleStatus>('offline');
   const [panes, setPanes] = useState<Record<string, PaneState>>({});
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
   const [lastConnection, setLastConnection] = useState<PairingPayload | null>(null);
@@ -72,6 +80,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const callbacks: TunnelCallbacks = {
       onConnectionStateChange: setConnectionState,
+      onLifecycleChange: setLifecycleStatus,
       onPanesChange: setPanes,
       onUserRequest: (_paneId, _prompt) => {
         // Desktop fires the FCM push; mobile only needs to update pane state,
@@ -104,6 +113,17 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     })();
 
     return () => { client.disconnect(); };
+  }, []);
+
+  // Reconnect on foreground (#217): iOS suspends timers + sockets in the
+  // background, so an armed backoff wait may never fire and a drop may not
+  // have surfaced yet. On 'active', redial immediately if a session dropped;
+  // reconnectNow() is a no-op when connected, user-disconnected, or unpaired.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') clientRef.current?.reconnectNow();
+    });
+    return () => sub.remove();
   }, []);
 
   const connect = useCallback(async (payload: PairingPayload) => {
@@ -190,6 +210,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
 
   const value: TunnelValue = {
     connectionState,
+    lifecycleStatus,
     panes,
     activePaneId,
     orderedPaneIds,
