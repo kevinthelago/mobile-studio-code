@@ -16,6 +16,7 @@ import { ThemeProvider, useTheme } from '../src/theme';
 import { Orbs } from '../src/components/ui/Orbs';
 import { PlannerSyncProvider } from '../src/lib/planner/PlannerSyncContext';
 import { LivePlanProvider } from '../src/lib/tunnel/LivePlanContext';
+import { MirrorProvider } from '../src/lib/mirror/MirrorContext';
 import {
   initFcm, subscribeFcm, getInitialNotificationPaneId, onNotificationOpened,
 } from '../src/lib/fcm';
@@ -76,7 +77,9 @@ function FcmBootstrap() {
       const initialPaneId = await getInitialNotificationPaneId();
       if (initialPaneId) {
         focusPane(initialPaneId);
-        router.navigate('/(tabs)/run' as never);
+        // The session surfaces are rebuilt by a later slice of the mirror epic;
+        // until then a notification tap lands on the Glance tab.
+        router.navigate('/(tabs)' as never);
       }
 
       cleanupSub = subscribeFcm(
@@ -91,7 +94,7 @@ function FcmBootstrap() {
     // Handle taps while the app was backgrounded (not quit)
     const cleanupOpened = onNotificationOpened((paneId) => {
       focusPane(paneId);
-      router.navigate('/(tabs)/run' as never);
+      router.navigate('/(tabs)' as never);
     });
 
     return () => {
@@ -128,8 +131,7 @@ function InnerStack() {
         <Stack.Screen name="repo" options={modal} />
         <Stack.Screen name="(planner)" options={modal} />
         <Stack.Screen name="(sync)" options={modal} />
-        <Stack.Screen name="(fleet)" options={modal} />
-        <Stack.Screen name="(live)" options={modal} />
+        <Stack.Screen name="(more)" options={modal} />
       </Stack>
     </NavThemeProvider>
   );
@@ -149,12 +151,14 @@ export default function RootLayout() {
         <TunnelProvider>
           <PlannerSyncProvider>
             <LivePlanProvider>
-              <FcmBootstrap />
-              <ThemedFrame>
-                <StageGate>
-                  <InnerStack />
-                </StageGate>
-              </ThemedFrame>
+              <MirrorProvider>
+                <FcmBootstrap />
+                <ThemedFrame>
+                  <StageGate>
+                    <InnerStack />
+                  </StageGate>
+                </ThemedFrame>
+              </MirrorProvider>
             </LivePlanProvider>
           </PlannerSyncProvider>
         </TunnelProvider>

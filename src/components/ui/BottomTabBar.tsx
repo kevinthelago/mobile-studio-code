@@ -4,27 +4,25 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme';
 import {
-  FilesIcon, FindIcon, EditIcon, RunIcon, GitIcon, GithubIcon,
+  GlanceIcon, PlannerIcon, SkillsIcon, UiIcon, AutomationsIcon,
 } from '../TabIcons';
 
 type IconCmp = (props: { color: string }) => React.ReactElement;
 
 const ICONS: Record<string, IconCmp> = {
-  index: FilesIcon,
-  find: FindIcon,
-  edit: EditIcon,
-  run: RunIcon,
-  git: GitIcon,
-  github: GithubIcon,
+  index: GlanceIcon,
+  plan: PlannerIcon,
+  skills: SkillsIcon,
+  ui: UiIcon,
+  automations: AutomationsIcon,
 };
 
 const LABELS: Record<string, string> = {
-  index: 'FILES',
-  find: 'FIND',
-  edit: 'EDIT',
-  run: 'RUN',
-  git: 'GIT',
-  github: 'PULSE',
+  index: 'GLANCE',
+  plan: 'PLANNER',
+  skills: 'SKILLS',
+  ui: 'UI',
+  automations: 'AUTOS',
 };
 
 export function BottomTabBar(props: BottomTabBarProps) {
@@ -56,7 +54,7 @@ export function BottomTabBar(props: BottomTabBarProps) {
     >
       {state.routes.map((route, i) => {
         const focused = state.index === i;
-        const Icon = ICONS[route.name] ?? FilesIcon;
+        const Icon = ICONS[route.name] ?? GlanceIcon;
         const tint = focused ? t.accent : t.fgMuted;
 
         return (
