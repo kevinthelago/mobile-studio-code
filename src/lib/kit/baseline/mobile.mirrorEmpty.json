@@ -1,0 +1,14 @@
+{
+  "id": "mobile.mirrorEmpty",
+  "name": "MirrorEmptyState",
+  "kitId": "mobile",
+  "role": "layout",
+  "spec": {
+    "type": "EmptyState",
+    "props": {
+      "variant": "card",
+      "icon": { "type": "Slot", "props": { "name": "mirrorIcon" } }
+    },
+    "binds": { "title": "title", "description": "description" }
+  }
+}

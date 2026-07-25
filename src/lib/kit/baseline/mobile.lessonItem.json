@@ -1,0 +1,16 @@
+{
+  "id": "mobile.lessonItem",
+  "name": "LessonItem",
+  "kitId": "mobile",
+  "role": "composite",
+  "spec": {
+    "type": "Card",
+    "props": {
+      "children": [
+        { "type": "Text", "props": { "weight": 600 }, "binds": { "children": "title" } },
+        { "type": "Text", "props": { "tone": "muted", "size": "sm" }, "binds": { "children": "sub" } },
+        { "type": "Text", "props": { "tone": "dim", "size": "sm" }, "binds": { "children": "seen" } }
+      ]
+    }
+  }
+}

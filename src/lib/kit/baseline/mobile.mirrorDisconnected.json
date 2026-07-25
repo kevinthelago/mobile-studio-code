@@ -1,0 +1,20 @@
+{
+  "id": "mobile.mirrorDisconnected",
+  "name": "MirrorDisconnectedState",
+  "kitId": "mobile",
+  "role": "layout",
+  "spec": {
+    "type": "EmptyState",
+    "props": {
+      "variant": "card",
+      "icon": { "type": "Slot", "props": { "name": "mirrorIcon" } },
+      "actions": {
+        "type": "Button",
+        "props": { "variant": "primary" },
+        "children": "Pair with desktop",
+        "actions": { "onClick": "pair" }
+      }
+    },
+    "binds": { "title": "title", "description": "description" }
+  }
+}
