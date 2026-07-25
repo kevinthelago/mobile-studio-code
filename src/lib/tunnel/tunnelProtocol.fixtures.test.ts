@@ -17,6 +17,9 @@ import type {
   PlanFile, PlanMessage, PlanPipelineRun, HookTelemetry,
 } from '../types';
 import { TUNNEL_PROTOCOL_VERSION, STORE_DOMAINS } from '../types';
+import {
+  str, num, bool, strOrNull, arr, strRecord, copyOptStr, copyOptNum, copyOptBool, type Raw,
+} from './fixtureDecode';
 
 const fx = JSON.parse(
   readFileSync('src/lib/tunnel/tunnelProtocol.fixtures.json', 'utf8'),
@@ -25,53 +28,8 @@ const fx = JSON.parse(
   clientToServer: Record<string, Record<string, unknown>>;
 };
 
-type Raw = Record<string, unknown>;
-
-// ── Typed field getters — assert presence + JS type, returning the value. ──
-function str(o: Raw, k: string): string {
-  assert.equal(typeof o[k], 'string', `field "${k}" must be a string`);
-  return o[k] as string;
-}
-function num(o: Raw, k: string): number {
-  assert.equal(typeof o[k], 'number', `field "${k}" must be a number`);
-  return o[k] as number;
-}
-function bool(o: Raw, k: string): boolean {
-  assert.equal(typeof o[k], 'boolean', `field "${k}" must be a boolean`);
-  return o[k] as boolean;
-}
-/** Required value that may legitimately be null (e.g. session_state.prompt). */
-function strOrNull(o: Raw, k: string): string | null {
-  assert.ok(o[k] === null || typeof o[k] === 'string', `field "${k}" must be string|null`);
-  return o[k] as string | null;
-}
-function arr(o: Raw, k: string): Raw[] {
-  assert.ok(Array.isArray(o[k]), `field "${k}" must be an array`);
-  return o[k] as Raw[];
-}
-/** Conditionally copy an optional string field only when present (so deep-equal stays exact). */
-function copyOptStr(src: Raw, dst: Raw, k: string): void {
-  if (k in src) dst[k] = str(src, k);
-}
-/** Conditionally copy an optional number field only when present. */
-function copyOptNum(src: Raw, dst: Raw, k: string): void {
-  if (k in src) dst[k] = num(src, k);
-}
-/** Conditionally copy an optional boolean field only when present. */
-function copyOptBool(src: Raw, dst: Raw, k: string): void {
-  if (k in src) dst[k] = bool(src, k);
-}
-/** relpath → content-hash map (plan_sync_manifest.files). */
-function strRecord(o: Raw, k: string): Record<string, string> {
-  const v = o[k];
-  assert.ok(v !== null && typeof v === 'object' && !Array.isArray(v), `field "${k}" must be an object`);
-  const out: Record<string, string> = {};
-  for (const [key, val] of Object.entries(v as Record<string, unknown>)) {
-    assert.equal(typeof val, 'string', `field "${k}.${key}" must be a string`);
-    out[key] = val as string;
-  }
-  return out;
-}
+// The typed field getters + optional-field copiers live in `./fixtureDecode`, shared with the
+// payload parity test (#246) so the two cannot drift apart.
 
 function decodeFile(o: Raw): PlanFile {
   return { relpath: str(o, 'relpath'), content: str(o, 'content') };
