@@ -1,0 +1,38 @@
+{
+  "id": "mobile.skillItem",
+  "name": "SkillItem",
+  "kitId": "mobile",
+  "role": "composite",
+  "spec": {
+    "type": "Card",
+    "props": {
+      "children": [
+        {
+          "type": "Row",
+          "props": {
+            "gap": "sm",
+            "align": "center",
+            "children": [
+              { "type": "Text", "props": { "weight": 600, "style": { "flex": 1 } }, "binds": { "children": "name" } },
+              { "type": "Chip", "props": { "tone": "neutral" }, "binds": { "children": "status" } }
+            ]
+          }
+        },
+        { "type": "Text", "props": { "tone": "muted", "size": "sm" }, "binds": { "children": "desc" } },
+        {
+          "type": "Row",
+          "props": {
+            "gap": "sm",
+            "wrap": true,
+            "align": "center",
+            "children": [
+              { "type": "Chip", "props": { "tone": "info" }, "binds": { "children": "kind" } },
+              { "type": "Chip", "props": { "tone": "neutral" }, "binds": { "children": "source" } },
+              { "type": "Text", "props": { "tone": "dim", "size": "sm" }, "binds": { "children": "scope" } }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

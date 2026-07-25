@@ -1,0 +1,15 @@
+{
+  "id": "mobile.skillGroup",
+  "name": "SkillGroup",
+  "kitId": "mobile",
+  "role": "composite",
+  "spec": {
+    "type": "Card",
+    "props": {
+      "children": [
+        { "type": "Text", "props": { "weight": 600 }, "binds": { "children": "name" } },
+        { "type": "Text", "props": { "tone": "muted", "size": "sm" }, "binds": { "children": "members" } }
+      ]
+    }
+  }
+}

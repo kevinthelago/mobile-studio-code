@@ -1,0 +1,37 @@
+{
+  "id": "mobile.connectionStatus",
+  "name": "ConnectionStatus",
+  "kitId": "mobile",
+  "role": "composite",
+  "spec": {
+    "type": "Box",
+    "props": {
+      "bg": "var(--card-bg)",
+      "border": "soft",
+      "radius": "lg",
+      "pad": "md",
+      "children": {
+        "type": "Row",
+        "props": {
+          "gap": "sm",
+          "align": "center",
+          "children": [
+            { "type": "StatusDot", "props": { "size": 10 }, "binds": { "color": "dotColor" } },
+            {
+              "type": "Stack",
+              "props": {
+                "gap": "xs",
+                "style": { "flex": 1 },
+                "children": [
+                  { "type": "Text", "props": { "weight": 600 }, "binds": { "children": "title" } },
+                  { "type": "Text", "props": { "tone": "muted", "size": "sm" }, "binds": { "children": "detail" } }
+                ]
+              }
+            },
+            { "type": "Slot", "props": { "name": "trailing" } }
+          ]
+        }
+      }
+    }
+  }
+}

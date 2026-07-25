@@ -8,7 +8,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../src/theme';
 import { useTunnel } from '../../src/lib/TunnelContext';
 import { parsePairingPayload } from '../../src/lib/tunnel/pairing';
-import { Surface } from '../../src/components/ui/Surface';
+import { SpecHost } from '../../src/components/kit/SpecHost';
 import { ModalHeader } from '../../src/components/shell/ModalHeader';
 
 /**
@@ -94,6 +94,28 @@ export default function ConnectionScreen() {
   const isConnected = connectionState === 'connected';
   const paneCount = Object.keys(panes).length;
 
+  // Host-derived values + trailing control for the mobile.connectionStatus spec — the card structure
+  // is data; the state-to-copy/color mapping and the variable trailing action stay host logic.
+  const statusDotColor = isConnected ? '#4ade80'
+    : isConnecting ? '#fbbf24'
+      : connectionState === 'error' ? '#f87171' : t.fgDim;
+  const statusTitle = isConnected ? 'Connected'
+    : connectionState === 'authenticating' ? 'Authenticating…'
+      : connectionState === 'connecting' ? 'Connecting…'
+        : connectionState === 'error' ? 'Connection failed' : 'Not connected';
+  const statusDetail = isConnected && lastConnection
+    ? `${lastConnection.relayUrl.replace(/^wss?:\/\//, '')} · ${paneCount} session${paneCount === 1 ? '' : 's'}`
+    : 'The desktop pushes its state here, end-to-end encrypted.';
+  const statusTrailing = isConnected ? (
+    <Pressable onPress={disconnect} style={[styles.disconnectBtn, { borderColor: t.borderColor }]} hitSlop={6}>
+      <Text style={[styles.disconnectText, { color: t.fgMuted }]}>Disconnect</Text>
+    </Pressable>
+  ) : isConnecting ? (
+    <Pressable onPress={disconnect} hitSlop={6}>
+      <ActivityIndicator color={t.accent} size="small" />
+    </Pressable>
+  ) : undefined;
+
   return (
     <View style={styles.root}>
       <ModalHeader title="Connection" subtitle="Pair with base-studio-code" />
@@ -101,42 +123,12 @@ export default function ConnectionScreen() {
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Status ── */}
-        <Surface style={styles.statusCard} radius={10}>
-          <View
-            style={[styles.statusDot, {
-              backgroundColor: isConnected ? '#4ade80' : isConnecting ? '#fbbf24'
-                : connectionState === 'error' ? '#f87171' : t.fgDim,
-            }]}
-          />
-          <View style={styles.statusText}>
-            <Text style={[styles.statusTitle, { color: t.fg }]}>
-              {isConnected ? 'Connected'
-                : connectionState === 'authenticating' ? 'Authenticating…'
-                  : connectionState === 'connecting' ? 'Connecting…'
-                    : connectionState === 'error' ? 'Connection failed' : 'Not connected'}
-            </Text>
-            <Text style={[styles.statusDetail, { color: t.fgMuted }]} numberOfLines={1}>
-              {isConnected && lastConnection
-                ? `${lastConnection.relayUrl.replace(/^wss?:\/\//, '')} · ${paneCount} session${paneCount === 1 ? '' : 's'}`
-                : 'The desktop pushes its state here, end-to-end encrypted.'}
-            </Text>
-          </View>
-          {isConnected && (
-            <Pressable
-              onPress={disconnect}
-              style={[styles.disconnectBtn, { borderColor: t.borderColor }]}
-              hitSlop={6}
-            >
-              <Text style={[styles.disconnectText, { color: t.fgMuted }]}>Disconnect</Text>
-            </Pressable>
-          )}
-          {isConnecting && (
-            <Pressable onPress={disconnect} hitSlop={6}>
-              <ActivityIndicator color={t.accent} size="small" />
-            </Pressable>
-          )}
-        </Surface>
+        {/* ── Status (rendered from the mobile.connectionStatus spec) ── */}
+        <SpecHost
+          id="mobile.connectionStatus"
+          values={{ dotColor: statusDotColor, title: statusTitle, detail: statusDetail }}
+          slots={{ trailing: statusTrailing }}
+        />
 
         {(error || connectionState === 'error') && (
           <Text style={styles.errorText}>
@@ -218,17 +210,6 @@ export default function ConnectionScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   body: { padding: 16, gap: 14 },
-  statusCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-  },
-  statusDot: { width: 10, height: 10, borderRadius: 5 },
-  statusText: { flex: 1, gap: 3 },
-  statusTitle: { fontSize: 14.5, fontWeight: '600' },
-  statusDetail: { fontSize: 12 },
   disconnectBtn: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 6,

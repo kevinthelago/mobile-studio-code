@@ -1,0 +1,43 @@
+{
+  "id": "mobile.moreMenu",
+  "name": "MoreMenu",
+  "kitId": "mobile",
+  "role": "page",
+  "spec": {
+    "type": "Stack",
+    "props": {
+      "gap": "sm",
+      "children": [
+        {
+          "type": "CardListRow",
+          "props": { "title": "Sessions", "subtitle": "Every desktop session · chat with any agent" },
+          "actions": { "onClick": "openSessions" }
+        },
+        {
+          "type": "CardListRow",
+          "props": {
+            "title": "Connection",
+            "subtitle": "Pair with base-studio-code · QR / reconnect",
+            "lead": { "type": "StatusDot", "binds": { "color": "connColor" } }
+          },
+          "actions": { "onClick": "openConnection" }
+        },
+        {
+          "type": "CardListRow",
+          "props": { "title": "Providers", "subtitle": "Connect a model — Anthropic · OpenAI · Google · local" },
+          "actions": { "onClick": "openProviders" }
+        },
+        {
+          "type": "CardListRow",
+          "props": { "title": "Theme", "subtitle": "Appearance · desktop theme parity" },
+          "actions": { "onClick": "openTheme" }
+        },
+        {
+          "type": "CardListRow",
+          "props": { "title": "Security", "subtitle": "Audit & activity · read-only mirror" },
+          "actions": { "onClick": "openSecurity" }
+        }
+      ]
+    }
+  }
+}

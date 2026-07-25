@@ -1,13 +1,13 @@
 import React, { type ReactNode } from 'react';
 import {
-  ActivityIndicator, Pressable, StyleSheet, Text, View,
+  ActivityIndicator, StyleSheet, Text, View,
 } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../theme';
 import { useTunnel } from '../../lib/TunnelContext';
 import { useMirrorDomain } from '../../lib/mirror/MirrorContext';
-import { Surface } from '../ui/Surface';
+import { SpecHost } from '../kit/SpecHost';
 import { ScreenHeader } from './ScreenHeader';
 
 type Props = {
@@ -81,6 +81,12 @@ export function MirrorScaffold({ domain, title, subtitle, blurb, headerAction, t
   );
 }
 
+/**
+ * The mirror empty/zero state — rendered from a bundled GeneralNode spec (the design-system port), not
+ * hand-coded. Picks the disconnected spec (with a Pair action) or the plain one by whether an action is
+ * given; `title`/`detail` flow in through the spec's `binds`, the Pair handler through its `actions`,
+ * and the native mirror glyph through the `mirrorIcon` Slot (a visual a data tree can't express).
+ */
 function EmptyCard({
   title, detail, action,
 }: {
@@ -89,28 +95,21 @@ function EmptyCard({
   action?: { label: string; onPress: () => void };
 }) {
   const t = useTheme();
+  const icon = (
+    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
+      {/* monitor → phone mirror glyph */}
+      <Path d="M3 5.5A1.5 1.5 0 014.5 4h11A1.5 1.5 0 0117 5.5V8h-2V6H5v7h6v2H4.5A1.5 1.5 0 013 13.5v-8z" fill={t.fgDim} />
+      <Path d="M14.5 10h4A1.5 1.5 0 0120 11.5v7a1.5 1.5 0 01-1.5 1.5h-4a1.5 1.5 0 01-1.5-1.5v-7a1.5 1.5 0 011.5-1.5z" stroke={t.accent} strokeWidth={1.5} />
+    </Svg>
+  );
   return (
     <View style={styles.centered}>
-      <Surface style={styles.card} radius={10}>
-        <View style={styles.cardIcon}>
-          <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-            {/* monitor → phone mirror glyph */}
-            <Path d="M3 5.5A1.5 1.5 0 014.5 4h11A1.5 1.5 0 0117 5.5V8h-2V6H5v7h6v2H4.5A1.5 1.5 0 013 13.5v-8z" fill={t.fgDim} />
-            <Path d="M14.5 10h4A1.5 1.5 0 0120 11.5v7a1.5 1.5 0 01-1.5 1.5h-4a1.5 1.5 0 01-1.5-1.5v-7a1.5 1.5 0 011.5-1.5z" stroke={t.accent} strokeWidth={1.5} />
-          </Svg>
-        </View>
-        <Text style={[styles.cardTitle, { color: t.fg }]}>{title}</Text>
-        <Text style={[styles.cardDetail, { color: t.fgMuted }]}>{detail}</Text>
-        {action && (
-          <Pressable
-            onPress={action.onPress}
-            style={[styles.cardBtn, { borderColor: t.accent }]}
-            accessibilityRole="button"
-          >
-            <Text style={[styles.cardBtnText, { color: t.accent }]}>{action.label}</Text>
-          </Pressable>
-        )}
-      </Surface>
+      <SpecHost
+        id={action ? 'mobile.mirrorDisconnected' : 'mobile.mirrorEmpty'}
+        values={{ title, description: detail }}
+        on={action ? { pair: action.onPress } : undefined}
+        slots={{ mirrorIcon: icon }}
+      />
     </View>
   );
 }
@@ -120,22 +119,4 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
   hint: { fontSize: 12.5 },
-  card: {
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    paddingVertical: 28,
-    paddingHorizontal: 22,
-    gap: 8,
-  },
-  cardIcon: { marginBottom: 4 },
-  cardTitle: { fontSize: 15, fontWeight: '600' },
-  cardDetail: { fontSize: 12.5, lineHeight: 18, textAlign: 'center' },
-  cardBtn: {
-    marginTop: 10,
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  cardBtnText: { fontSize: 13, fontWeight: '600' },
 });
