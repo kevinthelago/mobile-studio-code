@@ -5,9 +5,9 @@ import { SAMPLE_GLANCE } from './sampleData';
 
 const small = (): GlanceGraphInput => ({
   projects: [
-    { id: 'core', role: 'infra', status: 'done' },
-    { id: 'api', role: 'service', status: 'building' },
-    { id: 'web', role: 'client', status: 'planning' },
+    { id: 'core', role: 'infra', health: 'healthy', activity: 'live' },
+    { id: 'api', role: 'service', health: 'healthy', activity: 'building' },
+    { id: 'web', role: 'client', health: 'idle', activity: 'planning' },
   ],
   links: [
     { from: 'api', to: 'core', kind: 'api' }, // api depends on core
@@ -93,12 +93,59 @@ test('drilling an unknown project yields an empty scene', () => {
   assert.equal(fleet.edges.length, 0);
 });
 
-test('node cards carry the glance card content (title/subtitle/status/accent)', () => {
+// ── the two axes (#238) ─────────────────────────────────────────────────────
+
+test('node cards carry the glance card content (title/subtitle/health/accent)', () => {
   const scene = buildGlanceScene(SAMPLE_GLANCE);
   const analytics = scene.nodes.find((n) => n.id === 'analytics')!;
   assert.equal(analytics.title, 'analytics');
-  assert.match(analytics.subtitle!, /data · blocked · 2 faults/);
   assert.ok(analytics.statusColor);
-  assert.equal(analytics.pulse, true); // blocked pulses
+  assert.equal(analytics.pulse, true); // error pulses
   assert.equal(analytics.w, GLANCE_NODE_W);
+});
+
+test('a degraded node shows its REASON in place of the activity word', () => {
+  const scene = buildGlanceScene(SAMPLE_GLANCE);
+  const analytics = scene.nodes.find((n) => n.id === 'analytics')!;
+  // health `error` + reason ⇒ the why, not "waiting", and no "N faults" tail.
+  assert.equal(analytics.subtitle, 'data · schema drift');
+  assert.doesNotMatch(analytics.subtitle!, /faults/);
+});
+
+test('a healthy node shows its activity word', () => {
+  const scene = buildGlanceScene(SAMPLE_GLANCE);
+  assert.equal(scene.nodes.find((n) => n.id === 'ledger')!.subtitle, 'harden · in review');
+});
+
+test('an `off` node renders dimmed, unpulsed, and labelled off', () => {
+  const scene = buildGlanceScene(SAMPLE_GLANCE);
+  const web = scene.nodes.find((n) => n.id === 'web-app')!;
+  assert.equal(web.dimmed, true);
+  assert.equal(web.pulse, false);
+  assert.equal(web.subtitle, 'greenfield · off');
+});
+
+test('a dependent inherits a dependency error with a MUTED dot', () => {
+  const scene = buildGlanceScene(SAMPLE_GLANCE);
+  // reporting depends on analytics (error) — it lights up, but muted and unpulsed
+  // so the node that actually failed stays the one you look at.
+  const reporting = scene.nodes.find((n) => n.id === 'reporting')!;
+  const analytics = scene.nodes.find((n) => n.id === 'analytics')!;
+  assert.equal(reporting.statusColor, analytics.statusColor);
+  assert.equal(reporting.statusMuted, true);
+  assert.equal(reporting.pulse, false);
+  assert.equal(analytics.statusMuted, false);
+});
+
+test('the accent comes from the lifecycle CATEGORY, not a hash of the id', () => {
+  const scene = buildGlanceScene(SAMPLE_GLANCE);
+  const byId = (id: string) => scene.nodes.find((n) => n.id === id)!;
+  // Both `data`-category projects share one accent; a different category differs.
+  assert.equal(byId('analytics').accentColor, byId('reporting').accentColor);
+  assert.notEqual(byId('analytics').accentColor, byId('ledger').accentColor);
+});
+
+test('fleet nodes carry NO status dot (the wire ships no per-stream health)', () => {
+  const fleet = buildFleetScene(SAMPLE_GLANCE, 'identity-svc');
+  for (const n of fleet.nodes) assert.equal(n.statusColor, undefined);
 });

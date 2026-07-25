@@ -12,7 +12,10 @@ export { graphEdge, anchor, type EdgeBox, type EdgeRouting, type GraphEdgeOpts, 
 
 // Scene contract + palettes.
 export type { GraphScene, SceneNode, SceneEdge } from './scene';
-export { ROLE_COLOR, STATUS_META, EDGE_META, styleDash } from './scene';
+export { ROLE_COLOR, CATEGORY_COLOR, HEALTH_META, ACTIVITY_META, EDGE_META, styleDash } from './scene';
+
+// Health rollup (vendored from the desktop's glance model).
+export { rollUpHealth, HEALTH_RANK, type RolledHealth } from './health';
 
 // Layout.
 export { layeredLayout, gridLayout, type LayeredLayout, type LayeredLayoutOpts } from './layout';
@@ -36,6 +39,7 @@ export {
 export {
   buildGlanceScene,
   buildFleetScene,
+  projectSubtitle,
   GLANCE_NODE_W,
   GLANCE_NODE_H,
   type GlanceGraphInput,
@@ -43,7 +47,9 @@ export {
   type GlanceAgent,
   type GlanceLink,
   type GlanceRole,
-  type GlanceStatus,
+  type GlanceHealth,
+  type GlanceActivity,
+  type GlanceCategory,
   type GlanceEdgeKind,
 } from './glanceAdapter';
 export {
