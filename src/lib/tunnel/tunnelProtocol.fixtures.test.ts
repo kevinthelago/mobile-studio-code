@@ -76,6 +76,11 @@ function decodeServer(o: Raw): TunnelServerMessage {
       } as unknown as TunnelServerMessage;
     case 'store_state':
       return { type, domain: str(o, 'domain'), rev: num(o, 'rev'), json: str(o, 'json') };
+    case 'store_state_chunk':
+      return {
+        type, domain: str(o, 'domain'), rev: num(o, 'rev'),
+        seq: num(o, 'seq'), total: num(o, 'total'), chunk: str(o, 'chunk'),
+      };
     case 'hook_telemetry': {
       const t = o.telemetry as Raw;
       assert.ok(t && typeof t === 'object', 'hook_telemetry.telemetry must be an object');
@@ -215,7 +220,7 @@ test('the live-planning frames are present in the fixtures (contract coverage)',
 // ── Contract v2 (base-studio-code#2497) ──
 
 test('v2 frames are present in the fixtures (contract coverage)', () => {
-  for (const k of ['store_state', 'plan_sync_manifest', 'plan_sync_files', 'plan_sync_ack', 'hook_telemetry']) {
+  for (const k of ['store_state', 'store_state_chunk', 'plan_sync_manifest', 'plan_sync_files', 'plan_sync_ack', 'hook_telemetry']) {
     assert.ok(k in fx.serverToClient, `serverToClient.${k} fixture missing — coverage gap`);
   }
   for (const k of ['plan_sync_manifest_request', 'plan_sync_pull', 'plan_sync_push']) {
@@ -257,6 +262,16 @@ test('store_state is the domain-agnostic {domain, rev, json} projection frame', 
   // The fixture's domain is one of the registered vocabulary (the frame accepts any string).
   assert.ok((STORE_DOMAINS as readonly string[]).includes(f.domain as string));
   assert.doesNotThrow(() => JSON.parse(f.json as string));
+});
+
+test('store_state_chunk fragments an over-cap store_state domain (base-studio-code#3757)', () => {
+  const f = fx.serverToClient.store_state_chunk;
+  assert.deepEqual(Object.keys(f).sort(), ['chunk', 'domain', 'rev', 'seq', 'total', 'type']);
+  assert.ok((STORE_DOMAINS as readonly string[]).includes(f.domain as string));
+  assert.ok((f.seq as number) < (f.total as number), 'seq is an index within total');
+  // A chunk is a RAW slice of the json — NOT necessarily valid JSON alone; the reassembler
+  // concatenates seq 0..total (by domain+rev) before parsing. The fixture pins that partial-ness.
+  assert.throws(() => JSON.parse(f.chunk as string));
 });
 
 test('pane_list panes carry an OPTIONAL kind (v1 descriptors stay valid)', () => {
