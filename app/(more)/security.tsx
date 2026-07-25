@@ -5,18 +5,18 @@ import { ModalHeader } from '../../src/components/shell/ModalHeader';
 import { SecuritySections } from '../../src/components/security/SecuritySections';
 
 /**
- * Security page (#223) — the read-only audit/activity mirror: audit activity,
- * agent profiles, and profile assignments, exactly as the desktop records
- * them. Reads the `security` mirror domain; the desktop projector does not
- * publish that domain yet, so until it does the page shows its feed-ready
- * structure behind a "not yet published" notice. Display-only by product
- * rule — nothing here is editable from the phone.
+ * Security page (#223, rewired #237) — the read-only least-privilege mirror:
+ * agent profiles (the permission model), per-pane role/profile assignments, and
+ * recent audit activity, exactly as the desktop records them. Reads the
+ * `security` mirror domain, which the desktop has published since
+ * base-studio-code#2530. Display-only by product rule — nothing here is
+ * editable from the phone.
  */
 export default function SecurityScreen() {
   const { data, synced } = useMirrorDomain('security');
   return (
     <View style={styles.root}>
-      <ModalHeader title="Security" subtitle="Audit & activity · read-only" />
+      <ModalHeader title="Security" subtitle="Profiles, assignments & audit · read-only" />
       <SecuritySections data={data} synced={synced} />
     </View>
   );

@@ -219,7 +219,7 @@ export type PlanEventKind =
 /** The registered `store_state` domains (mirrors bsc-tunnel `store_domains::ALL`). */
 export const STORE_DOMAINS = [
   'glance', 'plan', 'org', 'blueprints', 'skills',
-  'components', 'themes', 'automations', 'mcp', 'alerts',
+  'components', 'themes', 'automations', 'mcp', 'alerts', 'security',
 ] as const;
 
 export type StoreDomain = (typeof STORE_DOMAINS)[number];
