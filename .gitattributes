@@ -1,0 +1,16 @@
+# Line-ending policy (#246).
+#
+# The tunnel contract fixtures are shared with base-studio-code and their own `$comment`
+# claims they are BYTE-IDENTICAL to the desktop copy. On a Windows checkout without this
+# file that claim is false in the working tree — Git stores LF but checks out CRLF, so
+# mobile's copy measured 5474 bytes against the desktop's 5376 (98 CRLFs) and any
+# working-tree hash comparison false-fails.
+#
+# Pinning eol=lf repo-wide fixes the working tree without touching a single blob (Git
+# already normalizes to LF on the way in), and makes the byte-identical claim literally
+# true for anyone who checks.
+* text=auto eol=lf
+
+# The contract fixtures specifically — stated explicitly so the rule survives any future
+# narrowing of the wildcard above.
+*.fixtures.json text eol=lf

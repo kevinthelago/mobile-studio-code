@@ -51,7 +51,39 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
 
-  # ── 3. Expo export (web bundle) ─────────────────────────────────────────────
+  # ── 3. Unit tests ───────────────────────────────────────────────────────────
+  # Added in #246. Until this job existed the suite — including the tunnel FRAME
+  # parity test, the one guard against wire-contract drift — ran developer-local
+  # only, so a red test could merge. Everything the payload parity harness does
+  # is decorative without it.
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22, not the 20 the other jobs pin: `npm test` is
+      # `tsx --test "src/**/*.test.ts"`, and glob expansion of the test runner's
+      # positional args only exists from Node 21. Verified — under Node 20 the
+      # command exits 1 with `Could not find 'src/**/*.test.ts'`; under 22 it
+      # runs the full suite.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Restore node_modules
+        uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: node-modules-${{ runner.os }}-
+
+      - name: Run tests
+        run: npm test
+
+  # ── 4. Expo export (web bundle) ─────────────────────────────────────────────
   export:
     name: Expo export
     runs-on: ubuntu-latest
