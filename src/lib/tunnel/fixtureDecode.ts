@@ -51,6 +51,15 @@ export function arr(o: Raw, k: string): Raw[] {
   return o[k] as Raw[];
 }
 
+/** A `string[]` field (e.g. `security.profiles[].commands`, `glance.streams[].dependsOn`). */
+export function strArr(o: Raw, k: string): string[] {
+  assert.ok(Array.isArray(o[k]), `field "${k}" must be an array`);
+  return (o[k] as unknown[]).map((v, i) => {
+    assert.equal(typeof v, 'string', `field "${k}[${i}]" must be a string`);
+    return v as string;
+  });
+}
+
 /** A `Record<string, string>` field (e.g. `plan_sync_manifest.files`). */
 export function strRecord(o: Raw, k: string): Record<string, string> {
   const v = o[k];
