@@ -25,8 +25,35 @@ export const DEMO_PROJECTIONS: Record<string, unknown> = {
     ],
     drill: null,
     drillFleet: null,
-    fleets: {},
-    personaRoles: {},
+    // A fleet per project (#2530) — the L1 agents shown when a node is drilled. Stream ids pair with
+    // the demo panes in TunnelContext (`<project>:<stream>`) so tapping an agent opens its chat.
+    fleets: {
+      api: {
+        streams: [
+          { id: 'backend', name: 'backend', persona: 'p-backend', dependsOn: [] },
+          { id: 'reviewer', name: 'reviewer', persona: 'p-reviewer', dependsOn: ['backend'] },
+          { id: 'tester', name: 'tester', persona: 'p-tester', dependsOn: ['backend'] },
+        ],
+        director: { enabled: true, role: 'director' },
+      },
+      web: {
+        streams: [
+          { id: 'ui', name: 'ui', persona: 'p-ui', dependsOn: [] },
+          { id: 'designer', name: 'designer', persona: 'p-designer', dependsOn: ['ui'] },
+        ],
+        director: { enabled: true, role: 'director' },
+      },
+      infra: {
+        streams: [
+          { id: 'ops', name: 'ops', persona: 'p-ops', dependsOn: [] },
+        ],
+        director: { enabled: false },
+      },
+    },
+    personaRoles: {
+      'p-backend': 'worker', 'p-reviewer': 'reviewer', 'p-tester': 'tester',
+      'p-ui': 'worker', 'p-designer': 'designer', 'p-ops': 'infra',
+    },
   },
 
   // Skills — library cards + a group + a pending lesson.
@@ -109,3 +136,37 @@ export const DEMO_PROJECTIONS: Record<string, unknown> = {
 
 /** Domains that have bundled demo data (used to gate the fallback). */
 export const DEMO_DOMAINS: readonly string[] = Object.keys(DEMO_PROJECTIONS);
+
+// ── Demo sessions (agent chats) ──────────────────────────────────────────────────────────────────
+// One pane per Glance fleet agent, keyed `<project>:<stream>` to match agentPaneId(), so drilling a
+// project and tapping an agent opens its session chat (a read-only PTY mirror) with sample output.
+// TunnelContext serves these while `demoActive`; a real pane_list overrides by id.
+import type { PaneState } from '../types';
+
+function demoPane(id: string, name: string, cwd: string, kind: PaneState['descriptor']['kind'], output: string): PaneState {
+  return {
+    descriptor: { id, cwd, name, status: 'running', kind },
+    streamingState: 'dormant',
+    outputBuffer: output,
+    sessionState: null,
+    ptySize: null,
+    hasUserRequest: false,
+    lastUserRequestAt: null,
+    lastActivityAt: null,
+  };
+}
+
+export const DEMO_PANES: Record<string, PaneState> = {
+  'api:backend': demoPane('api:backend', 'backend', '/worktrees/api/backend', 'worker',
+    '$ implement POST /auth (issue #142)\n> reading src/routes/auth.ts\n> writing handler + token refresh\n> added 14 unit tests\n✓ 14 passed\nawaiting review …'),
+  'api:reviewer': demoPane('api:reviewer', 'reviewer', '/worktrees/api/reviewer', 'triage',
+    '$ review backend#142\n> diff: src/routes/auth.ts (+96 −14)\n> flagged: missing rate-limit on /auth\n> requested one change\n'),
+  'api:tester': demoPane('api:tester', 'tester', '/worktrees/api/tester', 'worker',
+    '$ run integration suite\n✓ auth flow\n✓ token refresh\n✗ rate-limit (not implemented)\n2/3 green — blocking merge\n'),
+  'web:ui': demoPane('web:ui', 'ui', '/worktrees/web/ui', 'worker',
+    '$ build the settings screen\n> composing Card + SegmentedControl + Toggle\n> wired the provider picker\n✓ renders in light + dark\n'),
+  'web:designer': demoPane('web:designer', 'designer', '/worktrees/web/designer', 'designer',
+    '$ author the mobile kit\n> bsc ui set mobile.skillItem\n> bsc ui validate → ok\n> exported 7 components\n'),
+  'infra:ops': demoPane('infra:ops', 'ops', '/worktrees/infra/ops', 'console',
+    '$ terraform plan\n> 3 to add, 1 to change, 0 to destroy\n> apply gated on review\nidle — waiting on approval\n'),
+};

@@ -10,6 +10,7 @@ import { TunnelLifecycleStatus } from './tunnel/reconnect';
 import { KEYS, getSecret, setSecret } from './storage';
 import { parsePairingPayload } from './tunnel/pairing';
 import type { StoreStateMap } from './tunnel/storeState';
+import { DEMO_PANES } from './mirror/demoData';
 
 /** A live-planning frame (server → phone): full snapshot, header, or transient delta. */
 export type PlanFrame =
@@ -96,6 +97,8 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   const [connectionState, setConnectionState] = useState<TunnelConnectionState>('disconnected');
   const [lifecycleStatus, setLifecycleStatus] = useState<TunnelLifecycleStatus>('offline');
   const [panes, setPanes] = useState<Record<string, PaneState>>({});
+  // Standalone demo (#250): serve demo panes until a real connection latches this on.
+  const [everConnected, setEverConnected] = useState(false);
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
   const [lastConnection, setLastConnection] = useState<PairingPayload | null>(null);
   const [desktopProtocolVersion, setDesktopProtocolVersion] = useState<number | null>(null);
@@ -164,6 +167,11 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
     });
     return () => sub.remove();
   }, []);
+
+  // Latch demo mode off on the first successful connection (#250).
+  useEffect(() => {
+    if (connectionState === 'connected') setEverConnected(true);
+  }, [connectionState]);
 
   const connect = useCallback(async (payload: PairingPayload) => {
     await setSecret(KEYS.TUNNEL_PAIRING, JSON.stringify(payload));
@@ -243,8 +251,15 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const clearUserRequestSignal = useCallback(() => setUserRequestSignal(null), []);
 
+  // While no real connection has happened this session, surface demo panes so the sessions roster and
+  // the Glance agent chats are populated offline (#250). A real pane_list overrides any demo pane by id.
+  const effectivePanes = useMemo(
+    () => (everConnected ? panes : { ...DEMO_PANES, ...panes }),
+    [everConnected, panes],
+  );
+
   const orderedPaneIds = useMemo(() => {
-    return Object.values(panes)
+    return Object.values(effectivePanes)
       .sort((a, b) => {
         // Panes awaiting user input float to the top, ordered by recency
         const aReq = a.hasUserRequest ? (a.lastUserRequestAt ?? 0) : -1;
@@ -253,12 +268,12 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
         return (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0);
       })
       .map((p) => p.descriptor.id);
-  }, [panes]);
+  }, [effectivePanes]);
 
   const value: TunnelValue = {
     connectionState,
     lifecycleStatus,
-    panes,
+    panes: effectivePanes,
     activePaneId,
     orderedPaneIds,
     desktopProtocolVersion,
