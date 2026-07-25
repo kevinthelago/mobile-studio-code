@@ -20,21 +20,17 @@ import { MirrorProvider } from '../src/lib/mirror/MirrorContext';
 import {
   initFcm, subscribeFcm, getInitialNotificationTap, onNotificationOpened,
 } from '../src/lib/fcm';
-import { openSessionChat } from '../src/lib/sessions/nav';
 import { AlertsProvider, useAlerts } from '../src/lib/alerts/AlertsContext';
-import { alertTarget, type PushTap } from '../src/lib/alerts/model';
+import { pushTarget, type PushTap } from '../src/lib/alerts/model';
 import { openAlertTarget } from '../src/lib/alerts/nav';
 
-// One place both tap paths (cold-start + background) route through: a
-// `user_request` tap deep-links into that session's chat (#219); an #2498
-// alert tap follows its resolved target (that session's chat, the Planner tab,
-// or the inbox).
+// One place both tap paths (cold-start + background) route through. `pushTarget`
+// resolves EVERY push type the desktop emits (#244) — the #219 user_request, the
+// #2498 alert taxonomy, and the three standalone pushes (quarantine, automation
+// failure, coordination wait) that previously fell through to `null` and left the
+// tap opening the app to wherever it already was.
 function routeTap(tap: PushTap) {
-  if (tap.type === 'user_request') {
-    openSessionChat(tap.paneId);
-  } else {
-    openAlertTarget(alertTarget({ kind: tap.kind, paneId: tap.paneId }));
-  }
+  openAlertTarget(pushTarget(tap));
 }
 
 // Dark navigation theme with a transparent background so the ThemedFrame (theme

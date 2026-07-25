@@ -2,7 +2,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseAlertsPayload, parsePushTap, provisionalAlert, mergeAlerts,
-  visibleAlerts, unreadCount, alertMeta, alertTarget, type AlertEvent,
+  visibleAlerts, unreadCount, alertMeta, alertTarget, pushAlertDraft, pushTarget,
+  isDuplicateCoordWait, PUSH_TYPES, PUSH_ALERT_KINDS, COORD_WAIT_DEDUP_MS,
+  type AlertEvent, type PushType,
 } from './model';
 
 const ev = (o: Partial<AlertEvent> & { id: string; at: number }): AlertEvent => ({
@@ -62,6 +64,145 @@ describe('parsePushTap', () => {
     assert.equal(parsePushTap({ type: 'alert' }), null);       // no kind
     assert.equal(parsePushTap({ type: 'other' }), null);
     assert.equal(parsePushTap(null), null);
+  });
+});
+
+// ── The durable guard (#244) ────────────────────────────────────────────────
+//
+// A representative `data` block for EVERY `data.type` base-studio-code's
+// `src-tauri/src/mobile/fcm.rs` can emit, with the exact keys each builder puts
+// on the wire. Before #244 three of these parsed to null and the tap was
+// swallowed — including the security quarantine push, which exists specifically
+// to reach a backgrounded phone.
+const PUSH_SAMPLES: Record<PushType, Record<string, string>> = {
+  // build_message :146
+  user_request: { type: 'user_request', paneId: 't3p1', prompt: 'ready?' },
+  // build_alert_message :235
+  alert: { type: 'alert', kind: 'gate-ready', paneId: 'planning_demo' },
+  // build_coord_wait_message :170
+  coord_wait: { type: 'coord_wait', session: 't0p1', reason: 'bsc-wait' },
+  // build_autom_failed_message :190
+  autom_failed: { type: 'autom_failed', name: 'Nightly triage', error: 'exit 1' },
+  // build_warden_message :212
+  warden_quarantine: {
+    type: 'warden_quarantine', session: 't0p1', detail: 'denied-command: gh repo delete acme/api',
+  },
+};
+
+describe('every desktop push type is routable', () => {
+  it('PUSH_SAMPLES covers exactly PUSH_TYPES', () => {
+    assert.deepEqual(Object.keys(PUSH_SAMPLES).sort(), [...PUSH_TYPES].sort());
+  });
+
+  // THE test for #244: a new desktop push type fails here rather than silently
+  // going nowhere. If this breaks, `fcm.rs` grew a builder — add the type.
+  for (const type of PUSH_TYPES) {
+    it(`parses "${type}" to a non-null tap`, () => {
+      const tap = parsePushTap(PUSH_SAMPLES[type]);
+      assert.notEqual(tap, null, `push type "${type}" is unroutable`);
+      assert.equal(tap!.type, type);
+    });
+
+    it(`resolves "${type}" to a real destination`, () => {
+      const target = pushTarget(parsePushTap(PUSH_SAMPLES[type])!);
+      // `inbox` is a legitimate destination, but never a silent no-op.
+      assert.ok(['chat', 'planner', 'automations', 'inbox'].includes(target.type));
+    });
+  }
+
+  it('parses the standalone pushes with the exact Rust field names', () => {
+    assert.deepEqual(parsePushTap(PUSH_SAMPLES.warden_quarantine), {
+      type: 'warden_quarantine', session: 't0p1', detail: 'denied-command: gh repo delete acme/api',
+    });
+    assert.deepEqual(parsePushTap(PUSH_SAMPLES.autom_failed), {
+      type: 'autom_failed', name: 'Nightly triage', error: 'exit 1',
+    });
+    assert.deepEqual(parsePushTap(PUSH_SAMPLES.coord_wait), {
+      type: 'coord_wait', session: 't0p1', reason: 'bsc-wait',
+    });
+  });
+
+  it('requires the identifying field but tolerates a missing detail', () => {
+    assert.equal(parsePushTap({ type: 'warden_quarantine', detail: 'x' }), null);
+    assert.equal(parsePushTap({ type: 'autom_failed', error: 'x' }), null);
+    assert.equal(parsePushTap({ type: 'coord_wait', reason: 'x' }), null);
+    assert.deepEqual(parsePushTap({ type: 'warden_quarantine', session: 't0p1' }), {
+      type: 'warden_quarantine', session: 't0p1', detail: '',
+    });
+  });
+});
+
+describe('pushAlertDraft', () => {
+  it('turns a quarantine push into an inbox row bound to its session', () => {
+    const tap = parsePushTap(PUSH_SAMPLES.warden_quarantine)!;
+    assert.deepEqual(pushAlertDraft(tap, ''), {
+      kind: PUSH_ALERT_KINDS.quarantine,
+      text: 'denied-command: gh repo delete acme/api',
+      paneId: 't0p1',
+    });
+  });
+
+  it('prefers the notification body when the push carried one', () => {
+    const tap = parsePushTap(PUSH_SAMPLES.autom_failed)!;
+    assert.equal(pushAlertDraft(tap, 'Nightly triage failed')!.text, 'Nightly triage failed');
+    // ...and falls back to the tap's own fields so a row is never blank.
+    assert.equal(pushAlertDraft(tap, '')!.text, 'Nightly triage: exit 1');
+  });
+
+  it('does not mint a row for user_request (a pane signal, not an alert)', () => {
+    assert.equal(pushAlertDraft(parsePushTap(PUSH_SAMPLES.user_request)!, ''), null);
+  });
+
+  it('gives every minted kind real presentation, not the generic fallback', () => {
+    for (const kind of Object.values(PUSH_ALERT_KINDS)) {
+      assert.notEqual(alertMeta(kind).title, 'Alert', `${kind} renders generically`);
+    }
+  });
+});
+
+describe('pushTarget', () => {
+  it('deep-links a quarantine to the offending session chat', () => {
+    assert.deepEqual(pushTarget(parsePushTap(PUSH_SAMPLES.warden_quarantine)!), {
+      type: 'chat', paneId: 't0p1',
+    });
+  });
+
+  it('deep-links an automation failure to the Automations tab', () => {
+    assert.deepEqual(pushTarget(parsePushTap(PUSH_SAMPLES.autom_failed)!), { type: 'automations' });
+  });
+
+  it('routes user_request to its pane chat', () => {
+    assert.deepEqual(pushTarget(parsePushTap(PUSH_SAMPLES.user_request)!), {
+      type: 'chat', paneId: 't3p1',
+    });
+  });
+});
+
+describe('isDuplicateCoordWait', () => {
+  const NOW = 1_000_000;
+  const paused = ev({ id: 'a', at: NOW - 5_000, kind: 'agent-paused', paneId: 't0p1' });
+
+  it('suppresses a coord_wait matching a recent alert-path row for the same session', () => {
+    assert.equal(isDuplicateCoordWait('t0p1', [paused], NOW), true);
+  });
+
+  it('keeps it when the session differs', () => {
+    assert.equal(isDuplicateCoordWait('t9p9', [paused], NOW), false);
+  });
+
+  it('keeps it when the alert-path row is outside the window', () => {
+    assert.equal(isDuplicateCoordWait('t0p1', [paused], NOW + COORD_WAIT_DEDUP_MS), false);
+  });
+
+  it('only dedups against the kinds the coord log actually mints', () => {
+    const landed = ev({ id: 'b', at: NOW, kind: 'fleet-landed', paneId: 't0p1' });
+    assert.equal(isDuplicateCoordWait('t0p1', [landed], NOW), false);
+    const asking = ev({ id: 'c', at: NOW, kind: 'worker-question', paneId: 't0p1' });
+    assert.equal(isDuplicateCoordWait('t0p1', [asking], NOW), true);
+  });
+
+  it('is false against an empty inbox', () => {
+    assert.equal(isDuplicateCoordWait('t0p1', [], NOW), false);
   });
 });
 
