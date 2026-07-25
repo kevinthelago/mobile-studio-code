@@ -9,6 +9,12 @@
 // designPage / automationsView / mcpView), so it renders through the real view-models, not a mock path.
 // Representative, not exhaustive — a handful of items per domain.
 
+// Demo data is served ONLY in a release build — for App Store reviewers and the offline first-run
+// (#250). It is OFF in the dev client (`__DEV__`), so live-tunnel testing sees real desktop state and
+// honest awaiting/empty states, not mock data. To preview the demo path in dev, hardcode `true`; to
+// force it off everywhere, hardcode `false`.
+export const DEMO_ENABLED = !__DEV__;
+
 export const DEMO_PROJECTIONS: Record<string, unknown> = {
   // Glance — a small project network (selectGlance: health/activity/category unions, #238).
   glance: {

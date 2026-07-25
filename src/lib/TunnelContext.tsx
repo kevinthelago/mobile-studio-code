@@ -10,7 +10,7 @@ import { TunnelLifecycleStatus } from './tunnel/reconnect';
 import { KEYS, getSecret, setSecret } from './storage';
 import { parsePairingPayload } from './tunnel/pairing';
 import type { StoreStateMap } from './tunnel/storeState';
-import { DEMO_PANES } from './mirror/demoData';
+import { DEMO_ENABLED, DEMO_PANES } from './mirror/demoData';
 
 /** A live-planning frame (server → phone): full snapshot, header, or transient delta. */
 export type PlanFrame =
@@ -254,7 +254,7 @@ export function TunnelProvider({ children }: { children: React.ReactNode }) {
   // While no real connection has happened this session, surface demo panes so the sessions roster and
   // the Glance agent chats are populated offline (#250). A real pane_list overrides any demo pane by id.
   const effectivePanes = useMemo(
-    () => (everConnected ? panes : { ...DEMO_PANES, ...panes }),
+    () => (DEMO_ENABLED && !everConnected ? { ...DEMO_PANES, ...panes } : panes),
     [everConnected, panes],
   );
 

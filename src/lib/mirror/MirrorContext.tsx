@@ -5,7 +5,7 @@ import {
   EMPTY_MIRROR, applyMirrorFrame, type MirrorState,
 } from './state';
 import { mirrorFramesFrom } from './feed';
-import { DEMO_PROJECTIONS } from './demoData';
+import { DEMO_ENABLED, DEMO_PROJECTIONS } from './demoData';
 import { useTunnel } from '../TunnelContext';
 
 /** What a page sees for one domain. `synced` is false until a frame lands. */
@@ -56,7 +56,7 @@ export function MirrorProvider({ children }: { children: ReactNode }) {
   }, [connectionState]);
 
   const value = useMemo<MirrorContextValue>(
-    () => ({ entries: state, demoActive: !everConnected }),
+    () => ({ entries: state, demoActive: DEMO_ENABLED && !everConnected }),
     [state, everConnected],
   );
 
