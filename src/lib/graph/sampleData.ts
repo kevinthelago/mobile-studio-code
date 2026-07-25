@@ -10,19 +10,19 @@ import type { OrgGraphInput } from './orgAdapter';
 
 /** A small deterministic fleet: director hub, N workers depending on the director, one reviewer. */
 function sampleFleet(projectId: string, workers: number): GlanceAgent[] {
-  const director: GlanceAgent = { id: `${projectId}:director`, name: 'director', role: 'director', status: 'building' };
+  const director: GlanceAgent = { id: `${projectId}:director`, name: 'director', role: 'director', activity: 'building' };
   const workerAgents: GlanceAgent[] = Array.from({ length: workers }, (_, i) => ({
     id: `${projectId}:w${i + 1}`,
     name: `worker ${i + 1}`,
     role: 'worker',
-    status: i === 0 ? 'building' : 'planning',
+    activity: i === 0 ? 'building' : 'planning',
     dependsOn: [director.id],
   }));
   const reviewer: GlanceAgent = {
     id: `${projectId}:reviewer`,
     name: 'reviewer',
     role: 'reviewer',
-    status: 'idle',
+    activity: 'idle',
     dependsOn: workerAgents.map((w) => w.id),
   };
   return [director, ...workerAgents, reviewer];
@@ -32,15 +32,18 @@ function sampleFleet(projectId: string, workers: number): GlanceAgent[] {
  *  Keeps the analytics↔reporting cycle so the hazard styling shows. */
 export const SAMPLE_GLANCE: GlanceGraphInput = {
   projects: [
-    { id: 'auth-core', role: 'infra', status: 'done' },
-    { id: 'events-bus', role: 'infra', status: 'done' },
-    { id: 'identity-svc', role: 'service', status: 'building', agents: sampleFleet('identity-svc', 3) },
-    { id: 'ledger', role: 'data', status: 'review' },
-    { id: 'user-api', role: 'service', status: 'building', agents: sampleFleet('user-api', 2) },
-    { id: 'billing-svc', role: 'service', status: 'planning' },
-    { id: 'analytics', role: 'data', status: 'blocked', faults: 2 },
-    { id: 'reporting', role: 'data', status: 'blocked' },
-    { id: 'web-app', role: 'client', status: 'building' },
+    { id: 'auth-core', role: 'infra', category: 'maintain', health: 'healthy', activity: 'live' },
+    { id: 'events-bus', role: 'infra', category: 'maintain', health: 'healthy', activity: 'live' },
+    { id: 'identity-svc', role: 'service', category: 'greenfield', health: 'healthy', activity: 'building', agents: sampleFleet('identity-svc', 3) },
+    { id: 'ledger', role: 'data', category: 'harden', health: 'healthy', activity: 'review' },
+    { id: 'user-api', role: 'service', category: 'transform', health: 'healthy', activity: 'building', agents: sampleFleet('user-api', 2) },
+    { id: 'billing-svc', role: 'service', category: 'greenfield', health: 'idle', activity: 'planning' },
+    // Degraded with a reason — the subtitle shows the WHY in place of the activity word, and
+    // `reporting` (which depends on it) inherits the error through the rollup.
+    { id: 'analytics', role: 'data', category: 'data', health: 'error', activity: 'waiting', reason: 'schema drift', faults: 2 },
+    { id: 'reporting', role: 'data', category: 'data', health: 'idle', activity: 'waiting' },
+    // A user-deactivated node (#3239) — dimmed, and never lit by a dependency.
+    { id: 'web-app', role: 'client', category: 'greenfield', health: 'off', activity: 'idle' },
   ],
   links: [
     { from: 'identity-svc', to: 'auth-core', kind: 'api' },

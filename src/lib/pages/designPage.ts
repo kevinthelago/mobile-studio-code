@@ -220,7 +220,10 @@ export function compositionInput(model: ComponentsModel): GlanceGraphInput {
       id: c.id,
       slug: c.name,
       role: ROLE_TO_GROLE[c.role] ?? 'service',
-      status: 'idle',
+      // A component has no lifecycle of its own — both glance axes rest at `idle`, so the card
+      // reads by its role colour alone and no status dot competes for attention (#238).
+      health: 'idle' as const,
+      activity: 'idle' as const,
     })),
     links,
   };

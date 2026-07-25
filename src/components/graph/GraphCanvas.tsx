@@ -196,7 +196,9 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCa
     const stroke = isSelected ? colors.selection : colors.border;
     const stacked = (n.stackCount ?? 0) >= 2;
     return (
-      <G key={n.id} onPress={() => onSelect?.({ kind: 'node', id: n.id })}>
+      // A deactivated node (health `off`, #238) dims whole-card, mirroring the desktop's 0.42.
+      // Selection still reads through, so a dimmed node remains inspectable.
+      <G key={n.id} opacity={n.dimmed && !isSelected ? 0.42 : 1} onPress={() => onSelect?.({ kind: 'node', id: n.id })}>
         {stacked && (
           <>
             <Rect
@@ -246,7 +248,9 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, Props>(function GraphCa
             {n.pulse ? (
               <Circle cx={n.x + n.w - 16} cy={n.y + 16} r={7} stroke={n.statusColor} strokeWidth={1.5} fill="none" opacity={0.45} />
             ) : null}
-            <Circle cx={n.x + n.w - 16} cy={n.y + 16} r={4} fill={n.statusColor} />
+            {/* A dot lit only by a dependency (#238 `statusMuted`) renders at half opacity —
+                the node that actually failed keeps the full-strength dot. */}
+            <Circle cx={n.x + n.w - 16} cy={n.y + 16} r={4} fill={n.statusColor} opacity={n.statusMuted ? 0.5 : 1} />
           </>
         ) : null}
         {stacked ? (
