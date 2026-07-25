@@ -69,7 +69,15 @@ const UNPROJECTED_DOMAINS = new Set(['plan']);
 const PENDING_DOMAINS: Record<string, string> = {
   org: '#235 — orgs (the whole team library) + persona detail unread',
   blueprints: '#236 — soundKit/origin/updatedAt unread; only the ACTIVE team crosses',
-  components: '#241 — unpared kits, composes scoping, libraryRefs not projected',
+  // #241 C5 (global composes scoping) is FIXED. What remains is all desktop-side: kits ship
+  // unpared (C1), `group` is not projected (C3), and `libraryRefs` is not projected (C4).
+  //
+  // Note a limit of this harness, found while fixing C5: the fixture CANNOT catch C1. The kit in
+  // `PROJECTION_INPUTS` is `{id, name, tech, stack, dot}` — `animations`/`seedHash` are optional
+  // on `Kit`, so a minimal input satisfies the type, and `buildComponentsPayload` passes `kits`
+  // through verbatim. The fixture therefore shows a pared-looking kit the real wire would not
+  // produce. Catching pass-through bloat needs the fixture INPUT to carry the optional fields.
+  components: '#241 — C1/C3/C4 desktop-side; fixture input does not exercise kit pass-through',
   themes: '#242 — base + tech groups on the wire, never read',
   automations: '#239 — system hook floor never projected; two dead reads',
   mcp: '#240 — built-in servers invisible; version read is unfixable',
