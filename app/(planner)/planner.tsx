@@ -77,7 +77,7 @@ function buildGrade(readiness: ProjectReadiness): Grade {
   return { letter, pct, summary, categories, suggestions };
 }
 
-export default function PlannerScreen() {
+export default function PlannerScreen({ embedded = false }: { embedded?: boolean }) {
   const t = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -130,7 +130,7 @@ export default function PlannerScreen() {
   }
   function back() {
     if (active) closeProject();
-    else router.back();
+    else if (!embedded) router.back();
   }
   function confirmDelete(id: string, title: string) {
     Alert.alert('Delete plan?', `"${title}" will be removed from this device.`, [
@@ -142,11 +142,13 @@ export default function PlannerScreen() {
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: t.borderColor }]}>
-        <IconBtn onPress={back}>
-          <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-            <Path d="M9 3L5 7l4 4" stroke={t.fg} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        </IconBtn>
+        {(active || !embedded) && (
+          <IconBtn onPress={back}>
+            <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+              <Path d="M9 3L5 7l4 4" stroke={t.fg} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </IconBtn>
+        )}
         <View style={styles.headerText}>
           <Text style={[styles.title, { color: t.fg }]} numberOfLines={1}>
             {active ? active.title : 'Plan a project'}
@@ -437,7 +439,7 @@ export default function PlannerScreen() {
         <OverflowMenu
           onClose={() => setShowOverflow(false)}
           onPublish={() => { setShowOverflow(false); setShowPublish(true); }}
-          onSaveExit={() => { setShowOverflow(false); closeProject(); router.back(); }}
+          onSaveExit={() => { setShowOverflow(false); closeProject(); if (!embedded) router.back(); }}
           onSwitchBlueprint={() => { setShowOverflow(false); closeProject(); }}
           onClear={() => { setShowOverflow(false); void deleteProject(active.id); }}
         />
