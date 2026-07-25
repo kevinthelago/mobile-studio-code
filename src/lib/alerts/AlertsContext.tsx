@@ -5,7 +5,8 @@ import React, {
 import { useMirrorDomain } from '../mirror/MirrorContext';
 import { KEYS, getSecret, setSecret } from '../storage';
 import {
-  mergeAlerts, parseAlertsPayload, provisionalAlert, unreadCount, visibleAlerts,
+  isDuplicateCoordWait, mergeAlerts, parseAlertsPayload, provisionalAlert,
+  unreadCount, visibleAlerts, PUSH_ALERT_KINDS,
   type AlertEvent,
 } from './model';
 import {
@@ -111,11 +112,22 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
   const recordFcmAlert = useCallback(
     (kind: string, title: string, body: string, paneId?: string) => {
       const now = Date.now();
+      // The desktop fires BOTH an alert push and a standalone coord_wait push for
+      // one coordination event (#244). Suppress the second so the inbox shows one
+      // row — neither the row nor the toast, since the alert path already raised
+      // both. Retiring the desktop-side duplicate is the real fix.
+      if (
+        kind === PUSH_ALERT_KINDS.coordWaiting
+        && paneId
+        && isDuplicateCoordWait(paneId, alerts, now)
+      ) {
+        return;
+      }
       const entry = provisionalAlert(kind, body, paneId, now);
       setProvisional((prev) => [...prev, entry].slice(-PROVISIONAL_CAP));
       setToast({ kind, title, body, paneId, at: now });
     },
-    [],
+    [alerts],
   );
 
   const dismissToast = useCallback(() => setToast(null), []);

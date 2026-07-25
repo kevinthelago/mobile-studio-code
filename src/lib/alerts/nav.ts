@@ -14,7 +14,8 @@ export function openAlertsInbox() {
 
 /**
  * Follow a resolved alert deep-link (see `alertTarget` in model.ts):
- * chat → that session's chat; planner → the Planner tab; inbox → the inbox.
+ * chat → that session's chat; planner → the Planner tab; automations → the
+ * Automations tab; inbox → the inbox.
  */
 export function openAlertTarget(target: AlertTarget) {
   switch (target.type) {
@@ -23,6 +24,9 @@ export function openAlertTarget(target: AlertTarget) {
       break;
     case 'planner':
       router.navigate('/(tabs)/plan');
+      break;
+    case 'automations':
+      router.navigate('/(tabs)/automations');
       break;
     default:
       openAlertsInbox();

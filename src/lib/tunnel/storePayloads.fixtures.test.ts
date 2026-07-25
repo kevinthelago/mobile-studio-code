@@ -40,6 +40,7 @@ import { STORE_DOMAINS } from '../types';
 import { selectGlance, glanceL0Input } from '../pages/glancePage';
 import { buildGlanceScene } from '../graph';
 import { selectSecurityView } from '../mirror/securityView';
+import { parseAlertsPayload, alertTarget } from '../alerts/model';
 
 const fx = JSON.parse(
   readFileSync('src/lib/tunnel/storePayloads.fixtures.json', 'utf8'),
@@ -72,7 +73,6 @@ const PENDING_DOMAINS: Record<string, string> = {
   themes: '#242 — base + tech groups on the wire, never read',
   automations: '#239 — system hook floor never projected; two dead reads',
   mcp: '#240 — built-in servers invisible; version read is unfixable',
-  alerts: '#244 — three live FCM push types unroutable',
   skills: '#245 — lesson timestamps dropped; StageStatus "ahead" has no colour',
 };
 
@@ -191,9 +191,29 @@ function decodeSecurity(o: Raw): Raw {
   };
 }
 
+/**
+ * `alerts` — every field is consumed by `parseAlertsPayload`. #244 confirmed the
+ * store domain itself was already field- and type-exact (the ISO-string trap
+ * that broke `security` does not occur here: `at` is epoch ms on both sides);
+ * the drift was entirely in the FCM push surface around it, which this harness
+ * does not cover. The push types are guarded by their own enumeration test in
+ * `alerts/model.test.ts`.
+ */
+function decodeAlerts(o: Raw): Raw {
+  return {
+    alerts: arr(o, 'alerts').map((a) => {
+      const out: Raw = { id: str(a, 'id'), kind: str(a, 'kind'), text: str(a, 'text'), at: num(a, 'at') };
+      copyOptStr(a, out, 'paneId');
+      copyOptStr(a, out, 'project');
+      return out;
+    }),
+  };
+}
+
 const DECODERS: Record<string, (o: Raw) => Raw> = {
   glance: decodeGlance,
   security: decodeSecurity,
+  alerts: decodeAlerts,
 };
 
 // ── Coverage + vocabulary guards ────────────────────────────────────────────────────────────
@@ -338,6 +358,22 @@ test('Layer B: security — assignments join the two paneId records', () => {
   assert.equal(a.role, 'worker');
   assert.equal(a.profileId, 'pf_worker');
   assert.equal(a.profile, 'Worker', 'the profile id must resolve to its name');
+});
+
+test('Layer B: alerts — every field reaches the inbox row', () => {
+  const alerts = parseAlertsPayload(fx.domains.alerts);
+  assert.equal(alerts.length, 1, 'the canonical alert did not survive the parse');
+  const a = alerts[0];
+  assert.equal(a.id, 'gate-ready:demo:1721900000000');
+  assert.equal(a.kind, 'gate-ready');
+  assert.equal(a.text, 'Plan ready to publish');
+  assert.equal(a.at, 1721900000000);
+  assert.equal(a.paneId, 'demo:director');
+  assert.equal(a.project, 'demo');
+  // `at` is epoch ms on BOTH sides here — the #237 ISO-string trap does not occur.
+  assert.equal(typeof a.at, 'number');
+  // ...and the row resolves to a real destination rather than the inbox fallback.
+  assert.deepEqual(alertTarget(a), { type: 'planner' });
 });
 
 // ── The invariant that gives Layer B its teeth ───────────────────────────────────────────────

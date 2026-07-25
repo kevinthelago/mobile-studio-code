@@ -11,11 +11,14 @@ import {
   AuthorizationStatus,
   FirebaseMessagingTypes,
 } from '@react-native-firebase/messaging';
-import { parsePushTap, type PushTap } from './alerts/model';
+import { parsePushTap, pushAlertDraft, type PushTap } from './alerts/model';
 
 export type FcmTokenCallback = (token: string) => void;
 export type UserRequestCallback = (paneId: string, prompt: string) => void;
-/** A #2498 alert push received while the app is foregrounded. */
+/**
+ * An inbox-worthy push received while the app is foregrounded — the #2498
+ * `alert` taxonomy plus the three standalone desktop pushes (#244).
+ */
 export type AlertPushCallback = (
   kind: string,
   title: string,
@@ -114,6 +117,12 @@ export function onNotificationOpened(
   });
 }
 
+/**
+ * Fan a foreground push out by `data.type`. `user_request` is a pane-state
+ * signal; every other type becomes an inbox row via `pushAlertDraft`, so a
+ * quarantine or automation failure survives the banner instead of existing only
+ * as a transient OS notification (#244).
+ */
 function handleRemoteMessage(
   remote: FirebaseMessagingTypes.RemoteMessage,
   onUserRequest: UserRequestCallback,
@@ -126,10 +135,7 @@ function handleRemoteMessage(
     onUserRequest(tap.paneId, prompt);
     return;
   }
-  onAlert(
-    tap.kind,
-    remote.notification?.title ?? '',
-    remote.notification?.body ?? '',
-    tap.paneId,
-  );
+  const draft = pushAlertDraft(tap, remote.notification?.body ?? '');
+  if (!draft) return;
+  onAlert(draft.kind, remote.notification?.title ?? '', draft.text, draft.paneId);
 }
