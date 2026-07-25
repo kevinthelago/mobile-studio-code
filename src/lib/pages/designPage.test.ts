@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   selectComponents, selectThemes, groupByKit, hasComposition, compositionInput,
+  compositionEdges, toGlanceInput, type CompositionNode,
 } from './designPage';
 import { buildGlanceScene } from '../graph';
 
@@ -61,6 +62,110 @@ describe('composition graph', () => {
     assert.equal(input.links[0].to, 'c1');
     const scene = buildGlanceScene(input);
     assert.equal(scene.nodes.length, 3);
+  });
+
+  // ── #241 C5: composes never crosses a kit boundary ────────────────────────
+
+  it('draws NO edge between same-named components in different kits', () => {
+    // The desktop resolves `composes` by name within ONE kit (model.ts:100-106 — "kits never
+    // cross"). Mobile used a global name map, so this produced a phantom edge. Not hypothetical:
+    // react-ui, algo-viz, matrix-viz and graph-viz are all seeded together.
+    const m = selectComponents({
+      kits: [{ id: 'kit-a', name: 'A' }, { id: 'kit-b', name: 'B' }],
+      components: [
+        { id: 'a1', name: 'Button', kitId: 'kit-a', composes: [] },
+        { id: 'b1', name: 'Panel', kitId: 'kit-b', composes: ['Button'] }, // Button is in kit-a
+      ],
+    })!;
+    assert.deepEqual(compositionInput(m).links, []);
+    assert.equal(hasComposition(m), false);
+  });
+
+  it('still links same-named components WITHIN one kit', () => {
+    const m = selectComponents({
+      kits: [{ id: 'kit-a', name: 'A' }],
+      components: [
+        { id: 'a1', name: 'Button', kitId: 'kit-a', composes: [] },
+        { id: 'a2', name: 'Panel', kitId: 'kit-a', composes: ['Button'] },
+      ],
+    })!;
+    assert.deepEqual(compositionInput(m).links.map((l) => [l.from, l.to]), [['a2', 'a1']]);
+  });
+
+  it('resolves each kit independently when a name exists in both', () => {
+    const m = selectComponents({
+      kits: [{ id: 'kit-a', name: 'A' }, { id: 'kit-b', name: 'B' }],
+      components: [
+        { id: 'a1', name: 'Button', kitId: 'kit-a', composes: [] },
+        { id: 'a2', name: 'Panel', kitId: 'kit-a', composes: ['Button'] },
+        { id: 'b1', name: 'Button', kitId: 'kit-b', composes: [] },
+        { id: 'b2', name: 'Panel', kitId: 'kit-b', composes: ['Button'] },
+      ],
+    })!;
+    // Each Panel links to ITS OWN kit's Button — never the other's.
+    assert.deepEqual(
+      compositionInput(m).links.map((l) => [l.from, l.to]).sort(),
+      [['a2', 'a1'], ['b2', 'b1']],
+    );
+  });
+
+  it('hasComposition agrees with the edge pass (they share one implementation)', () => {
+    const m = selectComponents(components())!;
+    assert.equal(hasComposition(m), compositionInput(m).links.length > 0);
+  });
+});
+
+describe('toGlanceInput / compositionEdges (the shared Studio selector)', () => {
+  const node = (o: Partial<CompositionNode> & { id: string }): CompositionNode => ({
+    name: o.id, scope: 's', role: 'primitive', composes: [], ...o,
+  });
+
+  it('matches by NAME for components', () => {
+    const nodes = [node({ id: 'c1', name: 'Button' }), node({ id: 'c2', composes: ['Button'] })];
+    assert.deepEqual(compositionEdges(nodes, 'name').map((l) => [l.from, l.to]), [['c2', 'c1']]);
+  });
+
+  it('matches by ID for algorithms — the same list resolves differently', () => {
+    // Algorithms compose by id, components by name; a shared selector must not assume one.
+    const nodes = [node({ id: 'c1', name: 'Button' }), node({ id: 'c2', composes: ['c1'] })];
+    assert.deepEqual(compositionEdges(nodes, 'id').map((l) => [l.from, l.to]), [['c2', 'c1']]);
+    assert.deepEqual(compositionEdges(nodes, 'id').length, 1);
+    // ...and the name-matched reference finds nothing in id mode.
+    assert.deepEqual(compositionEdges([node({ id: 'x', composes: ['Button'] })], 'id'), []);
+  });
+
+  it('resolves globally when every node shares one scope', () => {
+    const nodes = [
+      node({ id: 'n1', name: 'A', scope: 'all' }),
+      node({ id: 'n2', name: 'B', scope: 'all', composes: ['A'] }),
+    ];
+    assert.equal(compositionEdges(nodes, 'name').length, 1);
+  });
+
+  it('drops a self-reference and an unresolvable one', () => {
+    const nodes = [node({ id: 'n1', name: 'A', composes: ['A', 'Nope'] })];
+    assert.deepEqual(compositionEdges(nodes, 'name'), []);
+  });
+
+  it('takes the FIRST match on a duplicate name, mirroring the desktop find()', () => {
+    const nodes = [
+      node({ id: 'first', name: 'Dup' }),
+      node({ id: 'second', name: 'Dup' }),
+      node({ id: 'ref', composes: ['Dup'] }),
+    ];
+    assert.deepEqual(compositionEdges(nodes, 'name').map((l) => l.to), ['first']);
+  });
+
+  it('maps roles through the caller palette and rests both glance axes', () => {
+    const input = toGlanceInput([node({ id: 'n1', role: 'layout' })], { layout: 'infra' }, 'name');
+    assert.equal(input.projects[0].role, 'infra');
+    assert.equal(input.projects[0].health, 'idle');
+    assert.equal(input.projects[0].activity, 'idle');
+  });
+
+  it('falls back to `service` for an unmapped role', () => {
+    const input = toGlanceInput([node({ id: 'n1', role: 'mystery' })], {}, 'name');
+    assert.equal(input.projects[0].role, 'service');
   });
 });
 
