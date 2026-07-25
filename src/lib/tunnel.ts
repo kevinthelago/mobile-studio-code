@@ -9,7 +9,7 @@ type PlanFrame<T extends TunnelServerMessage['type']> = Extract<TunnelServerMess
 import { NoiseSession } from './tunnel/noise';
 import { attachPaneSize, createPaneState } from './tunnel/paneSize';
 import { buildPaneInput } from './tunnel/input';
-import { applyStoreState, type StoreStateMap } from './tunnel/storeState';
+import { applyStoreState, applyStoreStateChunk, type StoreStateMap, type ChunkBuffers } from './tunnel/storeState';
 import {
   TunnelLifecycleStatus, decideReconnect, deriveLifecycleStatus,
 } from './tunnel/reconnect';
@@ -149,6 +149,9 @@ export class TunnelClient {
   private inputGranted: boolean | null = null;
   // Mirrored store projections: domain → last accepted {rev, json} (contract v2).
   private storeState: StoreStateMap = {};
+  // In-flight store_state_chunk reassembly per domain (contract v2, #3757) — an over-cap
+  // domain arrives fragmented; completed chunks fold into storeState above.
+  private storeStateChunks: ChunkBuffers = {};
   // Per-project planner manifests accumulated across the session (the desktop sends one
   // frame per project); flushed to onSyncManifest as ONE array after a quiet period.
   private manifests = new Map<string, PlanSyncManifestEntry>();
@@ -171,6 +174,7 @@ export class TunnelClient {
     this.desktopProtocolVersion = null;
     this.inputGranted = null;
     this.storeState = {};
+    this.storeStateChunks = {};
     this.manifests.clear();
     this.everConnected = false;
     this.reconnectAttempt = 0;
@@ -559,6 +563,8 @@ export class TunnelClient {
         console.log(`tunnel← user_request pane=${msg.paneId}`); break;
       case 'store_state':
         console.log(`tunnel← store_state ${msg.domain} rev=${msg.rev} bytes=${msg.json.length}`); break;
+      case 'store_state_chunk':
+        console.log(`tunnel← store_state_chunk ${msg.domain} rev=${msg.rev} seq=${msg.seq}/${msg.total}`); break;
       case 'hook_telemetry':
         console.log(`tunnel← hook_telemetry total=${msg.telemetry.total}`); break;
       case 'plan_sync_manifest':
@@ -712,6 +718,22 @@ export class TunnelClient {
         if (next !== this.storeState) {
           this.storeState = next;
           this.cb.onStoreState?.(msg.domain, next);
+        }
+        break;
+      }
+
+      case 'store_state_chunk': {
+        // Contract v2 (#3757): an over-cap store_state domain arrives fragmented. Buffer the
+        // piece; once a domain's rev is complete, apply the reassembled json exactly as a
+        // store_state (same map + notify path).
+        const { buffers, completed } = applyStoreStateChunk(this.storeStateChunks, msg);
+        this.storeStateChunks = buffers;
+        if (completed) {
+          const next = applyStoreState(this.storeState, completed);
+          if (next !== this.storeState) {
+            this.storeState = next;
+            this.cb.onStoreState?.(completed.domain, next);
+          }
         }
         break;
       }

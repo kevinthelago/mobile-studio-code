@@ -279,6 +279,10 @@ export type TunnelServerMessage =
   | { type: 'user_request'; paneId: string; prompt: string }
   // Generic store projection (contract v2) — see StoreStateEntry above.
   | { type: 'store_state'; domain: string; rev: number; json: string }
+  // One fragment of an over-cap store_state domain (contract v2, base-studio-code#3757):
+  // `chunk` is a raw UTF-8 slice of the json, `seq` 0..total; reassembled by (domain, rev)
+  // and applied as a store_state. An older desktop never sends it.
+  | { type: 'store_state_chunk'; domain: string; rev: number; seq: number; total: number; chunk: string }
   // Read-only hook-fire telemetry (desktop M3/#937).
   | { type: 'hook_telemetry'; telemetry: HookTelemetry }
   // ── Planner sync — the DESKTOP (Rust bsc-tunnel) shapes are authoritative (v2 drift
