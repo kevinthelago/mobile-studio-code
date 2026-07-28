@@ -38,7 +38,8 @@ import {
 } from './fixtureDecode';
 import { STORE_DOMAINS } from '../types';
 import { selectGlance, glanceL0Input } from '../pages/glancePage';
-import { buildGlanceScene } from '../graph';
+import { selectOrg, teamToOrgInput } from '../pages/orgPage';
+import { buildGlanceScene, buildOrgScene } from '../graph';
 import { selectSecurityView } from '../mirror/securityView';
 import { parseAlertsPayload, alertTarget } from '../alerts/model';
 
@@ -67,7 +68,6 @@ const UNPROJECTED_DOMAINS = new Set(['plan']);
  * coverage guard, so a newly-published desktop domain cannot slip in unnoticed.
  */
 const PENDING_DOMAINS: Record<string, string> = {
-  org: '#235 — orgs (the whole team library) + persona detail unread',
   blueprints: '#236 — soundKit/origin/updatedAt unread; only the ACTIVE team crosses',
   // #241 C5 (global composes scoping) is FIXED. What remains is all desktop-side: kits ship
   // unpared (C1), `group` is not projected (C3), and `libraryRefs` is not projected (C4).
@@ -218,10 +218,65 @@ function decodeAlerts(o: Raw): Raw {
   };
 }
 
+/** `org.orgs[].positions[]` — a team `Position`. */
+function decodeOrgPosition(o: Raw): Raw {
+  const out: Raw = { nodeId: str(o, 'nodeId'), kind: str(o, 'kind') };
+  copyOptStr(o, out, 'personaId');
+  copyOptStr(o, out, 'label');
+  return out;
+}
+
+/** `org.orgs[]` — one `Team` of the library. */
+function decodeOrgTeam(o: Raw): Raw {
+  const out: Raw = {
+    id: str(o, 'id'),
+    name: str(o, 'name'),
+    positions: arr(o, 'positions').map(decodeOrgPosition),
+    relationships: arr(o, 'relationships').map((r) => ({
+      id: str(r, 'id'), archetype: str(r, 'archetype'), from: str(r, 'from'), to: str(r, 'to'),
+    })),
+  };
+  copyOptStr(o, out, 'blurb');
+  copyOptBool(o, out, 'builtin');
+  return out;
+}
+
+/** `org.personas[]` — a pared `PersonaRef` (`id`/`name`/`blurb`/`role` required desktop-side). */
+function decodeOrgPersona(o: Raw): Raw {
+  const out: Raw = {
+    id: str(o, 'id'), name: str(o, 'name'), blurb: str(o, 'blurb'), role: str(o, 'role'),
+  };
+  copyOptStr(o, out, 'model');
+  copyOptBool(o, out, 'pooled');
+  copyOptBool(o, out, 'builtin');
+  return out;
+}
+
+/**
+ * `org` — the whole team library plus the persona refs (#235). Before that issue only `personas`
+ * was read, and only four of its seven fields, so `orgs` — N complete renderable graphs — was
+ * discarded on every publish.
+ *
+ * TWO known blind spots, both the pass-through-bloat limit noted for `components`:
+ *  • `Position.x`/`y` and `Relationship.bow` are absent from the fixture because `PROJECTION_INPUTS`
+ *    omits them, so this cannot pin mobile's deliberate ignore (we re-lay out via `layeredLayout`).
+ *    If they appear, add them to a `passThrough` here — do NOT start reading them.
+ *  • the fixture's only relationship uses archetype `"delegates"`, which is not one of the seven ids
+ *    in the desktop's `archetypes.json`, so the fixture cannot guard the archetype vocabulary.
+ *    `orgAdapter.test.ts` pins that key set separately.
+ */
+function decodeOrg(o: Raw): Raw {
+  return {
+    orgs: arr(o, 'orgs').map(decodeOrgTeam),
+    personas: arr(o, 'personas').map(decodeOrgPersona),
+  };
+}
+
 const DECODERS: Record<string, (o: Raw) => Raw> = {
   glance: decodeGlance,
   security: decodeSecurity,
   alerts: decodeAlerts,
+  org: decodeOrg,
 };
 
 // ── Coverage + vocabulary guards ────────────────────────────────────────────────────────────
@@ -382,6 +437,39 @@ test('Layer B: alerts — every field reaches the inbox row', () => {
   assert.equal(typeof a.at, 'number');
   // ...and the row resolves to a real destination rather than the inbox fallback.
   assert.deepEqual(alertTarget(a), { type: 'planner' });
+});
+
+test('Layer B: org — the team library is consumed, not discarded', () => {
+  const model = selectOrg(fx.domains.org);
+  // Before #235 this was structurally impossible: nothing in the app read `orgs` at all.
+  assert.ok(model.teams.length > 0, 'the canonical org payload produced no teams');
+  const team = model.teams[0];
+  assert.equal(team.id, 'o1');
+  assert.equal(team.name, 'Pipeline');
+  assert.notEqual(team.name, team.id, 'the team name fell back to its id');
+  assert.ok(team.positions.length > 0, 'the team has no renderable positions');
+});
+
+test('Layer B: org — persona detail survives to the node inspector', () => {
+  const model = selectOrg(fx.domains.org);
+  const persona = model.personas[0];
+  // Each of these was dropped by the old four-field parse.
+  assert.equal(persona.name, 'Backend dev');
+  assert.equal(persona.blurb, 'APIs');
+  assert.equal(persona.model, 'sonnet');
+  assert.equal(persona.builtin, true);
+  assert.equal(persona.role, 'worker');
+
+  // ...and reaches the adapter input the inspector actually reads, not just the parse.
+  const input = teamToOrgInput(model.teams[0], model.personas);
+  const p = input.personas.find((x) => x.id === persona.id);
+  assert.equal(p?.blurb, 'APIs');
+  assert.equal(p?.model, 'sonnet');
+
+  // The rendered card resolves the persona name rather than falling back to the nodeId.
+  const node = buildOrgScene(input).nodes[0];
+  assert.equal(node.title, 'Backend dev');
+  assert.equal(node.subtitle, 'worker');
 });
 
 // ── The invariant that gives Layer B its teeth ───────────────────────────────────────────────
