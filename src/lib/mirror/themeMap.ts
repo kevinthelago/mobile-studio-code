@@ -33,6 +33,13 @@ export interface KitTheme {
   label: string;
   description?: string;
   vars: Record<string, string>;
+  /**
+   * The SURFACE the theme sits on (`KitTheme.base`, #2545) — theme DATA, not the app's own toggle.
+   * Callers must map the vars over the palette this names, NOT over the app's current theme: most
+   * themes override only a handful of tokens, so a light theme previewed over the dark palette
+   * renders dark and misrepresents itself (#242). Absent implies dark, per the desktop contract.
+   */
+  base: 'dark' | 'light';
 }
 
 /** Kit token aliases → native theme field, first present + resolvable wins. */
@@ -143,6 +150,9 @@ export function parseKitThemes(json: unknown): KitTheme[] {
       label: typeof e.label === 'string' && e.label ? e.label : e.id,
       description: typeof e.description === 'string' ? e.description : undefined,
       vars,
+      // Anything that is not the string 'light' is dark — absent, corrupt, or a value from a newer
+      // desktop we do not model.
+      base: e.base === 'light' ? 'light' : 'dark',
     });
   }
   return out;
