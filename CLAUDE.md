@@ -13,8 +13,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Start dev server (use Expo Go or a dev build on device)
 npx expo start
 
-# Type-check (no tests exist — this is the primary correctness gate)
-npx tsc --noEmit
+# The two correctness gates — run BOTH before pushing
+npx tsc --noEmit          # or: npm run typecheck
+npm test                  # tsx --test "src/**/*.test.ts"
 
 # EAS builds (requires EAS CLI and login)
 eas build --platform ios --profile development   # dev client build
@@ -26,19 +27,41 @@ eas update --branch preview   # push to preview channel
 eas update --branch main      # push to production channel
 ```
 
-There are no automated tests. `tsc --noEmit` is the only local correctness check.
+**There is a real test suite — ~51 files, 500+ tests, run with `npm test`.** It is fast (a
+couple of seconds) and RN-free: tests run under `tsx --test`, so a module a test imports must
+not pull in `react-native`. That is why pure logic lives in `src/lib/**` and why, for example,
+the stage-status colour map sits in `lib/planner/colors.ts` rather than in the component that
+renders it — a `.tsx` cannot be imported from a `.ts` test.
+
+CI (`.github/workflows/ci.yml`) runs four jobs on every PR: `install` → `typecheck` · `test` ·
+`export`. The `test` job is the enforcement arm of the payload-parity harness (#246); without it
+the contract fixtures were developer-local only.
 
 ---
 
 ## What This App Is
 
-**Mobile Studio Code (MSC)** is an AI-first mobile IDE for iOS, built with Expo / React Native.
-It lets a developer work on a GitHub repository entirely from an iPhone — browsing files,
-editing code, committing, and — most importantly — directing an embedded Claude AI agent
-to do the heavy lifting.
+**Mobile Studio Code (MSC)** is an iOS companion to the **base-studio-code** desktop app, built
+with Expo / React Native. It ships to the App Store as `base-studio-code` (see `app.json`).
 
-The guiding principle: **the AI should be able to do everything. The user should only have
-to describe intent.**
+It is primarily a **read-only mirror**. The desktop publishes its state over an encrypted Noise
+tunnel as `store_state` frames; the phone renders them. Five tabs — **Glance · Planner · Skills ·
+UI · Automations** — plus session chat, an alerts inbox, and a local project planner.
+
+Three things it can actually *do*, as opposed to display:
+
+1. **Session chat** — the one sanctioned mutation path into the desktop's panes.
+2. **The local planner** (`app/(planner)/planner.tsx`) — fully local project planning that can
+   sync to the desktop.
+3. **A GitHub repo client** — `app/repo.tsx` plus `lib/github.ts` / `lib/agent.ts`, surviving from
+   the app's origin as a standalone mobile IDE. Still wired, no longer the centre of gravity.
+
+The guiding principle is unchanged: **the AI should be able to do everything. The user should only
+have to describe intent.**
+
+> **When the desktop is not paired, every mirror tab is empty.** `lib/mirror/demoData.ts` supplies
+> representative demo projections so first run is exercisable (#250 — an App Store review
+> requirement); real frames take over the moment a desktop connects.
 
 ---
 
@@ -51,14 +74,20 @@ enemy. If a workflow requires more than two taps from the user, ask whether the 
 absorb that complexity instead.
 
 ### AI is the primary actor
-The user sets direction. Claude executes. Browsing, editing, committing — all of it can
-and should be driven through the chat interface. The manual tabs (Files, Edit, Git) exist
-as power-user overrides, not the primary workflow.
+The user sets direction. Claude executes. The mirror tabs show what the desktop is doing; when
+the user wants something *done*, the path is chat — `app/(sessions)/chat.tsx` against an
+addressable desktop session.
+
+### Read-only until proven otherwise
+The phone mirrors; it does not edit the desktop's state. Every new surface starts read-only. A
+mutation needs a deliberate frame on the wire (`plan_confirm`, session input) — never a local
+write that hopes to be reconciled later.
 
 ### Trust the agent loop
-The agent has tools: `list_directory`, `read_file`, `write_file`, `read_issue`,
-`comment_on_issue`. These are intentionally minimal. New capability should be added as
-agent tools before it is added as UI.
+The repo-client agent (`lib/agent.ts`) has ten tools: `list_directory`, `read_file`, `grep_file`,
+`write_file`, `push_changes`, `pull_changes`, `read_remote_file`, `resolve_conflict`,
+`read_issue`, `comment_on_issue`. They are intentionally minimal. New capability should be added
+as an agent tool before it is added as UI.
 
 ### Invisible complexity
 Context optimisation, retry logic, session checkpointing, conflict resolution — none of
@@ -86,158 +115,169 @@ Errors should be actionable, not technical.
 
 ## Folder Structure
 
+Only the load-bearing paths. When this disagrees with the tree, the tree wins — and fix this file.
+
 ```
 /
-├── app/                        # Expo Router file-based routing
-│   ├── _layout.tsx             # Root layout: theme, session, nav guards, ambient Orbs background
-│   ├── repo.tsx                # Repo picker: search GitHub repos, clone (download) selected repo
-│   ├── (tabs)/                 # Main app — bottom tab navigator
-│   │   ├── _layout.tsx         # Tab definitions + custom BottomTabBar
-│   │   ├── index.tsx           # Files tab — collapsible folder tree, search, recents
-│   │   ├── find.tsx            # Find tab — full-text search across repo files
-│   │   ├── edit.tsx            # Edit tab — code viewer/editor for the currently open file
-│   │   ├── run.tsx             # Run tab — tunnel mirror of base-studio-code's PTY sessions (pairing/QR)
-│   │   ├── git.tsx             # Git tab — pull/push, changed files list, AI commit message draft
-│   │   ├── files.tsx           # Hidden route (href: null) — legacy/unused
-│   │   └── settings.tsx        # Hidden route (href: null) — surfaced via SettingsScreen
-│   ├── (planner)/planner.tsx   # Local project planner (PlannerContext + aiLoop + pipelines)
-│   ├── (sync)/sync.tsx         # Planner file-reconcile conflict editor (plan_sync_* path)
-│   ├── (fleet)/fleet.tsx       # Fleet/coordination view over the tunnel
-│   └── (live)/live.tsx         # Read-only mirror of the desktop's LIVE planning session (#1245)
+├── app/                          # Expo Router file-based routing
+│   ├── _layout.tsx               # Root layout: theme, tunnel, mirror, live-plan, alerts providers
+│   ├── repo.tsx                  # GitHub repo picker + PAT entry
+│   ├── (tabs)/                   # The five-tab mirror shell; lands on Glance
+│   │   ├── _layout.tsx           #   tab defs + custom BottomTabBar + AlertToast overlay
+│   │   ├── index.tsx             #   Glance    — domain "glance"
+│   │   ├── plan.tsx              #   Planner   — renders (planner)/planner embedded (NOT a mirror)
+│   │   ├── skills.tsx            #   Skills    — domain "skills"
+│   │   ├── ui.tsx                #   UI        — segmented: "components" + "themes"
+│   │   └── automations.tsx       #   Automations — segmented: "automations" + "mcp"
+│   ├── (sessions)/               # roster.tsx + chat.tsx — the ONE mutation path into the desktop
+│   ├── (alerts)/inbox.tsx        # Notification inbox (domain "alerts", FCM deep links)
+│   ├── (more)/                   # more · connection (pairing/QR) · providers · theme · security
+│   ├── (planner)/planner.tsx     # Local project planner (PlannerContext + pipelines)
+│   └── (sync)/sync.tsx           # Planner file-reconcile conflict editor (plan_sync_* path)
 │
 ├── src/
-│   ├── lib/                    # Core logic (no UI)
-│   │   ├── agent.ts            # Agent loop: tool definitions, tool runner, system prompt builder,
-│   │   │                       #   retry logic (exponential backoff), iteration cap (25), checkpoint
-│   │   │                       #   saves between iterations
-│   │   ├── anthropic.ts        # Raw Anthropic API client: streaming chat, commit message drafting
-│   │   ├── contextOptimizer.ts # Context window management: stale read eviction, history compaction
-│   │   │                       #   (summarises old turns when history exceeds ~60k chars)
-│   │   ├── errorBus.ts         # Global error event bus (lightweight pub/sub)
-│   │   ├── fs.ts               # All file system access via expo-file-system: read, write, manifest
-│   │   │                       #   I/O, task index I/O, pending checkpoint I/O
-│   │   ├── gitClient.ts        # (Minimal) git utility helpers
-│   │   ├── github.ts           # GitHub REST API: verify PAT, download repo (tree + blobs),
-│   │   │                       #   pull (diff remote tree vs manifest), push modified files,
-│   │   │                       #   fetch issues, post comments
-│   │   ├── llm.ts              # Legacy LLM wrapper (predates agent.ts; used by ChatScreen)
-│   │   ├── session.tsx         # SessionProvider + useSession hook — single source of truth for:
-│   │   │                       #   auth state, manifest, open file, pull/push, task management,
-│   │   │                       #   chat/agent lifecycle, retry + cancel signals
-│   │   ├── storage.ts          # Secure key-value store (expo-secure-store) for PAT + API key
-│   │   ├── syntax.ts           # Regex-based syntax highlighting token parser
-│   │   ├── tasks.ts            # Task CRUD helpers: create, bootstrap, migrate legacy chat,
-│   │   │                       #   patch index entries
-│   │   └── types.ts            # All shared TypeScript types (ChatMessage, Manifest, Task,
-│   │                           #   LinkedIssue, ToolDefinition, etc.)
+│   ├── lib/
+│   │   ├── tunnel.ts             # TunnelClient: Noise transport, frame decode, mutation senders
+│   │   ├── TunnelContext.tsx     # Provider + useTunnel()
+│   │   ├── tunnel/               # Transport internals — ALL pure + unit-tested
+│   │   │   ├── noise.ts pairing.ts reconnect.ts input.ts paneSize.ts
+│   │   │   ├── storeState.ts     #   store_state + store_state_chunk reassembly (rev-keyed)
+│   │   │   ├── livePlan.ts       #   plan_state / plan_event reducer → the LIVE plan
+│   │   │   ├── LivePlanContext.tsx
+│   │   │   ├── *.fixtures.json   #   CONTRACT: byte-identical with base-studio-code
+│   │   │   └── *.fixtures.test.ts#   the parity harness (frame + payload) — see below
+│   │   ├── mirror/               # Mirrored state → view models
+│   │   │   ├── MirrorContext.tsx #   useMirrorDomain(domain) → { data, rev, synced }
+│   │   │   ├── payload.ts        #   selector contract: NEVER throw on missing/extra/mistyped
+│   │   │   ├── state.ts demoData.ts feed.ts themeMap.ts
+│   │   │   └── securityView.ts automationsView.ts mcpView.ts
+│   │   ├── pages/                # Per-domain page selectors (pure, React-free)
+│   │   │   ├── glancePage.ts skillsPage.ts designPage.ts orgPage.ts
+│   │   │   └── blueprintsPage.ts plannerBoard.ts        ← currently ORPHANED (see Tech Debt)
+│   │   ├── graph/                # Pure graph engine: layout, cycles, routing, org + glance adapters
+│   │   ├── kit/                  # Design-system port: spec resolve, baseline JSON specs
+│   │   ├── planner/              # Local planner: context, pipelines, publish, colors, sync
+│   │   ├── sessions/             # roster, layout, input gating, nav
+│   │   ├── alerts/               # AlertsContext, model, FCM routing, read state
+│   │   ├── providers/            # Multi-provider LLM clients (anthropic, google, openai-compatible)
+│   │   ├── agent.ts github.ts fs.ts tasks.ts session.tsx storage.ts   # the repo-client half
+│   │   └── types.ts              # Wire types + STORE_DOMAINS
 │   │
 │   ├── components/
-│   │   ├── ui/                 # Shared UI primitives
-│   │   │   ├── BottomTabBar.tsx    # Custom tab bar with Claude avatar shortcut to chat
-│   │   │   ├── ClaudeAvatar.tsx    # Animated Claude "orb" avatar shown in tab bar + chat
-│   │   │   ├── IconBtn.tsx         # Pressable icon button
-│   │   │   ├── Icons.tsx           # SVG icon components
-│   │   │   ├── IssueLinkSheet.tsx  # Bottom sheet for linking a GitHub issue to a task
-│   │   │   ├── Orbs.tsx            # Ambient animated background blobs (theme-aware)
-│   │   │   ├── Surface.tsx         # Glass/blur surface card primitive
-│   │   │   ├── TaskSheet.tsx       # Bottom sheet for task management (create, switch, archive)
-│   │   │   ├── ThemePicker.tsx     # Theme selection UI
-│   │   │   ├── TokenText.tsx       # Syntax-highlighted text renderer (uses syntax.ts tokens)
-│   │   │   └── TopPill.tsx         # Top status pill (branch name, modified count, etc.)
-│   │   ├── CodeLine.tsx        # Single line of syntax-highlighted code
-│   │   ├── CodeView.tsx        # Scrollable code viewer built from CodeLine rows
-│   │   ├── IconBtn.tsx         # (duplicate root-level copy — prefer ui/ version)
-│   │   ├── Surface.tsx         # (duplicate root-level copy — prefer ui/ version)
-│   │   └── TabIcons.tsx        # Tab bar icon definitions
-│   │
-│   ├── screens/
-│   │   ├── ChatScreen.tsx      # Legacy standalone chat screen (uses llm.ts, not agent.ts)
-│   │   └── SettingsScreen.tsx  # Settings UI: theme picker, auth reset, repo clear
-│   │
-│   ├── data/                   # Static data / assets (contents not examined)
-│   ├── theme.ts                # Theme definitions (dark/light palettes, code colours, glass flag)
-│   ├── theme/                  # Theme sub-module (index re-exports)
-│   ├── ThemeContext.tsx         # Legacy ThemeContext (predates theme.ts; used by ChatScreen)
-│   └── codeContent.ts          # Static code sample (used in onboarding/demo)
+│   │   ├── shell/                # MirrorScaffold (domain → synced/awaiting/demo), headers
+│   │   ├── glance/ skills/ design/ automations/ security/ sessions/   # one mirror per domain
+│   │   ├── kit/                  # SpecHost / KitRenderer — renders baseline JSON specs
+│   │   ├── graph/                # GraphCanvas (RN-SVG), drill-back
+│   │   ├── planner/              # Local planner UI (several files here are ORPHANED)
+│   │   └── ui/                   # Primitives: Surface, Tag, Btn, BottomTabBar, ThemePicker…
+│   └── theme.ts                  # THEMES.dark / THEMES.light + useTheme()
 │
-├── .github/
-│   ├── ISSUE_TEMPLATE/         # GitHub issue templates
-│   ├── pull_request_template.md
-│   └── workflows/
-│       ├── expo-preview.yml        # ✅ canonical name
-│       ├── expo_preview.yml        # ⚠️  old underscore name — to be deleted
-│       ├── issue-branch-check.yml  # ✅ canonical name
-│       ├── issue_branch_check.yml  # ⚠️  old underscore name — to be deleted
-│       └── .gitkeep
-│
-├── App.tsx                     # Expo entry point (delegates to app/_layout.tsx via router)
-├── app.json                    # Expo config: name "Mobile Studio Code", bundle ID, plugins
-├── package.json                # Dependencies
-├── tsconfig.json               # TypeScript config
-├── babel.config.js             # Babel config
-└── CLAUDE.md                   # This file
+├── .github/workflows/            # ci.yml (install·typecheck·test·export) · preview.yml · update.yml
+├── app.json                      # Expo config — display name "base-studio-code"
+└── CLAUDE.md                     # This file
 ```
 
 ---
 
 ## Key Data Flows
 
-### Session stages
-`loading` → `ready` (app usable)
+### Boot
+`app/_layout.tsx` mounts the provider stack (theme → tunnel → mirror → live plan → alerts) and
+holds a spinner only until secrets load. The app lands on **Glance**. There is no onboarding and
+no launch gate: pairing happens on demand from **More → Connection**, repo selection from
+`/repo`.
 
-`StageGate` in `app/_layout.tsx` only holds a spinner until secrets + any saved
-manifest load; it does not gate navigation. The app boots into the tabs and
-lands on the **Run** tab (`unstable_settings.initialRouteName` in
-`app/(tabs)/_layout.tsx`). Repo selection is **not** a launch gate — the user
-opens the repo picker (`/repo`) on demand from the **Git** tab (its "Switch"
-action, or the "Pick a repo" button in the no-repo empty state). The repo
-picker also hosts GitHub PAT entry and a "Plan a project" entry into the
-planner (`/(planner)/planner`). There is no onboarding screen — credentials
-are persisted via `storage.ts` and surfaced errors if missing.
+### The mirror path (how nearly every screen gets its data)
+```
+desktop  ──store_state {domain, rev, json}──▶  tunnel.ts
+                                                  │  (over-cap domains arrive as
+                                                  │   store_state_chunk and are reassembled
+                                                  │   by tunnel/storeState.ts, keyed by rev)
+                                                  ▼
+                                        MirrorContext  ──useMirrorDomain(d)──▶  MirrorScaffold
+                                                                                     │
+                                                        lib/pages/*.ts selector  ◀────┘
+                                                                                     │
+                                                                     component renders the VM
+```
+`STORE_DOMAINS` (`lib/types.ts`) is the vocabulary: `glance`, `plan`, `org`, `blueprints`,
+`skills`, `components`, `themes`, `automations`, `mcp`, `alerts`, `security`.
 
-### Agent loop (per message send)
-1. User sends message via chat UI in `edit.tsx` (the main chat interface)
-2. `session.tsx` → `runAgent()` in `agent.ts`
-3. Agent calls Anthropic API (`anthropic.ts`), receives tool calls
-4. `runTool()` executes each tool (read/write file, list dir, read/comment issue)
-5. Results fed back; loop continues until `end_turn` or iteration cap (25)
-6. Context optimiser trims stale reads + compacts old history as needed
-7. Checkpoint saved to disk between iterations (survives app backgrounding)
+**Selectors must never throw** on a missing, extra, or mistyped field (`lib/mirror/payload.ts`).
+A drifted payload must degrade to a blank section, never a crash, on a phone in the field.
 
-### Pull / Push (GitHub API — no native git)
-- **Pull**: fetch remote tree → compare SHAs vs manifest → download changed blobs →
-  skip locally-modified files (surface as conflicts)
-- **Push**: for each `modified=true` file in manifest → `PUT /repos/{repo}/contents/{path}`
-  with the file's last-known SHA → update manifest SHA on success
+### The live plan (a SEPARATE path — do not confuse it with the `plan` domain)
+`plan_state` / `plan_event` **frames** → `tunnel/livePlan.ts` (pure reducer, keyed by projectId)
+→ `LivePlanContext` → `BlueprintStageBar` / `(planner)/planner.tsx`. It uses its own status
+vocabulary (`SectionRenderStatus`), not the `plan` domain's `StageStatus`. **The `plan` store
+domain currently has no consumer at all.**
 
-### Task system
-Each task has isolated `turns` (UI display) and `history` (Anthropic API messages).
-Switching tasks gives the agent a completely fresh context window. Tasks persist to
-`{repoDir}/.msc-tasks/{taskId}.json`; the index lives at `{repoDir}/.msc-task-index.json`.
+### Contract parity (the thing that keeps mobile and desktop honest)
+Two fixture files are **byte-identical** with base-studio-code (verified by git blob hash), and
+two test files decode them into our typed models and deep-equal back:
+
+- `tunnelProtocol.fixtures.json` — FRAME shapes.
+- `storePayloads.fixtures.json` — per-domain PAYLOAD shapes (#246). Generated desktop-side from
+  the real builders. **Layer A** re-encodes only the fields we read (an unknown field fails the
+  deep-equal; a missing required field throws by name). **Layer B** smoke-tests that the
+  canonical payload yields a non-degenerate view — per field, never just "not empty" — because a
+  tolerant selector renders a blank page rather than failing.
+
+A domain is either in `DECODERS` (reconciled) or in `PENDING_DOMAINS` with its issue number.
+**Moving a domain from `PENDING_DOMAINS` into `DECODERS` is the definition of done for its
+issue.** Changing a fixture is a coordinated two-repo PR pair.
+
+### Session chat (the one mutation path)
+`(sessions)/roster.tsx` lists addressable desktop panes; `chat.tsx` streams one and sends input,
+subject to the desktop's input grant (`tunnel/inputGrant`, `sessions/inputGate.ts`).
 
 ---
 
 ## Known Issues & Tech Debt
 
-- **Duplicate components**: `IconBtn.tsx` and `Surface.tsx` exist at both
-  `src/components/` and `src/components/ui/`. The `ui/` versions are current;
-  the root-level copies are stale.
-- **Legacy ChatScreen**: `src/screens/ChatScreen.tsx` uses the old `llm.ts` wrapper
-  and `ThemeContext.tsx` instead of the current `theme.ts`. Not wired into the main
-  tab navigation.
-- **Legacy ThemeContext**: `src/ThemeContext.tsx` is a parallel theme system only used
-  by `ChatScreen.tsx`. Everything else uses `src/theme.ts`.
-- **Run tab is the tunnel mirror**: `app/(tabs)/run.tsx` mirrors base-studio-code's PTY
-  sessions over the Noise relay (the phone has no shell of its own — there is nothing to
-  run locally). It also hosts the **Fleet** / **Live** / **Plan** shortcuts.
-- **Workflow filename duplication**: Both `expo_preview.yml` / `expo-preview.yml` and
-  `issue_branch_check.yml` / `issue-branch-check.yml` exist. The underscore versions
-  should be removed; only the hyphenated versions are canonical.
-- **New-file push limitation**: Files written by the agent that have never been on remote
-  (`sha: null`) rely on the GitHub `PUT /contents` API creating them. If the manifest
-  SHA state desyncs (e.g. after a failed push), recovery requires a pull first.
-- **No delete-file tool**: The agent can write files but cannot delete them. Removing a
-  file from a repo requires manual action (or a future `delete_file` tool).
-- **No branch creation**: The app works on whatever branch was selected at clone time.
-  Creating or switching branches is not possible from within the app.
-- **No diff view**: The Git tab shows which files changed but not what changed within them.
+### Orphaned code — read this before starting any issue
+
+**24 source files are unreachable from any `app/` route.** They compile, they have passing
+tests, and nothing renders them. This is the single biggest trap in the repo: issues get written
+against them and the work lands somewhere no user can see. It has already happened — see #236
+and the plan half of #245, both invalidated by `54c13fb` (2026-07-25), which removed the Planner
+tab's segment strip and orphaned every surface it mounted.
+
+**Before implementing an issue, confirm its target is reachable:**
+
+```bash
+# does anything import it?
+grep -rn "ComponentName" --include=*.tsx --include=*.ts src app
+```
+
+Currently orphaned:
+
+| Area | Files |
+|---|---|
+| planner UI | `BlueprintsSection` `LivePlanBoard` `ChatTab` `PlanTab` `PlannerChrome` `PreviewTab` `atoms` |
+| page selectors | `blueprintsPage.ts` `plannerBoard.ts` · `orgPage.ts` *(deliberate — built for #233's Teams segment)* |
+| repo-client leftovers | `github/BranchGraph` `github/LanguageBar` `github/charts` `diff.ts` `githubCache.ts` `githubPulse.ts` `syntax.ts` |
+| other | `fleet/CoordInboxCard` `fleet/WorkerCard` `ui/IssueLinkSheet` `ui/TaskSheet` `ui/TopPill` `planner/seed.ts` `screens/GraphDemoScreen.tsx` |
+
+Test-only files (`tunnel/fixtureDecode.ts`, the `*.fixtures.json`, `graph/vitestShim.ts`) are
+also unreachable from `app/` — that is correct and expected.
+
+### Live traps
+
+- **Tests must not import React Native.** `npm test` runs under `tsx --test`. Put logic that
+  needs testing in `src/lib/**`, not in a `.tsx`.
+- **`src/lib/pages/designPage.ts` is not plain ASCII** — `grep` reports it as a binary file. Use
+  `grep -a`, or the Read tool.
+- **Desktop `tech`/`hue` values are CSS** (`var(--accent)`, `oklch(...)`). React Native can parse
+  neither. Never bind a mirrored colour string to a `color` prop without normalising it.
+- **Sync against base-studio-code `develop`, not `main`.** `main` is far behind; every contract
+  reference our code cites exists only on `develop`.
+- **`plan` is exempt from the payload harness** (`UNPROJECTED_DOMAINS`) — it is published by the
+  planner, not `useStoreProjector`.
+
+### Platform limits (unchanged)
+
+- **No delete-file tool** — the agent can write files but not remove them.
+- **No branch creation** — the app works on whatever branch was selected at clone time.
+- **New-file push** relies on `PUT /contents` creating the path; if the manifest SHA desyncs,
+  recovery requires a pull first.
