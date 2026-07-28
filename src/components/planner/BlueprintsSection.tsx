@@ -96,6 +96,15 @@ function TeamGraph({ input }: { input: ReturnType<typeof blueprintTeamToOrgInput
   const [selected, setSelected] = useState<GraphSelection | null>(null);
   const scene: GraphScene = useMemo(() => buildOrgScene(input), [input]);
   const node = selected?.kind === 'node' ? scene.nodes.find((n) => n.id === selected.id) : undefined;
+  // The persona behind the selected node, for the blurb + model the `org` domain carries (#235).
+  // Pools collapse to a synthetic `pool:<personaId>` id, so resolve those directly.
+  const persona = useMemo(() => {
+    if (!node) return undefined;
+    const personaId = node.id.startsWith('pool:')
+      ? node.id.slice('pool:'.length)
+      : input.positions.find((p) => p.nodeId === node.id)?.personaId;
+    return personaId ? input.personas.find((p) => p.id === personaId) : undefined;
+  }, [node, input]);
 
   const colors = {
     card: t.surfaceSolid, cardStack: t.bg, border: t.borderColor,
@@ -115,10 +124,16 @@ function TeamGraph({ input }: { input: ReturnType<typeof blueprintTeamToOrgInput
         <Surface style={styles.inspector} radius={12}>
           <Text style={[styles.inspTitle, { color: t.fg }]}>{node.title}</Text>
           {node.subtitle ? <Text style={[styles.inspSub, { color: t.fgMuted }]}>{node.subtitle}</Text> : null}
+          {persona?.blurb ? <Text style={[styles.inspSub, { color: t.fgMuted }]}>{persona.blurb}</Text> : null}
           {node.stackCount ? (
             <Text style={[styles.inspSub, { color: t.fgDim }]}>
               pool · {node.stackCount} members{node.homogeneous === false ? ' · mixed wiring' : ''}
             </Text>
+          ) : null}
+          {persona?.model ? (
+            <View style={styles.inspTags}>
+              <Tag border={false} bg={t.surface}>{persona.model}</Tag>
+            </View>
           ) : null}
         </Surface>
       ) : (
@@ -149,6 +164,7 @@ const styles = StyleSheet.create({
   inspector: { margin: 12, padding: 13, gap: 4 },
   inspTitle: { fontSize: 15, fontWeight: '700' },
   inspSub: { fontSize: 12 },
+  inspTags: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingTop: 3 },
   hint: { fontSize: 11, textAlign: 'center', paddingVertical: 12 },
   fallback: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   fallbackText: { fontSize: 13, textAlign: 'center' },

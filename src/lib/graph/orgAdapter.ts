@@ -29,6 +29,10 @@ export interface OrgPersona {
   role?: string;
   /** Explicit stacking override — always wins (desktop `isStackable`). */
   pooled?: boolean;
+  /** One-line description (`PersonaRef.blurb`). Inspector copy only — never affects layout. */
+  blurb?: string;
+  /** The model this persona runs on (`PersonaRef.model`). Inspector copy only. */
+  model?: string;
 }
 
 export interface OrgPosition {
@@ -53,7 +57,15 @@ export interface OrgGraphInput {
   personas: OrgPersona[];
 }
 
-/** Archetype display meta (desktop @data/org/archetypes.json — style · hue · bidirectional). */
+/**
+ * Archetype display meta — the mobile half of the desktop's `src-tauri/data/teams/archetypes.json`
+ * (style · hue · bidirectional; the desktop's label copy, edge verbs and blurbs stay desktop-side).
+ *
+ * The KEY SET is the contract: an unknown archetype falls through to the solid / hue 210 fallback in
+ * `assembleOrgScene`, which renders a plausible-looking but wrong edge rather than failing. The
+ * `iterates` archetype (#2578) drifted in exactly that way. `orgAdapter.test.ts` pins this key set
+ * against the desktop file's id set, so the next addition fails loudly instead of degrading.
+ */
 export const ORG_ARCHETYPES: Record<
   string,
   { label: string; style: string; hue: number; bidirectional?: boolean }
@@ -64,6 +76,9 @@ export const ORG_ARCHETYPES: Record<
   consults: { label: 'Consults', style: 'dotted', hue: 280, bidirectional: true },
   peers: { label: 'Peers', style: 'dotted', hue: 190, bidirectional: true },
   stewards: { label: 'Stewards', style: 'resource', hue: 20 },
+  // Deliberately closes a cycle (desktop `cyclical: true`) — safe here because only the HIERARCHY
+  // archetypes below drive layering, so an `iterates` loop never reaches the cycle-break pass.
+  iterates: { label: 'Iterates', style: 'dashed', hue: 300, bidirectional: true },
 };
 
 /** Archetypes that impose a top-down hierarchy (desktop orgLayout.ts `HIERARCHY_ARCHETYPES`). */

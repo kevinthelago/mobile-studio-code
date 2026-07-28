@@ -6,6 +6,7 @@ import {
   collapseOrg,
   detectPools,
   poolSubgraph,
+  ORG_ARCHETYPES,
   type OrgGraphInput,
 } from './orgAdapter';
 import { SAMPLE_ORG } from './sampleData';
@@ -125,4 +126,50 @@ test('bidirectional archetypes are double-ended; styles map to dashes', () => {
   const manages = scene.edges.find((e) => e.label === 'Manages')!;
   assert.equal(manages.arrowStart, undefined);
   assert.equal(manages.dash, ''); // solid
+});
+
+// ── archetype vocabulary (#235) ─────────────────────────────────────────────
+
+/**
+ * The archetype ids the desktop ships in `src-tauri/data/teams/archetypes.json` (base-studio-code
+ * @develop). The vocabulary is NOT on the wire — `OrgPayload` carries relationship archetypes as
+ * bare strings — so it can only drift silently: an id missing from `ORG_ARCHETYPES` falls through
+ * `assembleOrgScene`'s solid / hue 210 fallback and renders a plausible but wrong edge. That is
+ * exactly how `iterates` (#2578) was mis-drawn for three releases.
+ *
+ * To refresh after a desktop archetype change, re-read that file and update this list in the same
+ * PR that updates `ORG_ARCHETYPES`.
+ */
+const DESKTOP_ARCHETYPE_IDS = [
+  'manages', 'serves', 'oversees', 'consults', 'peers', 'stewards', 'iterates',
+];
+
+test('ORG_ARCHETYPES covers exactly the desktop archetype vocabulary', () => {
+  assert.deepEqual(Object.keys(ORG_ARCHETYPES).sort(), [...DESKTOP_ARCHETYPE_IDS].sort());
+});
+
+test('iterates renders as a dashed, double-ended hue-300 edge — not the fallback', () => {
+  const org: OrgGraphInput = {
+    personas: [{ id: 'auditor', role: 'reviewer' }, { id: 'subject', role: 'director' }],
+    positions: [
+      { nodeId: 'a', kind: 'agent', personaId: 'auditor' },
+      { nodeId: 's', kind: 'agent', personaId: 'subject' },
+    ],
+    relationships: [{ id: 'r1', archetype: 'iterates', from: 'a', to: 's' }],
+  };
+  const edge = buildOrgScene(org).edges.find((e) => e.id === 'r1')!;
+  assert.equal(edge.label, 'Iterates');
+  assert.equal(edge.color, 'hsl(300, 70%, 62%)');
+  assert.equal(edge.dash, '7 5'); // dashed
+  assert.ok(edge.arrowStart, 'the feedback loop draws both arrowheads');
+});
+
+test('an unknown archetype still renders, labelled with its raw id', () => {
+  const org: OrgGraphInput = {
+    personas: [],
+    positions: [{ nodeId: 'a', kind: 'agent' }, { nodeId: 'b', kind: 'agent' }],
+    relationships: [{ id: 'r1', archetype: 'teleports', from: 'a', to: 'b' }],
+  };
+  const edge = buildOrgScene(org).edges.find((e) => e.id === 'r1')!;
+  assert.equal(edge.label, 'teleports'); // tolerant at runtime; the parity test is the guard
 });
