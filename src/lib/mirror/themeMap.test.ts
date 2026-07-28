@@ -134,4 +134,15 @@ describe('parseKitThemes', () => {
     assert.deepEqual(parseKitThemes({ themes: 'nope' }), []);
     assert.deepEqual(parseKitThemes([{ label: 'no id' }, null, 7]), []);
   });
+
+  it('reads the declared surface, defaulting to dark (#242 — previews mapped over the app palette)', () => {
+    const themes = parseKitThemes([
+      { id: 'paper', label: 'Paper', base: 'light' },
+      { id: 'midnight', label: 'Midnight' },
+      { id: 'odd', label: 'Odd', base: 'sepia' },
+    ]);
+    assert.equal(themes[0].base, 'light');
+    assert.equal(themes[1].base, 'dark', 'absent implies dark');
+    assert.equal(themes[2].base, 'dark', 'an unmodelled value must not be guessed as light');
+  });
 });

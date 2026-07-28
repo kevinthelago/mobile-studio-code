@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '../../src/theme';
+import { THEMES, useTheme } from '../../src/theme';
 import { useMirrorDomain } from '../../src/lib/mirror/MirrorContext';
 import { mapKitTokens, parseKitThemes } from '../../src/lib/mirror/themeMap';
 import { Surface } from '../../src/components/ui/Surface';
@@ -38,7 +38,10 @@ export default function ThemeScreen() {
           </Surface>
         ) : (
           kitThemes.map((kit) => {
-            const preview = mapKitTokens(t, kit.vars);
+            // Map over the surface the THEME declares, not the app's current one (#242): a theme
+            // typically overrides a handful of tokens, so previewing a light theme against the dark
+            // palette showed it as dark.
+            const preview = mapKitTokens(THEMES[kit.base], kit.vars);
             return (
               <Surface key={kit.id} style={styles.kitRow} radius={8}>
                 <View style={[styles.kitSwatch, {
@@ -56,6 +59,7 @@ export default function ThemeScreen() {
                       {kit.description}
                     </Text>
                   ) : null}
+                  <Text style={[styles.kitDetail, { color: t.fgDim }]}>{kit.base} surface</Text>
                 </View>
               </Surface>
             );

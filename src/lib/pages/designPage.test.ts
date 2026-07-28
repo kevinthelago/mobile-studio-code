@@ -1,8 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  selectComponents, selectThemes, groupByKit, hasComposition, compositionInput,
-  compositionEdges, toGlanceInput, type CompositionNode,
+  selectComponents, selectThemes, groupByKit, groupThemes, hasComposition, compositionInput,
+  compositionEdges, toGlanceInput, OTHER_THEME_GROUP, type CompositionNode,
 } from './designPage';
 import { buildGlanceScene } from '../graph';
 
@@ -19,8 +19,9 @@ const components = () => ({
 const themes = () => ({
   active: 'midnight',
   themes: [
-    { id: 'default', label: 'Default', description: 'base', vars: {}, builtin: true },
-    { id: 'midnight', label: 'Midnight', description: 'dark', vars: { '--bg': '#000', '--fg': '#fff' }, builtin: true },
+    { id: 'default', label: 'Default', description: 'base', tech: 'react', vars: {}, builtin: true },
+    { id: 'midnight', label: 'Midnight', description: 'dark', tech: 'react', vars: { '--bg': '#000', '--fg': '#fff' }, builtin: true },
+    { id: 'paper', label: 'Paper', description: 'light surface', tech: 'svelte', base: 'light', vars: { '--bg': '#fff' } },
   ],
 });
 
@@ -181,5 +182,77 @@ describe('selectThemes', () => {
   it('returns undefined for missing / malformed payloads', () => {
     assert.equal(selectThemes(undefined), undefined);
     assert.equal(selectThemes({}), undefined);
+  });
+
+  it('reads base, defaulting to dark when absent (#2545 — "absent implies dark")', () => {
+    const m = selectThemes(themes())!;
+    assert.equal(m.themes.find((t) => t.id === 'paper')!.base, 'light');
+    assert.equal(m.themes.find((t) => t.id === 'midnight')!.base, 'dark');
+  });
+
+  it('treats any non-light base as dark rather than guessing', () => {
+    const m = selectThemes({
+      active: 'x',
+      themes: [
+        { id: 'a', label: 'A', base: 'sepia' },   // a value from a newer desktop
+        { id: 'b', label: 'B', base: 7 },          // corrupt
+      ],
+    })!;
+    assert.equal(m.themes[0].base, 'dark');
+    assert.equal(m.themes[1].base, 'dark');
+  });
+
+  it('reads tech, and leaves it empty when absent or blank', () => {
+    const m = selectThemes({
+      active: 'x',
+      themes: [{ id: 'a', label: 'A', tech: 'react' }, { id: 'b', label: 'B' }, { id: 'c', label: 'C', tech: '  ' }],
+    })!;
+    assert.equal(m.themes[0].tech, 'react');
+    assert.equal(m.themes[1].tech, '');
+    assert.equal(m.themes[2].tech, '');
+  });
+});
+
+describe('groupThemes', () => {
+  it('sections themes by tech, preserving wire order within a group', () => {
+    const groups = groupThemes(selectThemes(themes())!);
+    assert.deepEqual(groups.map((g) => g.tech), ['react', 'svelte']);
+    assert.deepEqual(groups[0].themes.map((t) => t.id), ['default', 'midnight']);
+    assert.deepEqual(groups[1].themes.map((t) => t.id), ['paper']);
+    assert.equal(groups[0].label, 'react', 'the label is the raw slug — the view uppercases it');
+  });
+
+  it('orders groups by first appearance, not alphabetically', () => {
+    const m = selectThemes({
+      active: 'x',
+      themes: [
+        { id: 'a', label: 'A', tech: 'zeta' },
+        { id: 'b', label: 'B', tech: 'alpha' },
+        { id: 'c', label: 'C', tech: 'zeta' },
+      ],
+    })!;
+    assert.deepEqual(groupThemes(m).map((g) => g.tech), ['zeta', 'alpha']);
+    assert.deepEqual(groupThemes(m)[0].themes.map((t) => t.id), ['a', 'c']);
+  });
+
+  it('forces the tech-less bucket last however it arrives', () => {
+    const m = selectThemes({
+      active: 'x',
+      themes: [
+        { id: 'a', label: 'A' },                  // no tech — arrives FIRST
+        { id: 'b', label: 'B', tech: 'react' },
+      ],
+    })!;
+    const groups = groupThemes(m);
+    assert.deepEqual(groups.map((g) => g.tech), ['react', OTHER_THEME_GROUP]);
+  });
+
+  it('keeps the other bucket as the only group when nothing has a tech', () => {
+    const m = selectThemes({ active: 'x', themes: [{ id: 'a', label: 'A' }] })!;
+    assert.deepEqual(groupThemes(m).map((g) => g.tech), [OTHER_THEME_GROUP]);
+  });
+
+  it('returns [] for an empty theme list', () => {
+    assert.deepEqual(groupThemes({ themes: [], active: '' }), []);
   });
 });

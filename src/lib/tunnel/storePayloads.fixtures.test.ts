@@ -39,6 +39,7 @@ import {
 import { STORE_DOMAINS } from '../types';
 import { selectGlance, glanceL0Input } from '../pages/glancePage';
 import { selectOrg, teamToOrgInput } from '../pages/orgPage';
+import { selectThemes, groupThemes, OTHER_THEME_GROUP } from '../pages/designPage';
 import { buildGlanceScene, buildOrgScene } from '../graph';
 import { selectSecurityView } from '../mirror/securityView';
 import { parseAlertsPayload, alertTarget } from '../alerts/model';
@@ -78,7 +79,6 @@ const PENDING_DOMAINS: Record<string, string> = {
   // through verbatim. The fixture therefore shows a pared-looking kit the real wire would not
   // produce. Catching pass-through bloat needs the fixture INPUT to carry the optional fields.
   components: '#241 — C1/C3/C4 desktop-side; fixture input does not exercise kit pass-through',
-  themes: '#242 — base + tech groups on the wire, never read',
   automations: '#239 — system hook floor never projected; two dead reads',
   mcp: '#240 — built-in servers invisible; version read is unfixable',
   skills: '#245 — lesson timestamps dropped; StageStatus "ahead" has no colour',
@@ -272,11 +272,38 @@ function decodeOrg(o: Raw): Raw {
   };
 }
 
+/**
+ * `themes` — `ThemesPayload` is fully unpared (`themes: input.themes`), so every `KitThemeRecord`
+ * field crosses. `vars` is copied whole even though only its KEY COUNT is rendered: the values are
+ * the theme, and copying them verbatim keeps the deep-equal honest while `strRecord` still pins them
+ * as strings.
+ *
+ * `base` is absent from this fixture, so Layer B cannot distinguish "read `base` correctly" from
+ * "fell back to dark" — the one field #242 was filed over. A `themes_light` variant desktop-side
+ * would close that; until then `designPage.test.ts` covers it against hand-written payloads.
+ */
+function decodeTheme(o: Raw): Raw {
+  const out: Raw = {
+    id: str(o, 'id'), tech: str(o, 'tech'), label: str(o, 'label'),
+    description: str(o, 'description'), vars: strRecord(o, 'vars'),
+  };
+  copyOptStr(o, out, 'base');
+  copyOptBool(o, out, 'builtin');
+  // Seed provenance — desktop-only bookkeeping (#242 T4 proposes paring it).
+  if ('seedHash' in o) passThrough(o, out, 'seedHash');
+  return out;
+}
+
+function decodeThemes(o: Raw): Raw {
+  return { themes: arr(o, 'themes').map(decodeTheme), active: str(o, 'active') };
+}
+
 const DECODERS: Record<string, (o: Raw) => Raw> = {
   glance: decodeGlance,
   security: decodeSecurity,
   alerts: decodeAlerts,
   org: decodeOrg,
+  themes: decodeThemes,
 };
 
 // ── Coverage + vocabulary guards ────────────────────────────────────────────────────────────
@@ -470,6 +497,26 @@ test('Layer B: org — persona detail survives to the node inspector', () => {
   const node = buildOrgScene(input).nodes[0];
   assert.equal(node.title, 'Backend dev');
   assert.equal(node.subtitle, 'worker');
+});
+
+test('Layer B: themes — the design group reaches the page, not the defensive bucket', () => {
+  const model = selectThemes(fx.domains.themes);
+  assert.ok(model, 'selectThemes returned undefined for the canonical payload');
+
+  const theme = model.themes[0];
+  assert.equal(theme.id, 'soft');
+  assert.equal(theme.label, 'Soft');
+  assert.notEqual(theme.label, theme.id, 'the label fell back to the id');
+  assert.equal(theme.builtin, true);
+  assert.equal(theme.active, true, 'the active theme must be flagged');
+  assert.equal(theme.varCount, 1);
+
+  // The #242 regression asserted directly: `tech` was never read, so EVERY theme grouped as
+  // `other` and the page rendered one flat list.
+  assert.equal(theme.tech, 'react');
+  const groups = groupThemes(model);
+  assert.deepEqual(groups.map((g) => g.tech), ['react']);
+  assert.notEqual(groups[0].tech, OTHER_THEME_GROUP, 'the canonical theme fell into the other bucket');
 });
 
 // ── The invariant that gives Layer B its teeth ───────────────────────────────────────────────
