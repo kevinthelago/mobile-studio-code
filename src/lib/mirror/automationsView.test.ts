@@ -64,40 +64,31 @@ describe('selectAutomationsView', () => {
     assert.equal(v.automations[0].runs[0].status, 'unknown');
   });
 
-  it('shows the target pane only when the payload carries it', () => {
-    const v = selectAutomationsView(payload);
-    assert.equal(v.automations[0].targetLabel, null); // today's projection omits it
-    const withTarget = selectAutomationsView({
-      automations: [{ id: 'a', targetTab: 'Build', targetPaneIdx: 1 }],
-      hooks: [],
-    });
-    assert.equal(withTarget.automations[0].targetLabel, 'Build · pane 2');
-    const tabOnly = selectAutomationsView({
-      automations: [{ id: 'a', targetTab: 'Build' }],
-      hooks: [],
-    });
-    assert.equal(tabOnly.automations[0].targetLabel, 'Build');
-  });
-
   it('maps hooks with matcher and scope', () => {
     const v = selectAutomationsView(payload);
     assert.equal(v.hooks.length, 2);
     assert.deepEqual(v.hooks[0], {
       id: 'h1', name: 'Lint gate', enabled: true, event: 'PreToolUse',
-      matcher: 'Bash', scopeLabel: 'Global', builtin: false,
+      matcher: 'Bash', scopeLabel: 'Global',
     });
     assert.equal(v.hooks[1].matcher, null);
     assert.equal(v.hooks[1].scopeLabel, '2 projects');
-    assert.equal(v.hasSystemFloor, false);
   });
 
-  it('flags the system floor when the payload marks built-in hooks', () => {
+  /**
+   * #239: the VM must not regrow a field the desktop has ruled out. `targetTab` /
+   * `targetPaneIdx` are withheld with a regression test pinning their absence, and a hook
+   * `builtin` flag cannot exist — `Hook` is exclusively user-authored config. Reading either
+   * produced UI that could never render, which is how the dead system-floor note survived.
+   */
+  it('ignores fields the desktop deliberately never sends', () => {
     const v = selectAutomationsView({
-      automations: [],
-      hooks: [{ id: 'floor', name: 'bsc-deny', enabled: true, event: 'PreToolUse', projects: [], builtin: true }],
+      automations: [{ id: 'a', targetTab: 'Build', targetPaneIdx: 1 }],
+      hooks: [{ id: 'h', name: 'x', enabled: true, event: 'PreToolUse', projects: [], builtin: true }],
     });
-    assert.equal(v.hasSystemFloor, true);
-    assert.equal(v.hooks[0].builtin, true);
+    assert.equal('targetLabel' in v.automations[0], false);
+    assert.equal('builtin' in v.hooks[0], false);
+    assert.equal('hasSystemFloor' in v, false);
   });
 
   it('tolerates missing/partial fields', () => {
