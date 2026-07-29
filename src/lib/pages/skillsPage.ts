@@ -18,9 +18,13 @@ export interface SkillCardVM {
 export interface SkillGroupVM {
   id: string;
   name: string;
-  hue: string;
   skillIds: string[];
 }
+// `hue` is deliberately NOT carried (#245 S2). Desktop hues are CSS: `parseSkillGroupsFile` defaults
+// to `var(--accent)` and authored values may be `oklch(...)` literals — React Native can parse
+// neither, so a hue bound to a `color` prop is a crash or a silently ignored style. Anyone adding
+// group colour must normalise first (reject `var()`/`oklch()`, fall back to the theme accent); the
+// payload decoder documents the same thing at the wire.
 
 export interface LessonVM {
   id: string;
@@ -29,6 +33,10 @@ export interface LessonVM {
   rule: string;
   status: string;
   seen: number;
+  /** Where the lesson was captured (pane / repo). Epoch ms, NOT ISO — no string-vs-number trap. */
+  provenance: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface SkillsModel {
@@ -69,7 +77,7 @@ function parseGroups(v: unknown): SkillGroupVM[] {
   const out: SkillGroupVM[] = [];
   for (const g of v) {
     if (!isObj(g) || typeof g.id !== 'string') continue;
-    out.push({ id: g.id, name: str(g.name, g.id), hue: str(g.hue), skillIds: strArr(g.skillIds) });
+    out.push({ id: g.id, name: str(g.name, g.id), skillIds: strArr(g.skillIds) });
   }
   return out;
 }
@@ -86,9 +94,37 @@ function parseLessons(v: unknown): { project: string; pending: LessonVM[] } | nu
       rule: str(l.rule),
       status: str(l.status, 'pending'),
       seen: num(l.seen),
+      provenance: str(l.provenance),
+      createdAt: num(l.createdAt),
+      updatedAt: num(l.updatedAt),
     });
   }
+  // Newest first. The wire order is the desktop's storage order, which is not recency — a stable
+  // sort keeps equal timestamps (and the 0 fallback) in payload order rather than shuffling them.
+  pending.sort((a, b) => b.createdAt - a.createdAt);
   return { project: v.project, pending };
+}
+
+/**
+ * Relative age of an epoch-ms timestamp, e.g. `3d ago`. Empty string for a missing (0) timestamp, so
+ * a lesson from a desktop that predates the field renders without a bogus "56y ago".
+ *
+ * @param at epoch milliseconds
+ * @param now epoch milliseconds to measure against — injected so this stays pure and testable
+ */
+export function relativeAge(at: number, now: number): string {
+  if (!at || !Number.isFinite(at) || at > now) return '';
+  const secs = Math.floor((now - at) / 1000);
+  if (secs < 60) return 'just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
 }
 
 /** Parse the mirrored `skills` projection, or `undefined` when the payload is missing / malformed. */

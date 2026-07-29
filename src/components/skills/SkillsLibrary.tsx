@@ -3,17 +3,26 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme';
 import { SpecHost } from '../kit/SpecHost';
-import { selectSkills, groupSkillNames } from '../../lib/pages/skillsPage';
+import { selectSkills, groupSkillNames, relativeAge, type LessonVM } from '../../lib/pages/skillsPage';
+
+/** The lesson meta line: age first (the queue is sorted by it), then origin, then repetition. */
+function lessonMeta(l: LessonVM, now: number): string {
+  return [relativeAge(l.createdAt, now), l.provenance, l.seen > 1 ? `seen ${l.seen}×` : '']
+    .filter(Boolean)
+    .join(' · ');
+}
 
 /**
  * Skills library mirror (#221) — read-only cards for the desktop's `skills` domain: each skill's
  * name/kind/scope with pinned + enabled badges, the task groups, and the active project's pending
- * lessons. No analytics, no CRUD.
+ * lessons (newest first, with capture age + origin — #245). No analytics, no CRUD.
  */
 export function SkillsLibrary({ data }: { data: unknown }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const model = useMemo(() => selectSkills(data), [data]);
+  // Stamped once per payload rather than per row, so every age in a render is measured consistently.
+  const now = useMemo(() => Date.now(), [model]);
 
   if (!model) {
     return (
@@ -77,7 +86,9 @@ export function SkillsLibrary({ data }: { data: unknown }) {
               values={{
                 title: l.rule || l.mistake,
                 sub: l.mistake && l.rule ? l.mistake : '',
-                seen: l.seen > 1 ? `seen ${l.seen}×` : '',
+                // The spec's third slot carries the whole meta line — age, origin, repetition — so
+                // #245's provenance/timestamps land without a design-system spec change.
+                seen: lessonMeta(l, now),
               }}
             />
           ))}

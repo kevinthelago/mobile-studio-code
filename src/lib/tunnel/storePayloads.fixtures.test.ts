@@ -40,6 +40,7 @@ import { STORE_DOMAINS } from '../types';
 import { selectGlance, glanceL0Input } from '../pages/glancePage';
 import { selectOrg, teamToOrgInput } from '../pages/orgPage';
 import { selectThemes, groupThemes, OTHER_THEME_GROUP } from '../pages/designPage';
+import { selectSkills } from '../pages/skillsPage';
 import { buildGlanceScene, buildOrgScene } from '../graph';
 import { selectSecurityView } from '../mirror/securityView';
 import { parseAlertsPayload, alertTarget } from '../alerts/model';
@@ -81,7 +82,6 @@ const PENDING_DOMAINS: Record<string, string> = {
   components: '#241 — C1/C3/C4 desktop-side; fixture input does not exercise kit pass-through',
   automations: '#239 — system hook floor never projected; two dead reads',
   mcp: '#240 — built-in servers invisible; version read is unfixable',
-  skills: '#245 — lesson timestamps dropped; StageStatus "ahead" has no colour',
 };
 
 // ── decode helpers local to this harness ────────────────────────────────────────────────────
@@ -298,12 +298,58 @@ function decodeThemes(o: Raw): Raw {
   return { themes: arr(o, 'themes').map(decodeTheme), active: str(o, 'active') };
 }
 
+/**
+ * `skills` — the library cards, the task groups, and the active project's pending lessons.
+ *
+ * `groups[].hue` is passed through, NOT read (#245 S2): desktop hues are CSS (`var(--accent)` by
+ * default, `oklch(...)` when authored) and React Native can parse neither, so binding one to a
+ * `color` prop is a crash or a silently ignored style. The pass-through keeps the field visible here
+ * — if it ever becomes a resolvable colour, this is where you would start reading it.
+ *
+ * Lesson `createdAt`/`updatedAt` are epoch ms on both sides, so `num` is correct — the ISO-string
+ * trap that broke `security` does not occur.
+ */
+function decodeSkill(o: Raw): Raw {
+  const out: Raw = {
+    id: str(o, 'id'), name: str(o, 'name'), kind: str(o, 'kind'), source: str(o, 'source'),
+    desc: str(o, 'desc'), projects: strArr(o, 'projects'),
+    enabled: bool(o, 'enabled'), pinned: bool(o, 'pinned'),
+  };
+  copyOptBool(o, out, 'packaged');
+  return out;
+}
+
+function decodeLesson(o: Raw): Raw {
+  return {
+    id: str(o, 'id'), mistake: str(o, 'mistake'), cause: str(o, 'cause'), rule: str(o, 'rule'),
+    provenance: str(o, 'provenance'), status: str(o, 'status'), seen: num(o, 'seen'),
+    createdAt: num(o, 'createdAt'), updatedAt: num(o, 'updatedAt'),
+  };
+}
+
+function decodeSkills(o: Raw): Raw {
+  const out: Raw = {
+    skills: arr(o, 'skills').map(decodeSkill),
+    groups: arr(o, 'groups').map((g) => {
+      const grp: Raw = { id: str(g, 'id'), name: str(g, 'name'), skillIds: strArr(g, 'skillIds') };
+      passThrough(g, grp, 'hue');
+      return grp;
+    }),
+  };
+  optObjOrNull(o, out, 'lessons', (l) => ({
+    project: str(l, 'project'),
+    pending: arr(l, 'pending').map(decodeLesson),
+  }));
+  return out;
+}
+
 const DECODERS: Record<string, (o: Raw) => Raw> = {
   glance: decodeGlance,
   security: decodeSecurity,
   alerts: decodeAlerts,
   org: decodeOrg,
   themes: decodeThemes,
+  skills: decodeSkills,
 };
 
 // ── Coverage + vocabulary guards ────────────────────────────────────────────────────────────
@@ -517,6 +563,29 @@ test('Layer B: themes — the design group reaches the page, not the defensive b
   const groups = groupThemes(model);
   assert.deepEqual(groups.map((g) => g.tech), ['react']);
   assert.notEqual(groups[0].tech, OTHER_THEME_GROUP, 'the canonical theme fell into the other bucket');
+});
+
+test('Layer B: skills — lessons keep their provenance and capture time', () => {
+  const model = selectSkills(fx.domains.skills);
+  assert.ok(model, 'selectSkills returned undefined for the canonical payload');
+
+  const lesson = model.lessons!.pending[0];
+  // Each of these was dropped before #245, leaving the queue in raw payload order with no origin.
+  assert.equal(lesson.provenance, 'pane 1');
+  assert.equal(lesson.createdAt, 1);
+  assert.equal(lesson.updatedAt, 2);
+  assert.notEqual(lesson.createdAt, 0, 'a 0 createdAt is the missing-field fallback');
+  assert.equal(lesson.rule, 'guard nullable reads');
+  assert.equal(lesson.seen, 2);
+
+  assert.equal(model.skills[0].name, 'Review checklist');
+  assert.equal(model.groups[0].name, 'Backend');
+});
+
+test('Layer B: skills — the no-lessons variant parses as null, not as an empty queue', () => {
+  const model = selectSkills(fx.variants.skills_no_lessons)!;
+  assert.equal(model.lessons, null);
+  assert.equal(model.skills.length, 1, 'the library must survive a null lessons block');
 });
 
 // ── The invariant that gives Layer B its teeth ───────────────────────────────────────────────
