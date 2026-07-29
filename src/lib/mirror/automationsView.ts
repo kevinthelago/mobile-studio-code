@@ -6,9 +6,21 @@
  *   AutomationCard = { id, name, armed, when, lastRunAt, nextRunAt, runs }
  *   HookCard       = { id, name, enabled, event, matcher?, projects }
  *
- * The projection does not (yet) carry the automation's target pane or a
- * built-in marker on hooks; both are read tolerantly so they light up the
- * moment the desktop starts publishing them, and render as absent until then.
+ * Two fields this file used to read speculatively are GONE (#239). Neither was
+ * "not yet published" — the desktop has ruled both out, with regression tests
+ * pinning their absence:
+ *
+ *   - `targetTab` / `targetPaneIdx`: withheld on purpose. `storeProjections.test.ts`
+ *     asserts the serialized payload does not contain "targetTab" — the card is
+ *     schedule + outcome, the dispatch target stays desktop-side.
+ *   - `builtin` on a hook: cannot exist. `Hook` is exclusively user-authored
+ *     config, and `HookCard` field-exactness is asserted desktop-side.
+ *
+ * The desktop's always-on system floor (`SYSTEM_HOOKS` — bsc-deny, bsc-confine,
+ * bsc-scope) is a module constant the projector never reads, so it crosses no
+ * frame at all. Surfacing it needs a new `systemHooks` field on the payload;
+ * until that lands there is nothing here to render, and pretending otherwise
+ * showed the user an empty hook list implying nothing is enforced.
  */
 
 import {
@@ -30,8 +42,6 @@ export type AutomationVM = {
   armed: boolean;
   /** Human cadence label derived from the `when` union ("every day at 09:00"). */
   whenLabel: string;
-  /** "Tab · pane N" when the payload carries the target; null until it does. */
-  targetLabel: string | null;
   lastRunAt: number | null;
   nextRunAt: number | null;
   /** Newest first, capped to the projection's 10. */
@@ -45,20 +55,14 @@ export type HookVM = {
   event: string;
   matcher: string | null;
   scopeLabel: string;
-  /** Marked by the payload as part of the desktop's always-on system floor. */
-  builtin: boolean;
 };
 
 export type AutomationsView = {
   automations: AutomationVM[];
   hooks: HookVM[];
-  /** Any hook is marked built-in → show the system-floor note row. */
-  hasSystemFloor: boolean;
 };
 
-export const EMPTY_AUTOMATIONS_VIEW: AutomationsView = {
-  automations: [], hooks: [], hasSystemFloor: false,
-};
+export const EMPTY_AUTOMATIONS_VIEW: AutomationsView = { automations: [], hooks: [] };
 
 /** Runs shown per schedule card (mirrors the desktop projection cap). */
 export const RUNS_SHOWN = 10;
@@ -94,13 +98,6 @@ function toAutomation(raw: unknown, index: number): AutomationVM | null {
   if (!r) return null;
   const id = readString(r.id, '') || `automation-${index}`;
 
-  // Target pane — not in today's projection; render when the desktop adds it.
-  const targetTab = readString(r.targetTab, '').trim();
-  const paneIdx = readNumOrNull(r.targetPaneIdx);
-  const targetLabel = targetTab
-    ? paneIdx !== null ? `${targetTab} · pane ${paneIdx + 1}` : targetTab
-    : null;
-
   const runs = asArray(r.runs)
     .map(toRun)
     .filter((run): run is AutomationRunVM => run !== null)
@@ -112,7 +109,6 @@ function toAutomation(raw: unknown, index: number): AutomationVM | null {
     name: readString(r.name, '').trim() || id,
     armed: readBool(r.armed, false),
     whenLabel: formatWhen(r.when),
-    targetLabel,
     lastRunAt: readNumOrNull(r.lastRunAt),
     nextRunAt: readNumOrNull(r.nextRunAt),
     runs,
@@ -130,7 +126,6 @@ function toHook(raw: unknown, index: number): HookVM | null {
     event: readString(r.event, '').trim() || '—',
     matcher: readString(r.matcher, '').trim() || null,
     scopeLabel: scopeLabel(r.projects),
-    builtin: readBool(r.builtin, false),
   };
 }
 
@@ -144,5 +139,5 @@ export function selectAutomationsView(data: unknown): AutomationsView {
   const hooks = asArray(root.hooks)
     .map(toHook)
     .filter((h): h is HookVM => h !== null);
-  return { automations, hooks, hasSystemFloor: hooks.some((h) => h.builtin) };
+  return { automations, hooks };
 }

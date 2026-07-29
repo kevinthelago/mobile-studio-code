@@ -41,6 +41,7 @@ import { selectGlance, glanceL0Input } from '../pages/glancePage';
 import { selectOrg, teamToOrgInput } from '../pages/orgPage';
 import { selectThemes, groupThemes, OTHER_THEME_GROUP } from '../pages/designPage';
 import { selectSkills } from '../pages/skillsPage';
+import { selectAutomationsView } from '../mirror/automationsView';
 import { buildGlanceScene, buildOrgScene } from '../graph';
 import { selectSecurityView } from '../mirror/securityView';
 import { parseAlertsPayload, alertTarget } from '../alerts/model';
@@ -80,7 +81,6 @@ const PENDING_DOMAINS: Record<string, string> = {
   // through verbatim. The fixture therefore shows a pared-looking kit the real wire would not
   // produce. Catching pass-through bloat needs the fixture INPUT to carry the optional fields.
   components: '#241 — C1/C3/C4 desktop-side; fixture input does not exercise kit pass-through',
-  automations: '#239 — system hook floor never projected; two dead reads',
   mcp: '#240 — built-in servers invisible; version read is unfixable',
 };
 
@@ -343,6 +343,43 @@ function decodeSkills(o: Raw): Raw {
   return out;
 }
 
+/**
+ * `automations` — schedule + outcome only. The dispatch target (`targetTab` / `targetPaneIdx`)
+ * is withheld desktop-side with a regression test pinning its absence, and `HookCard` is
+ * field-exact with no `builtin`: `Hook` is exclusively user-authored config. #239 deleted the
+ * mobile reads that waited on both.
+ *
+ * `runs[].at` is epoch ms on both sides — the ISO-string trap that broke `security` does not
+ * occur here. The desktop caps `runs` at 10 (`AUTOMATION_RUNS_CAP`), asserted desktop-side.
+ *
+ * NOT covered: the always-on system floor (`SYSTEM_HOOKS` — bsc-deny / bsc-confine / bsc-scope)
+ * is a module constant the projector never reads, so it crosses no frame and no decoder can
+ * see it. Needs a `systemHooks` field on the payload.
+ */
+function decodeAutomations(o: Raw): Raw {
+  return {
+    automations: arr(o, 'automations').map((a) => {
+      const out: Raw = {
+        id: str(a, 'id'), name: str(a, 'name'), armed: bool(a, 'armed'),
+        when: a.when as Raw,
+        lastRunAt: num(a, 'lastRunAt'), nextRunAt: num(a, 'nextRunAt'),
+        runs: arr(a, 'runs').map((r) => ({
+          at: num(r, 'at'), status: str(r, 'status'), note: str(r, 'note'),
+        })),
+      };
+      return out;
+    }),
+    hooks: arr(o, 'hooks').map((h) => {
+      const out: Raw = {
+        id: str(h, 'id'), name: str(h, 'name'), enabled: bool(h, 'enabled'),
+        event: str(h, 'event'), projects: strArr(h, 'projects'),
+      };
+      copyOptStr(h, out, 'matcher');
+      return out;
+    }),
+  };
+}
+
 const DECODERS: Record<string, (o: Raw) => Raw> = {
   glance: decodeGlance,
   security: decodeSecurity,
@@ -350,6 +387,7 @@ const DECODERS: Record<string, (o: Raw) => Raw> = {
   org: decodeOrg,
   themes: decodeThemes,
   skills: decodeSkills,
+  automations: decodeAutomations,
 };
 
 // ── Coverage + vocabulary guards ────────────────────────────────────────────────────────────
@@ -586,6 +624,33 @@ test('Layer B: skills — the no-lessons variant parses as null, not as an empty
   const model = selectSkills(fx.variants.skills_no_lessons)!;
   assert.equal(model.lessons, null);
   assert.equal(model.skills.length, 1, 'the library must survive a null lessons block');
+});
+
+test('Layer B: automations — the schedule card renders from real values', () => {
+  const view = selectAutomationsView(fx.domains.automations);
+  assert.equal(view.automations.length, 1, 'the canonical automation did not survive the parse');
+
+  const a = view.automations[0];
+  assert.equal(a.name, 'Nightly triage');
+  assert.notEqual(a.name, a.id, 'the name fell back to the id');
+  assert.equal(a.armed, true);
+  assert.equal(a.whenLabel, 'every day at 02:00', 'the `when` union must format, not fall back to —');
+  assert.notEqual(a.whenLabel, '—');
+  assert.equal(a.lastRunAt, 200);
+  assert.equal(a.nextRunAt, 300);
+
+  // Runs: newest first, statuses mapped — `unknown` is the fallback, so it must not appear.
+  assert.deepEqual(a.runs.map((r) => r.at), [200, 100]);
+  assert.equal(a.runs[0].status, 'ok');
+  assert.equal(a.runs[1].status, 'skipped');
+  assert.equal(a.runs[0].note, 'triaged 4 issues');
+  for (const r of a.runs) assert.notEqual(r.status, 'unknown', 'a run status fell back');
+
+  const h = view.hooks[0];
+  assert.equal(h.name, 'deny-floor');
+  assert.equal(h.enabled, true);
+  assert.equal(h.event, 'PreToolUse');
+  assert.notEqual(h.event, '—');
 });
 
 // ── The invariant that gives Layer B its teeth ───────────────────────────────────────────────

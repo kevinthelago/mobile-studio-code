@@ -41,13 +41,11 @@ export function AutomationsSegment({ data }: { data: unknown }) {
         view.automations.map((a) => <AutomationCard key={a.id} automation={a} />)
       )}
 
+      {/* The desktop's always-on system floor (bsc-deny / bsc-confine / bsc-scope) is NOT on
+          the wire — it is a module constant the projector never reads (#239). The note that
+          used to sit here was gated on a `builtin` flag that cannot exist, so it never
+          rendered. It returns when the payload grows a `systemHooks` field. */}
       <SectionLabel style={styles.sectionGap}>Hooks</SectionLabel>
-      {view.hasSystemFloor && (
-        <Text style={[styles.floorNote, { color: t.fgMuted }]}>
-          Built-in hooks are the desktop&apos;s system floor — always on, under every
-          permission posture.
-        </Text>
-      )}
       {view.hooks.length === 0 ? (
         <EmptyRow>No hooks configured on the desktop yet.</EmptyRow>
       ) : (
@@ -69,9 +67,9 @@ function AutomationCard({ automation: a }: { automation: AutomationVM }) {
         </Tag>
       </View>
 
+      {/* Schedule only — the dispatch target is deliberately withheld desktop-side (#239). */}
       <Text style={[styles.when, { color: t.fgMuted, fontFamily: t.fontMono }]} numberOfLines={1}>
         {a.whenLabel}
-        {a.targetLabel ? `  → ${a.targetLabel}` : ''}
       </Text>
 
       <Text style={[styles.timing, { color: t.fgDim }]} numberOfLines={1}>
@@ -110,7 +108,6 @@ function HookRow({ hook: h }: { hook: HookVM }) {
       <View style={styles.hookText}>
         <View style={styles.titleLine}>
           <Text style={[styles.name, { color: t.fg }]} numberOfLines={1}>{h.name}</Text>
-          {h.builtin && <Tag color={t.accent}>built-in</Tag>}
         </View>
         <Text style={[styles.hookMeta, { color: t.fgMuted, fontFamily: t.fontMono }]} numberOfLines={1}>
           {h.event}
@@ -128,7 +125,6 @@ function HookRow({ hook: h }: { hook: HookVM }) {
 const styles = StyleSheet.create({
   list: { padding: 16, gap: 10, paddingBottom: 28 },
   sectionGap: { marginTop: 14 },
-  floorNote: { fontSize: 11.5, lineHeight: 16 },
 
   card: { padding: 14, gap: 6 },
   titleLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
