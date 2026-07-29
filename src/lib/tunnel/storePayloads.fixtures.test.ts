@@ -42,6 +42,7 @@ import { selectOrg, teamToOrgInput } from '../pages/orgPage';
 import { selectThemes, groupThemes, OTHER_THEME_GROUP } from '../pages/designPage';
 import { selectSkills } from '../pages/skillsPage';
 import { selectAutomationsView } from '../mirror/automationsView';
+import { selectMcpView } from '../mirror/mcpView';
 import { buildGlanceScene, buildOrgScene } from '../graph';
 import { selectSecurityView } from '../mirror/securityView';
 import { parseAlertsPayload, alertTarget } from '../alerts/model';
@@ -81,7 +82,6 @@ const PENDING_DOMAINS: Record<string, string> = {
   // through verbatim. The fixture therefore shows a pared-looking kit the real wire would not
   // produce. Catching pass-through bloat needs the fixture INPUT to carry the optional fields.
   components: '#241 — C1/C3/C4 desktop-side; fixture input does not exercise kit pass-through',
-  mcp: '#240 — built-in servers invisible; version read is unfixable',
 };
 
 // ── decode helpers local to this harness ────────────────────────────────────────────────────
@@ -380,6 +380,32 @@ function decodeAutomations(o: Raw): Raw {
   };
 }
 
+/**
+ * `mcp` — the desktop's configured MCP servers. `env` never crosses (asserted desktop-side)
+ * and no `version` exists anywhere in the model, which is why #240 deleted that read rather
+ * than filing it as a projection gap.
+ *
+ * `builtin` is absent from the fixture and read optionally mobile-side. That is a KNOWN gap,
+ * not a decoder bug: the two always-on built-in servers are not in `servers[]` at all, so the
+ * "Built-in tools" section cannot render. `installedIds` already carries their ids in a form
+ * nothing can use. Fixing it is `withBuiltins(input.servers)` in the same builder — tracked
+ * on #240, and this decoder needs no change when it lands.
+ */
+function decodeMcp(o: Raw): Raw {
+  return {
+    servers: arr(o, 'servers').map((s) => {
+      const out: Raw = {
+        id: str(s, 'id'), name: str(s, 'name'), enabled: bool(s, 'enabled'),
+        transport: str(s, 'transport'), projects: strArr(s, 'projects'),
+        installed: bool(s, 'installed'),
+      };
+      copyOptStr(s, out, 'url');
+      copyOptBool(s, out, 'builtin');
+      return out;
+    }),
+  };
+}
+
 const DECODERS: Record<string, (o: Raw) => Raw> = {
   glance: decodeGlance,
   security: decodeSecurity,
@@ -388,6 +414,7 @@ const DECODERS: Record<string, (o: Raw) => Raw> = {
   themes: decodeThemes,
   skills: decodeSkills,
   automations: decodeAutomations,
+  mcp: decodeMcp,
 };
 
 // ── Coverage + vocabulary guards ────────────────────────────────────────────────────────────
@@ -651,6 +678,30 @@ test('Layer B: automations — the schedule card renders from real values', () =
   assert.equal(h.enabled, true);
   assert.equal(h.event, 'PreToolUse');
   assert.notEqual(h.event, '—');
+});
+
+test('Layer B: mcp — both install states resolve, neither falls back to unknown', () => {
+  const view = selectMcpView(fx.domains.mcp);
+  assert.equal(view.servers.length, 2, 'the canonical servers did not survive the parse');
+
+  const [research, custom] = view.servers;
+  assert.equal(research.name, 'research');
+  assert.equal(research.installState, 'installed');
+  assert.equal(research.transport, 'stdio');
+  assert.notEqual(research.transport, '—');
+  assert.equal(research.url, null, 'a stdio server has no url');
+
+  assert.equal(custom.name, 'custom');
+  assert.equal(custom.installState, 'available');
+  assert.equal(custom.url, 'https://mcp.acme.dev');
+  assert.equal(custom.scopeLabel, '1 project');
+
+  // `unknown` is the fallback for a non-boolean `installed` — it must not appear here.
+  for (const s of view.servers) assert.notEqual(s.installState, 'unknown');
+
+  // The known gap, asserted so it fails loudly the day the desktop fixes it: built-ins are
+  // not in `servers[]`, so this section is empty. When `withBuiltins` lands, flip this.
+  assert.equal(view.builtins.length, 0, 'built-ins now ride — update the mcp Layer B expectation (#240)');
 });
 
 // ── The invariant that gives Layer B its teeth ───────────────────────────────────────────────

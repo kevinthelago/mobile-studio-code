@@ -11,8 +11,9 @@ const GOOD = '#4ade80';
 
 function installTag(s: McpServerVM, t: Theme): { label: string; color: string; dot?: string } {
   switch (s.installState) {
+    // No version branch: nothing on the wire carries one, and none can (#240).
     case 'installed':
-      return { label: s.version ? `v${s.version}` : 'installed', color: t.fg, dot: GOOD };
+      return { label: 'installed', color: t.fg, dot: GOOD };
     case 'available':
       return { label: 'not installed', color: t.fgMuted };
     default:

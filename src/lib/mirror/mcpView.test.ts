@@ -51,10 +51,14 @@ describe('selectMcpView', () => {
     assert.deepEqual(v.builtins.map((s) => s.id), ['research']);
   });
 
-  it('carries a version through when present', () => {
+  /**
+   * #240: no `version` exists in `McpServer` or anywhere on the wire, and none can — unlike a
+   * missing projection this was never fixable desktop-side. The old test asserted the VM would
+   * carry one through, which kept a permanently-null field and a dead tag branch alive.
+   */
+  it('does not carry a version even when a payload invents one', () => {
     const v = selectMcpView({ servers: [{ id: 's', installed: true, version: '1.2.0' }] });
-    assert.equal(v.servers[0].version, '1.2.0');
-    assert.equal(selectMcpView(payload).servers[0].version, null);
+    assert.equal('version' in v.servers[0], false);
   });
 
   it('tolerates missing/partial fields', () => {
