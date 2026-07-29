@@ -6,9 +6,18 @@
  *   McpCard = { id, name, enabled, transport, projects, url?, installed }
  *
  * `installed` means the desktop resolved a runnable config for the server.
- * A `builtin` marker and a `version` are not in today's projection but are
- * read tolerantly (the desktop bundles built-in MCP sidecars — when the
- * projector starts marking them, the "Built-in tools" section fills in).
+ *
+ * `version` used to be read here. It is GONE (#240): no version exists in
+ * `McpServer` or anywhere on the wire, so unlike a missing projection this was
+ * unfixable — there is no string to project. Do not re-add it.
+ *
+ * `builtin` IS still read, and that is a deliberate difference. Unlike the
+ * automations `Hook.builtin` (which cannot exist), `McpCard` can and should
+ * gain it: the payload's `installedIds` already carries the built-in ids in a
+ * form nothing can use, so the fix is a small edit to the same builder —
+ * `withBuiltins(input.servers)`. Until that lands, `builtins` is empty and the
+ * "Built-in tools" section does not render, which is honest rather than dead:
+ * the section is one desktop field away from being live.
  */
 
 import {
@@ -24,8 +33,6 @@ export type McpServerVM = {
   transport: string;
   /** `unknown` when the payload omitted the installed flag. */
   installState: McpInstallState;
-  /** Version string when the payload carries one; null otherwise. */
-  version: string | null;
   scopeLabel: string;
   url: string | null;
   builtin: boolean;
@@ -52,7 +59,6 @@ function toServer(raw: unknown, index: number): McpServerVM | null {
     installState: typeof r.installed === 'boolean'
       ? (r.installed ? 'installed' : 'available')
       : 'unknown',
-    version: readString(r.version, '').trim() || null,
     scopeLabel: scopeLabel(r.projects),
     url: readString(r.url, '').trim() || null,
     builtin: readBool(r.builtin, false),
