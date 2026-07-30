@@ -1,7 +1,8 @@
 // Graph module barrel (#220) — the public surface: the vendored base-studio-code graph core
 // (layers/order/cycles/edgePath/types — see each file's VENDORED header), the scene contract the
 // GraphCanvas renders, the layered layout, the drill stack, and the two model adapters + demo
-// fixtures. The shell issue mounts GraphDemoScreen (src/screens/GraphDemoScreen.tsx) over this.
+// fixtures. Consumed by GlanceMirror, ComponentsMirror and the org/blueprint team graphs.
+// (The old GraphDemoScreen that used to mount over this was deleted in #262 — it had no route.)
 
 // Vendored core (byte-exact from base-studio-code src/shared/lib/graph @ 6349c0a2).
 export type { GraphNode, GraphEdge } from './types';

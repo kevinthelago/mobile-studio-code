@@ -1,6 +1,12 @@
 // Org page view-model (#235) — the pure bridge to the mirrored `org` store domain
 // (base-studio-code `OrgPayload`: `{ orgs: Team[]; personas: PersonaRef[] }`).
 //
+// NOTE (#262): no route imports this yet. That is DELIBERATE, not rot — it is built ahead of
+// #233's Studio → Teams segment, which renders `org.orgs` as a picker over the team library.
+// It cannot drift unnoticed in the meantime: `org` sits in the payload harness's `DECODERS`,
+// so a wire change fails Layer A, and `orgPage.test.ts` covers the parsing directly. The
+// reachability guard lists it for this reason — see `src/lib/reachability.test.ts`.
+//
 // `orgs` is the WHOLE team library — every built-in team plus every user-authored one — and the
 // desktop builder passes it through unmodified, so each entry is already a complete, renderable
 // graph. Before this module it arrived on every publish and was discarded; only `personas` was read.
